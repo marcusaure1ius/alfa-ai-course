@@ -1,0 +1,69 @@
+{
+  "checkedAt": "2026-07-14",
+  "environment": {
+    "n8n": "2.29.10",
+    "host": "local fixture harness; workflow imports run in pinned n8n container",
+    "externalCredentialsPresent": false
+  },
+  "evidenceLabels": {
+    "verified_static": "Export wiring, credential references, graph and local validation inspected without provider traffic.",
+    "mocked_contract": "Exported Code nodes executed against synthetic response fixtures; no external account was contacted.",
+    "external_unverified": "Requires user-owned endpoint or provider credential and a controlled redacted smoke test.",
+    "unsupported_default": "Disabled in the starter-kit default profile until separate evidence and contract work exist."
+  },
+  "providers": {
+    "generic": {
+      "authBoundary": "verified_static",
+      "modelDiscovery": "external_unverified",
+      "manualModelFallback": "verified_static",
+      "completion": "mocked_contract",
+      "localJsonSchema": "mocked_contract",
+      "tools": "unsupported_default",
+      "providerStructuredOutput": "unsupported_default",
+      "externalAccount": "external_unverified",
+      "credentialGaps": [
+        "real HTTPS Base URL and Bearer credential",
+        "actual /models response shape or confirmed absence",
+        "manual model availability and provider error semantics",
+        "quota, price and model-specific limits"
+      ]
+    },
+    "yandex": {
+      "authBoundary": "verified_static",
+      "modelDiscovery": "mocked_contract",
+      "manualModelFallback": "unsupported_default",
+      "completion": "mocked_contract",
+      "localJsonSchema": "mocked_contract",
+      "tools": "unsupported_default",
+      "providerStructuredOutput": "unsupported_default",
+      "externalAccount": "external_unverified",
+      "credentialGaps": [
+        "user folder, service-account role and API key",
+        "yc.ai.foundationModels.execute and yc.ai.models.viewer scopes",
+        "model URI visible to the configured folder",
+        "account quota and model-specific native schema behavior"
+      ]
+    },
+    "gigachat": {
+      "authBoundary": "verified_static",
+      "modelDiscovery": "unsupported_default",
+      "manualModelFallback": "verified_static",
+      "completion": "mocked_contract",
+      "localJsonSchema": "mocked_contract",
+      "tools": "unsupported_default",
+      "providerStructuredOutput": "unsupported_default",
+      "externalAccount": "external_unverified",
+      "credentialGaps": [
+        "authorization key, contract scope and matching API base",
+        "trusted Russian CA chain inside the n8n container",
+        "model availability for the account",
+        "OAuth rate and live 401 refresh behavior under real concurrency"
+      ]
+    }
+  },
+  "liteLlm": {
+    "decision": "excluded",
+    "adrRequired": false,
+    "reason": "The three MVP paths work through reusable n8n workflows without a proxy, and no measured routing, failover or compatibility gap justifies another service, secret boundary or operations surface. Adding LiteLLM later requires measured evidence and a new ADR."
+  }
+}

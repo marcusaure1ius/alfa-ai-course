@@ -21,10 +21,11 @@ Gateway возвращает только нормализованный success
 - автоматический application retry в MVP выключен, чтобы diagnostic или caller незаметно не удвоил billable request; повтор выполняется осознанно после backoff;
 - `401/403`, invalid model и invalid response не retryable;
 - Responses API, tools и provider-native structured output выключены до отдельных authenticated contract tests;
-- JSON mode выполняет local parse; JSON Schema validation/repair остаётся отдельным расширением и не заявляется как готовая provider capability.
+- JSON mode добавляет bounded schema instruction, выполняет local parse и проверяет ограниченную JSON Schema без `$ref`; mismatch возвращает `OUTPUT_VALIDATION_FAILED`;
+- provider-native JSON Schema и automatic repair остаются выключенными и не заявляются как готовая provider capability.
 
 ## Evidence boundary
 
-Clean import и fixture tests подтверждают schema, secret boundary и error mapping. Они не подтверждают конкретного внешнего provider без его Base URL/credential. Заполненный Connection Test с реальными credentials должен быть приложен как отдельное redacted evidence; до этого capability остаётся unverified.
+Clean import и fixture tests подтверждают schema, secret boundary и error mapping. Единая [проверочная матрица](llm-providers.md#единая-проверочная-матрица) прогоняет тот же контракт для Generic, Yandex и GigaChat. Эти проверки не подтверждают конкретного внешнего provider без его Base URL/credential. Заполненный Connection Test с реальными credentials должен быть приложен как отдельное redacted evidence; до этого capability остаётся `external_unverified`.
 
 Официальные справочные материалы n8n: [Server CLI import](https://docs.n8n.io/hosting/cli-commands/#import-workflows-and-credentials), [HTTP Request node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/) и [sub-workflows](https://docs.n8n.io/flow-logic/subworkflows/).

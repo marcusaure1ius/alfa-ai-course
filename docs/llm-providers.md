@@ -4,6 +4,39 @@
 
 Документ описывает provider-specific setup поверх общего [LLM Gateway contract](contracts/llm-gateway.md). Реальный provider smoke не выполнен: в репозитории нет пользовательских credentials, а локальные fixtures проверяют только exported workflow contract и безопасную нормализацию.
 
+## Единая проверочная матрица
+
+Контрольная точка `T-0016` выполнена 2026-07-14 для n8n `2.29.10`: Code nodes запускались локальным Node fixture harness, изменённые exports импортировались в чистый контейнер с закреплённой версией n8n. Внешних credentials в окружении не было, поэтому ни один внешний аккаунт не считается проверенным.
+
+Evidence labels:
+
+| Label | Что именно доказано |
+|---|---|
+| `verified_static` | Wiring, credential references, graph и локальная валидация проверены без provider traffic |
+| `mocked_contract` | Одинаковые contract fixtures исполнены против Code nodes; внешний аккаунт не вызывался |
+| `external_unverified` | Нужны пользовательские endpoint/credential и отдельный redacted smoke |
+| `unsupported_default` | Возможность выключена в default profile до отдельного contract evidence |
+
+| Provider | Auth boundary | Model discovery | Manual model | Text | Local JSON Schema | Tools / native schema | External account |
+|---|---|---|---|---|---|---|---|
+| Generic | `verified_static` | `external_unverified` | `verified_static` | `mocked_contract` | `mocked_contract` | `unsupported_default` | `external_unverified` |
+| Yandex | `verified_static` | `mocked_contract` | `unsupported_default` | `mocked_contract` | `mocked_contract` | `unsupported_default` | `external_unverified` |
+| GigaChat | `verified_static` | `unsupported_default` | `verified_static` | `mocked_contract` | `mocked_contract` | `unsupported_default` | `external_unverified` |
+
+Единый suite проверяет для каждого adapter одинаковые text/JSON success, schema mismatch, malformed JSON, auth, model, rate-limit, unavailable и redaction scenarios:
+
+```bash
+./tests/llm_provider_matrix_test.sh
+```
+
+Точные gaps до live evidence:
+
+- Generic: реальный HTTPS Base URL и Bearer credential, фактическая форма или отсутствие `/models`, доступность manual model, quota/price/model limits;
+- Yandex: folder, service-account role и API key, scopes `yc.ai.foundationModels.execute` и `yc.ai.models.viewer`, доступный account model URI, quota и native schema behavior;
+- GigaChat: authorization key, contract scope и matching API base, доверенная российская CA chain внутри контейнера, account model availability, OAuth rate и реальный `401` refresh при concurrency.
+
+LiteLLM исключён из MVP: три пути реализуют общий контракт reusable n8n workflows, а измеренного routing/failover/compatibility gap нет. Поэтому отдельный ADR сейчас не создаётся. Возврат LiteLLM в scope требует измеримого evidence и нового ADR, потому что добавляет service, secret boundary и operations surface.
+
 ## Yandex AI Studio
 
 Adapter: `workflows/adapters/llm-yandex.json`, ID `adapterYandexAiStudioLlmV1`. Connection test: `workflows/diagnostics/yandex-llm-connection-test.json`, ID `diagnosticYandexAiStudioConnectionV1`.

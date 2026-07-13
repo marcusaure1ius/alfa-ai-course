@@ -98,13 +98,13 @@ Caddy выбран для базового профиля из-за неболь
 
 Утверждённые provider paths:
 
-1. generic OpenAI-compatible endpoint использует native OpenAI Chat Model только после Connection Test; Responses API выключен, tool/JSON capabilities opt-in;
+1. generic OpenAI-compatible endpoint использует native OpenAI Chat Model только после Connection Test; Responses API и tools выключены, JSON проверяется локально по ограниченной schema;
 2. при несовместимом или отсутствующем `/models` используется manual model ID, а при блокирующем credential test — HTTP Request adapter;
 3. Yandex AI Studio — provider-specific HTTP Request adapter к `https://ai.api.cloud.yandex.net/v1`: API key только в n8n credential, folder через `OpenAI-Project`, полный `gpt://<folder>/<model>/<version>` URI, обязательный `/models` connection diagnostic и локальная JSON Schema validation; native/provider schema modes требуют отдельного authenticated evidence;
 4. GigaChat — provider-specific HTTP Request adapter с execution-local token, ранним refresh по `expires_at` и максимум одним refresh/retry после `401`; long-lived authorization key хранится только в n8n credential, а host CA bundle подключается read-only без отключения TLS verification;
 5. другие endpoints добавляются только после capability matrix и contract tests.
 
-Нормализованные inputs, outputs, errors, provider flags и secret rules заданы в [LLM Gateway contract](contracts/llm-gateway.md). Credentials создаются в n8n и никогда не встраиваются в workflow JSON. LiteLLM рассматривается только как отдельный optional profile, если нативный n8n + gateway workflow не закрывает подтверждённые требования.
+Нормализованные inputs, outputs, errors, provider flags и secret rules заданы в [LLM Gateway contract](contracts/llm-gateway.md). Credentials создаются в n8n и никогда не встраиваются в workflow JSON. LiteLLM исключён из MVP: измеренного gap в routing, failover или compatibility нет; добавление proxy требует измеримого evidence и нового ADR для service, secret boundary и operations surface.
 
 ## Workflow layers
 

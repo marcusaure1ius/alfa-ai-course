@@ -36,7 +36,7 @@ function classify(fixture) {
   if (status < 200 || status >= 300 || typeof fixture.body?.choices?.[0]?.message?.content !== 'string') return 'INVALID_PROVIDER_RESPONSE';
   return null;
 }
-const fixtures = fs.readdirSync(path.join(root, 'tests/fixtures/llm')).sort();
+const fixtures = fs.readdirSync(path.join(root, 'tests/fixtures/llm')).filter((file) => file !== 'provider-matrix.json').sort();
 assert.equal(fixtures.length, 5);
 for (const file of fixtures) {
   const fixture = JSON.parse(fs.readFileSync(path.join(root, 'tests/fixtures/llm', file)));

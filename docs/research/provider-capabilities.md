@@ -1,6 +1,6 @@
 # Capability matrix: n8n, LLM и CRM providers
 
-- Статус: research baseline принят в `T-0004`; Yandex evidence обновлён при реализации `T-0014`
+- Статус: baseline принят в `T-0004`; единая provider matrix финализирована в `T-0016`
 - Проверено: 2026-07-14
 - Базовая версия n8n: `2.29.10`
 - Источники: только официальная документация и исходный код n8n на закреплённом tag; один явно отмеченный HTTP probe без credentials
@@ -15,6 +15,8 @@
 - **Candidate, runtime test required** — официальные контракты выглядят совместимыми, но связка provider ↔ n8n не проверена реальным запросом.
 - **Unsupported for default path** — подтверждённое расхождение делает default path ненадёжным.
 - **Unverified** — официального подтверждения для конкретного endpoint/формата не найдено.
+
+Для executable matrix `T-0016` эти статусы сведены к четырём точным labels: `verified_static`, `mocked_contract`, `external_unverified` и `unsupported_default`. Окружение проверки: local Node fixture harness и clean import в pinned n8n `2.29.10`; external credentials отсутствовали. Канонический датированный результат и точные credential gaps находятся в [LLM provider guide](../llm-providers.md#единая-проверочная-матрица), machine-readable snapshot — в `tests/fixtures/llm/provider-matrix.json`.
 
 Фактический API smoke test с credentials относится к implementation-задачам `T-0013`–`T-0016`; до него UI-валидация n8n, tool calling и structured output не считаются работающими.
 
@@ -230,27 +232,29 @@ Research поддерживает следующий минимальный ко
 }
 ```
 
-Provider-specific поля, raw token и полный raw response наружу не передаются. JSON mode обязан локально parse/validate результат; если provider-native schema mode не подтверждён, gateway использует prompt contract, один repair attempt и затем возвращает нормализованную validation error.
+Provider-specific поля, raw token и полный raw response наружу не передаются. JSON mode обязан локально parse/validate результат; если provider-native schema mode не подтверждён, gateway использует prompt contract и возвращает нормализованную validation error без скрытого repair request.
 
-## Решения и открытые проверки для T-0004
+## Итоговая validation checkpoint T-0016
 
-Можно фиксировать:
+Подтверждено static/mock evidence:
 
 - reusable LLM Gateway без обязательного proxy;
 - generic native path только через Connection Test;
 - Responses API off по умолчанию для non-OpenAI providers;
 - manual model ID + HTTP fallback при проблемах `/models`;
-- Yandex как native candidate, не как обещанная совместимость;
+- Yandex через explicit HTTP adapter, не как обещанная native compatibility;
 - GigaChat через provider-specific per-execution OAuth adapter;
 - Bitrix24 как единственный CRM example adapter MVP.
 
-До implementation остаются обязательными:
+Не подтверждено без пользовательских credentials:
 
 - authenticated Yandex `/models` и chat smoke tests;
 - exact n8n credential-save behavior при неуспехе `/models`;
-- provider-specific JSON/tool call contract tests;
+- provider-native JSON/tool call behavior на конкретных account/model;
 - GigaChat TLS/root certificate проверка на Ubuntu container без отключения certificate verification;
 - выбор безопасного хранения Bitrix24 webhook path secret;
 - portal-specific required fields, custom external ID и responsible user для Bitrix24.
 
-Эти пункты — не скрытые обещания, а явные acceptance gates последующих задач.
+Эти пункты — не скрытые обещания, а `external_unverified` gates последующих controlled smoke. Local JSON Schema contract для всех трёх adapters, включая schema mismatch и malformed JSON, уже проверен единым `./tests/llm_provider_matrix_test.sh`.
+
+LiteLLM исключён из MVP без нового ADR: текущие reusable workflows закрывают три выбранных пути, а измеренного routing, failover или compatibility gap нет. Его добавление требует сначала измеримого evidence, затем отдельного ADR для нового service, secret boundary и operations surface.
