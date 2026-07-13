@@ -1,0 +1,27 @@
+[
+  {
+    "name":"maps lead to universal CRM fields",
+    "input":{"operation":"lead.upsert","idempotencyKey":"b24-lead-0001","fields":{"title":"Website lead","name":"Alex","phone":"+7 000 000-00-00","assignedTo":"42"},"provenance":{"title":"system","name":"user","phone":"user","assignedTo":"crm"}},
+    "expected":{"ok":true,"testMode":true,"mutate":false,"request":{"kind":"lead","mappedFields":{"originatorId":"n8n-starter-kit","originId":"b24-lead-0001","title":"Website lead","name":"Alex","assignedById":42,"fm":{"n0":{"typeId":"PHONE","valueType":"WORK","value":"+7 000 000-00-00"}}}}}
+  },
+  {
+    "name":"maps task and lead binding",
+    "input":{"operation":"task.create","idempotencyKey":"b24-task-0001","fields":{"title":"Call lead","responsibleRef":"42","relatedLeadRef":"77"},"provenance":{"title":"user","responsibleRef":"crm","relatedLeadRef":"crm"}},
+    "expected":{"ok":true,"request":{"kind":"task","taskBody":{"fields":{"TITLE":"Call lead","RESPONSIBLE_ID":42,"XML_ID":"n8n-starter-kit:b24-task-0001","UF_CRM_TASK":["L_77"]}}}}
+  },
+  {
+    "name":"unsupported priority is not silently ignored",
+    "input":{"operation":"task.create","idempotencyKey":"b24-task-0002","fields":{"title":"Call lead","responsibleRef":"42","priority":"high"},"provenance":{"title":"user","responsibleRef":"crm","priority":"user"}},
+    "expected":{"ok":false,"error":{"code":"UNSUPPORTED_FIELD"}}
+  },
+  {
+    "name":"non numeric responsible is rejected",
+    "input":{"operation":"task.create","idempotencyKey":"b24-task-0003","fields":{"title":"Call lead","responsibleRef":"user-42"},"provenance":{"title":"user","responsibleRef":"crm"}},
+    "expected":{"ok":false,"error":{"code":"INVALID_ASSIGNEE"}}
+  },
+  {
+    "name":"production bitrix request enables mutation",
+    "input":{"testMode":false,"operation":"lead.upsert","idempotencyKey":"b24-lead-0005","fields":{"title":"Approved lead"},"provenance":{"title":"user"}},
+    "expected":{"ok":true,"testMode":false,"mutate":true}
+  }
+]

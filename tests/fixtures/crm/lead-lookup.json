@@ -1,0 +1,27 @@
+[
+  {
+    "name":"zero duplicates plans create",
+    "response":{"statusCode":200,"body":{"items":[]}},
+    "expected":{"ok":true,"action":"create","method":"POST","crmId":null}
+  },
+  {
+    "name":"one duplicate plans update",
+    "response":{"statusCode":200,"body":{"items":[{"id":"77"}]}},
+    "expected":{"ok":true,"action":"update","method":"PATCH","crmId":"77"}
+  },
+  {
+    "name":"multiple duplicates stop mutation",
+    "response":{"statusCode":200,"body":{"items":[{"id":"77"},{"id":"78"}]}},
+    "expected":{"ok":false,"mutate":false,"error":{"code":"DUPLICATE_AMBIGUOUS"}}
+  },
+  {
+    "name":"lookup auth error is normalized",
+    "response":{"statusCode":401,"body":{"error":"unauthorized"}},
+    "expected":{"ok":false,"error":{"code":"AUTH_FAILED","retryable":false,"httpStatus":401}}
+  },
+  {
+    "name":"lookup rate error is retryable",
+    "response":{"statusCode":429,"body":{"error":"rate"}},
+    "expected":{"ok":false,"error":{"code":"RATE_LIMITED","retryable":true,"httpStatus":429}}
+  }
+]

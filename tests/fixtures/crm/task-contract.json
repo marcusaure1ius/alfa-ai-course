@@ -1,0 +1,37 @@
+[
+  {
+    "name":"valid task preview",
+    "input":{"idempotencyKey":"task-0001","task":{"title":"Call lead","responsibleRef":"42","provenance":{"title":"user","responsibleRef":"crm"}}},
+    "expected":{"ok":true,"valid":true,"testMode":true,"mutate":false,"fields":{"title":"Call lead","responsibleRef":"42"}}
+  },
+  {
+    "name":"due date remains explicit ISO",
+    "input":{"idempotencyKey":"task-0002","task":{"title":"Call lead","responsibleRef":"42","dueAt":"2026-07-15T10:00:00+03:00","provenance":{"title":"user","responsibleRef":"crm","dueAt":"system"}}},
+    "expected":{"ok":true,"fields":{"dueAt":"2026-07-15T07:00:00.000Z"}}
+  },
+  {
+    "name":"empty optional field is rejected",
+    "input":{"idempotencyKey":"task-0003","task":{"title":"Call lead","responsibleRef":"42","description":"","provenance":{"title":"user","responsibleRef":"crm","description":"user"}}},
+    "expected":{"ok":false,"error":{"code":"EMPTY_OR_INVALID_FIELD"}}
+  },
+  {
+    "name":"llm task value is rejected",
+    "input":{"idempotencyKey":"task-0004","task":{"title":"Generated task","responsibleRef":"42","provenance":{"title":"llm","responsibleRef":"crm"}}},
+    "expected":{"ok":false,"error":{"code":"UNTRUSTED_VALUE"}}
+  },
+  {
+    "name":"unknown task field is rejected",
+    "input":{"idempotencyKey":"task-0005","task":{"title":"Call lead","responsibleRef":"42","customField":"x","provenance":{"title":"user","responsibleRef":"crm"}}},
+    "expected":{"ok":false,"error":{"code":"INVENTED_FIELD"}}
+  },
+  {
+    "name":"required responsible is missing",
+    "input":{"idempotencyKey":"task-0006","task":{"title":"Call lead","provenance":{"title":"user"}}},
+    "expected":{"ok":false,"error":{"code":"MISSING_REQUIRED_FIELD"}}
+  },
+  {
+    "name":"production mode enables task mutation",
+    "input":{"testMode":false,"idempotencyKey":"task-0007","task":{"title":"Approved task","responsibleRef":"42","provenance":{"title":"user","responsibleRef":"crm"}}},
+    "expected":{"ok":true,"testMode":false,"mutate":true}
+  }
+]

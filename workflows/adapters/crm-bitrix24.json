@@ -1,0 +1,134 @@
+{
+  "id": "adapterBitrix24CrmV1",
+  "name": "Adapter - Bitrix24 CRM (OAuth2)",
+  "nodes": [
+    {
+      "parameters": {"inputSource":"passthrough"},
+      "id": "01100000-0000-4111-8111-000000000001",
+      "name": "Called by Core CRM Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-900, 100]
+    },
+    {
+      "parameters": {"assignments":{"assignments":[{"id":"b24-base-url","name":"profileBaseUrl","value":"https://your-domain.bitrix24.com/rest","type":"string"},{"id":"b24-timeout","name":"profileTimeoutMs","value":30000,"type":"number"}]},"includeOtherFields":true,"options":{}},
+      "id": "01200000-0000-4222-8222-000000000002",
+      "name": "Bitrix24 Profile",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-680, 100]
+    },
+    {
+      "parameters": {"jsCode":"const input=$input.first().json;const contractVersion='1.0';const testMode=input.testMode!==false;const correlationId=typeof input.correlationId==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId)?input.correlationId:crypto.randomUUID();const operation=input.operation;const base={contractVersion,testMode,correlationId,operation,provider:'bitrix24',mutated:false};const fail=(code,message)=>[{json:{...base,ok:false,valid:false,error:{code,message}}}];const allowed=new Set(['contractVersion','testMode','correlationId','operation','idempotencyKey','fields','provenance','profileBaseUrl','profileTimeoutMs']);if(Object.keys(input).some(k=>!allowed.has(k)))return fail('INVALID_REQUEST','Input contains unknown fields');if(input.contractVersion!==undefined&&input.contractVersion!==contractVersion)return fail('UNSUPPORTED_CONTRACT','contractVersion must be 1.0');if(!['lead.upsert','task.create'].includes(operation))return fail('INVALID_OPERATION','operation must be lead.upsert or task.create');if(typeof input.idempotencyKey!=='string'||!/^[A-Za-z0-9._:-]{8,128}$/.test(input.idempotencyKey))return fail('INVALID_IDEMPOTENCY_KEY','A stable idempotencyKey is required');const fields=input.fields;if(!fields||Array.isArray(fields)||typeof fields!=='object')return fail('INVALID_FIELDS','fields object is required');const provenance=input.provenance??{};const trusted=new Set(['user','system','crm','import']);if(!provenance||Array.isArray(provenance)||typeof provenance!=='object'||Object.keys(fields).some(k=>!trusted.has(provenance[k]))||Object.keys(provenance).some(k=>!Object.prototype.hasOwnProperty.call(fields,k)))return fail('UNTRUSTED_VALUE','Every field needs non-LLM provenance and no extra provenance keys');const ensureString=(key,limit)=>{if(!Object.prototype.hasOwnProperty.call(fields,key))return true;return typeof fields[key]==='string'&&fields[key].length>=1&&fields[key].length<=limit;};let request;if(operation==='lead.upsert'){const allowedLead=new Set(['title','name','lastName','company','email','phone','source','notes','assignedTo']);if(Object.keys(fields).some(k=>!allowedLead.has(k)))return fail('UNSUPPORTED_FIELD','Bitrix24 lead mapping does not support this field');if(!ensureString('title',200)||!Object.prototype.hasOwnProperty.call(fields,'title'))return fail('MISSING_REQUIRED_FIELD','Bitrix24 upsert requires a non-empty title');for(const [key,limit] of Object.entries({name:100,lastName:100,company:200,email:254,phone:40,source:100,notes:4000,assignedTo:20}))if(!ensureString(key,limit))return fail('EMPTY_OR_INVALID_FIELD',`${key} is invalid; null/empty is not supported by this adapter`);if(fields.email&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(fields.email))return fail('INVALID_EMAIL','email format is invalid');if(fields.phone&&!/^\\+?[0-9 ()-]{7,40}$/.test(fields.phone))return fail('INVALID_PHONE','phone format is invalid');if(fields.assignedTo&&!/^\\d+$/.test(fields.assignedTo))return fail('INVALID_ASSIGNEE','Bitrix24 assignedTo must be a numeric user id');const mapped={originatorId:'n8n-starter-kit',originId:input.idempotencyKey,title:fields.title};for(const [from,to] of Object.entries({name:'name',lastName:'lastName',company:'companyTitle',source:'sourceId',notes:'comments'}))if(fields[from]!==undefined)mapped[to]=fields[from];if(fields.assignedTo!==undefined)mapped.assignedById=Number(fields.assignedTo);const fm={};let n=0;if(fields.phone)fm[`n${n++}`]={typeId:'PHONE',valueType:'WORK',value:fields.phone};if(fields.email)fm[`n${n++}`]={typeId:'EMAIL',valueType:'WORK',value:fields.email};if(n)mapped.fm=fm;request={kind:'lead',lookupBody:{entityTypeId:1,select:['id','originatorId','originId'],filter:{originatorId:'n8n-starter-kit',originId:input.idempotencyKey}},mappedFields:mapped};}else{const allowedTask=new Set(['title','description','responsibleRef','dueAt','relatedLeadRef']);if(Object.keys(fields).some(k=>!allowedTask.has(k)))return fail('UNSUPPORTED_FIELD','Bitrix24 task mapping does not support this field');if(!ensureString('title',250)||!ensureString('responsibleRef',20)||!Object.prototype.hasOwnProperty.call(fields,'title')||!Object.prototype.hasOwnProperty.call(fields,'responsibleRef'))return fail('MISSING_REQUIRED_FIELD','TITLE and numeric RESPONSIBLE_ID are required');if(!/^\\d+$/.test(fields.responsibleRef))return fail('INVALID_ASSIGNEE','responsibleRef must be a numeric Bitrix24 user id');if(!ensureString('description',4000)||!ensureString('relatedLeadRef',20))return fail('EMPTY_OR_INVALID_FIELD','Optional task field must be omitted or non-empty');const mapped={TITLE:fields.title,RESPONSIBLE_ID:Number(fields.responsibleRef),XML_ID:`n8n-starter-kit:${input.idempotencyKey}`};if(fields.description!==undefined)mapped.DESCRIPTION=fields.description;if(fields.dueAt!==undefined){const dueAt=new Date(fields.dueAt);if(Number.isNaN(dueAt.getTime()))return fail('INVALID_DUE_AT','dueAt must be ISO 8601');mapped.DEADLINE=dueAt.toISOString();}if(fields.relatedLeadRef!==undefined){if(!/^\\d+$/.test(fields.relatedLeadRef))return fail('INVALID_LEAD_REF','relatedLeadRef must be a numeric Bitrix24 lead id');mapped.UF_CRM_TASK=[`L_${fields.relatedLeadRef}`];}request={kind:'task',taskBody:{fields:mapped}};}return [{json:{...base,ok:true,valid:true,mutate:!testMode,idempotencyKey:input.idempotencyKey,request,profileBaseUrl:input.profileBaseUrl,profileTimeoutMs:input.profileTimeoutMs}}];"},
+      "id": "01300000-0000-4333-8333-000000000003",
+      "name": "Prepare Bitrix24 Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-450, 100]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"b24-mutate","leftValue":"={{ $json.mutate }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "01400000-0000-4444-8444-000000000004",
+      "name": "Mutation Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-220, 100]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"b24-lead","leftValue":"={{ $json.request.kind }}","rightValue":"lead","operator":{"type":"string","operation":"equals"}}],"combinator":"and"},"options":{}},
+      "id": "01500000-0000-4555-8555-000000000005",
+      "name": "Lead Operation?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [20, 0]
+    },
+    {
+      "parameters": {"method":"POST","url":"={{ $json.profileBaseUrl.replace(/\\/$/, '') + '/crm.item.list.json' }}","authentication":"genericCredentialType","genericAuthType":"oAuth2Api","sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{ JSON.stringify($json.request.lookupBody) }}","options":{"timeout":"={{ $json.profileTimeoutMs }}","response":{"response":{"fullResponse":true,"neverError":true,"responseFormat":"json"}}}},
+      "id": "01600000-0000-4666-8666-000000000006",
+      "name": "Bitrix24 Find Integration Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, -100],
+      "credentials": {"oAuth2Api":{"id":"REPLACE_WITH_BITRIX24_OAUTH2_CREDENTIAL_ID","name":"Bitrix24 OAuth2"}},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {"jsCode":"const response=$input.first().json;const request=$('Prepare Bitrix24 Request').first().json;const status=Number(response.statusCode??0);const body=response.body??response;const apiCode=String(body.error??'');const fail=(code,message,retryable=false)=>[{json:{...request,ok:false,mutate:false,error:{code,message,retryable,httpStatus:status||null}}}];if(status===401||status===403||/token|auth|access_denied|insufficient/i.test(apiCode))return fail('AUTH_FAILED','Bitrix24 authentication or CRM permission failed');if(status===429||/limit|too_many/i.test(apiCode))return fail('RATE_LIMITED','Bitrix24 rate limit exceeded',true);if(status===0||status>=500)return fail('CRM_UNAVAILABLE','Bitrix24 is unavailable',true);if(status<200||status>=300||apiCode)return fail('CRM_API_ERROR','Bitrix24 duplicate lookup failed');const items=body.result?.items;if(!Array.isArray(items))return fail('INVALID_CRM_RESPONSE','Bitrix24 lookup response has no items');if(items.length>1)return fail('DUPLICATE_AMBIGUOUS','Multiple integration-owned leads share one idempotency key');const id=items.length===1?Number(items[0].id):null;if(items.length===1&&(!Number.isInteger(id)||id<1))return fail('INVALID_CRM_RESPONSE','Matched Bitrix24 lead has no numeric id');const action=id?'update':'create';return [{json:{...request,ok:true,action,methodPath:id?'/crm.item.update.json':'/crm.item.add.json',mutationBody:id?{entityTypeId:1,id,fields:request.request.mappedFields}:{entityTypeId:1,fields:request.request.mappedFields}}}];"},
+      "id": "01700000-0000-4777-8777-000000000007",
+      "name": "Plan Bitrix24 Lead Mutation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, -100]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"b24-plan-ok","leftValue":"={{ $json.ok }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "01800000-0000-4888-8888-000000000008",
+      "name": "Lead Mutation Safe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [740, -100]
+    },
+    {
+      "parameters": {"method":"POST","url":"={{ $json.profileBaseUrl.replace(/\\/$/, '') + $json.methodPath }}","authentication":"genericCredentialType","genericAuthType":"oAuth2Api","sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{ JSON.stringify($json.mutationBody) }}","options":{"timeout":"={{ $json.profileTimeoutMs }}","response":{"response":{"fullResponse":true,"neverError":true,"responseFormat":"json"}}}},
+      "id": "01900000-0000-4999-8999-000000000009",
+      "name": "Bitrix24 Add or Update Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, -180],
+      "credentials": {"oAuth2Api":{"id":"REPLACE_WITH_BITRIX24_OAUTH2_CREDENTIAL_ID","name":"Bitrix24 OAuth2"}},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {"method":"POST","url":"={{ $json.profileBaseUrl.replace(/\\/$/, '') + '/tasks.task.add.json' }}","authentication":"genericCredentialType","genericAuthType":"oAuth2Api","sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{ JSON.stringify($json.request.taskBody) }}","options":{"timeout":"={{ $json.profileTimeoutMs }}","response":{"response":{"fullResponse":true,"neverError":true,"responseFormat":"json"}}}},
+      "id": "01a00000-0000-4aaa-8aaa-00000000000a",
+      "name": "Bitrix24 Add Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 100],
+      "credentials": {"oAuth2Api":{"id":"REPLACE_WITH_BITRIX24_OAUTH2_CREDENTIAL_ID","name":"Bitrix24 OAuth2"}},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {"jsCode":"const response=$input.first().json;const request=$('Prepare Bitrix24 Request').first().json;let plan=null;try{plan=$('Plan Bitrix24 Lead Mutation').first().json;}catch{}const status=Number(response.statusCode??0);const body=response.body??response;const apiCode=String(body.error??'');const fail=(code,message,retryable=false)=>[{json:{ok:false,contractVersion:'1.0',testMode:false,correlationId:request.correlationId,operation:request.operation,provider:'bitrix24',mutated:false,idempotencyKey:request.idempotencyKey,error:{code,message,retryable,httpStatus:status||null}}}];if(status===401||status===403||/token|auth|access_denied|insufficient/i.test(apiCode))return fail('AUTH_FAILED','Bitrix24 authentication or permission failed');if(status===429||/limit|too_many/i.test(apiCode))return request.operation==='task.create'?fail('AMBIGUOUS_TASK_STATE','Bitrix24 task was not retried; reconcile by XML_ID before another create'):fail('RATE_LIMITED','Bitrix24 rate limit exceeded',true);if(status===0||status>=500)return request.operation==='task.create'?fail('AMBIGUOUS_TASK_STATE','Bitrix24 task outcome is unknown; reconcile by XML_ID before another create'):fail('CRM_UNAVAILABLE','Bitrix24 is unavailable',true);if(status<200||status>=300||apiCode)return fail(/field|argument|parameter/i.test(apiCode)?'CRM_VALIDATION_FAILED':'CRM_API_ERROR','Bitrix24 rejected the operation');const rawId=request.operation==='lead.upsert'?body.result?.item?.id:body.result?.task?.id;const id=String(rawId??'');if(!/^\\d+$/.test(id))return fail('INVALID_CRM_RESPONSE','Bitrix24 response has no numeric id');return [{json:{ok:true,contractVersion:'1.0',testMode:false,correlationId:request.correlationId,operation:request.operation,provider:'bitrix24',mutated:true,action:request.operation==='lead.upsert'?(plan?.action??'upsert'):'create',crmId:id,idempotencyKey:request.idempotencyKey,error:null}}];"},
+      "id": "01b00000-0000-4bbb-8bbb-00000000000b",
+      "name": "Normalize Bitrix24 Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1220, 0]
+    },
+    {
+      "parameters": {"jsCode":"const request=$input.first().json;return [{json:{ok:true,contractVersion:'1.0',testMode:true,correlationId:request.correlationId,operation:request.operation,provider:'bitrix24',mutated:false,action:'preview',idempotencyKey:request.idempotencyKey,request:request.request,error:null}}];"},
+      "id": "01c00000-0000-4ccc-8ccc-00000000000c",
+      "name": "Return Bitrix24 Preview",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [20, 260]
+    },
+    {
+      "parameters": {"content":"## Bitrix24 example adapter v1.0\nChecked against official docs on 2026-07-14.\n\n- Configure the portal `/rest` base URL in this workflow and bind an OAuth2 credential with `crm` and `task` scopes.\n- Lead uses current universal `crm.item.list/add/update` with `entityTypeId=1`; deprecated `crm.lead.*` is not used.\n- Only records owned by `originatorId=n8n-starter-kit` and the same idempotency key are updated. Multiple matches stop safely.\n- Task uses `tasks.task.add`. Default test mode bypasses all HTTP nodes.","height":350,"width":480,"color":5},
+      "id": "01d00000-0000-4ddd-8ddd-00000000000d",
+      "name": "Bitrix24 Setup and Safety Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-920, -360]
+    }
+  ],
+  "connections": {
+    "Called by Core CRM Workflow":{"main":[[{"node":"Bitrix24 Profile","type":"main","index":0}]]},
+    "Bitrix24 Profile":{"main":[[{"node":"Prepare Bitrix24 Request","type":"main","index":0}]]},
+    "Prepare Bitrix24 Request":{"main":[[{"node":"Mutation Enabled?","type":"main","index":0}]]},
+    "Mutation Enabled?":{"main":[[{"node":"Lead Operation?","type":"main","index":0}],[{"node":"Return Bitrix24 Preview","type":"main","index":0}]]},
+    "Lead Operation?":{"main":[[{"node":"Bitrix24 Find Integration Lead","type":"main","index":0}],[{"node":"Bitrix24 Add Task","type":"main","index":0}]]},
+    "Bitrix24 Find Integration Lead":{"main":[[{"node":"Plan Bitrix24 Lead Mutation","type":"main","index":0}]]},
+    "Plan Bitrix24 Lead Mutation":{"main":[[{"node":"Lead Mutation Safe?","type":"main","index":0}]]},
+    "Lead Mutation Safe?":{"main":[[{"node":"Bitrix24 Add or Update Lead","type":"main","index":0}],[]]},
+    "Bitrix24 Add or Update Lead":{"main":[[{"node":"Normalize Bitrix24 Result","type":"main","index":0}]]},
+    "Bitrix24 Add Task":{"main":[[{"node":"Normalize Bitrix24 Result","type":"main","index":0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder":"v1","saveDataErrorExecution":"all","saveDataSuccessExecution":"none","saveManualExecutions":false},
+  "active": false,
+  "versionId": "01e00000-0000-4eee-8eee-00000000000e",
+  "meta": {"templateCredsSetupCompleted":false},
+  "tags": []
+}

@@ -1,0 +1,123 @@
+{
+  "id": "coreGenericCrmLeadUpsertV1",
+  "name": "Core - CRM Create or Update Lead (Generic HTTP)",
+  "nodes": [
+    {
+      "parameters": {"inputSource":"passthrough"},
+      "id": "e1100000-0000-4111-8111-000000000001",
+      "name": "Called by Business Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-900, 120]
+    },
+    {
+      "parameters": {
+        "assignments": {"assignments":[
+          {"id":"crm-base-url","name":"profileBaseUrl","value":"https://crm.example.invalid/v1","type":"string"},
+          {"id":"crm-timeout","name":"profileTimeoutMs","value":30000,"type":"number"}
+        ]},
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "e1200000-0000-4222-8222-000000000002",
+      "name": "Generic CRM Profile",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-680, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first().json; const contractVersion='1.0'; const testMode=input.testMode!==false; const correlationId=typeof input.correlationId==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId)?input.correlationId:crypto.randomUUID(); const base={contractVersion,testMode,correlationId,operation:'lead.upsert',mutated:false}; const fail=(code,message)=>[{json:{...base,ok:false,valid:false,error:{code,message}}}]; const allowed=new Set(['contractVersion','testMode','correlationId','idempotencyKey','lead','profileBaseUrl','profileTimeoutMs']); if(Object.keys(input).some(k=>!allowed.has(k))) return fail('INVALID_REQUEST','Input contains unknown fields'); if(input.contractVersion!==undefined&&input.contractVersion!==contractVersion) return fail('UNSUPPORTED_CONTRACT','contractVersion must be 1.0'); if(typeof input.idempotencyKey!=='string'||!/^[A-Za-z0-9._:-]{8,128}$/.test(input.idempotencyKey)) return fail('INVALID_IDEMPOTENCY_KEY','A stable idempotencyKey is required'); const lead=input.lead; if(!lead||Array.isArray(lead)||typeof lead!=='object') return fail('INVALID_LEAD','lead object is required'); const fieldsAllowed=new Set(['externalId','title','name','lastName','company','email','phone','source','notes','assignedTo','clearFields','provenance']); if(Object.keys(lead).some(k=>!fieldsAllowed.has(k))) return fail('INVENTED_FIELD','Lead contains a field outside the contract'); const clearFields=lead.clearFields??[]; const clearable=new Set(['company','email','phone','source','notes','assignedTo']); if(!Array.isArray(clearFields)||new Set(clearFields).size!==clearFields.length||clearFields.some(k=>!clearable.has(k))) return fail('INVALID_CLEAR_FIELDS','clearFields contains a forbidden field'); const has=(k)=>Object.prototype.hasOwnProperty.call(lead,k); if(clearFields.some(has)) return fail('AMBIGUOUS_FIELD','A field cannot be both supplied and cleared'); const limits={externalId:128,title:200,name:100,lastName:100,company:200,email:254,phone:40,source:100,notes:4000,assignedTo:128}; const fields={}; for(const [key,limit] of Object.entries(limits)){ if(!has(key)) continue; if(typeof lead[key]!=='string'||lead[key].length<1||lead[key].length>limit) return fail('EMPTY_OR_INVALID_FIELD',`${key} must be omitted or contain 1..${limit} characters`); fields[key]=lead[key]; } if(has('email')&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(lead.email)) return fail('INVALID_EMAIL','email format is invalid'); if(has('phone')&&!/^\\+?[0-9 ()-]{7,40}$/.test(lead.phone)) return fail('INVALID_PHONE','phone format is invalid'); for(const key of clearFields) fields[key]=null; if(!has('externalId')&&!has('email')&&!has('phone')) return fail('MISSING_MATCH_KEY','externalId, email or phone is required for duplicate lookup'); const provenance=lead.provenance??{}; if(!provenance||Array.isArray(provenance)||typeof provenance!=='object') return fail('INVALID_PROVENANCE','provenance must be an object'); const sourced=[...Object.keys(fields)].filter(k=>k!=='externalId'); const sourceAllowed=new Set(['user','system','crm','import']); if(sourced.some(k=>!sourceAllowed.has(provenance[k]))||Object.keys(provenance).some(k=>!sourced.includes(k))) return fail('UNTRUSTED_VALUE','Every mutable field needs non-LLM provenance and no extra provenance keys'); const lookup=has('externalId')?{field:'externalId',value:lead.externalId}:has('email')?{field:'email',value:lead.email}:{field:'phone',value:lead.phone}; return [{json:{...base,ok:true,valid:true,mutate:!testMode,idempotencyKey:input.idempotencyKey,lookup,fields,profileBaseUrl:input.profileBaseUrl,profileTimeoutMs:input.profileTimeoutMs}}];"
+      },
+      "id": "e1300000-0000-4333-8333-000000000003",
+      "name": "Prepare Lead Upsert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-450, 120]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"lead-mutate","leftValue":"={{ $json.mutate }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "e1400000-0000-4444-8444-000000000004",
+      "name": "Mutation Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-220, 120]
+    },
+    {
+      "parameters": {"method":"POST","url":"={{ $json.profileBaseUrl.replace(/\\/$/, '') + '/leads/search' }}","authentication":"genericCredentialType","genericAuthType":"oAuth2Api","sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{ JSON.stringify({match:$json.lookup,limit:2}) }}","options":{"timeout":"={{ $json.profileTimeoutMs }}","response":{"response":{"fullResponse":true,"neverError":true,"responseFormat":"json"}}}},
+      "id": "e1500000-0000-4555-8555-000000000005",
+      "name": "Find Duplicate Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [20, 20],
+      "credentials": {"oAuth2Api":{"id":"REPLACE_WITH_GENERIC_CRM_OAUTH2_CREDENTIAL_ID","name":"Generic CRM OAuth2"}},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {"jsCode":"const response=$input.first().json; const request=$('Prepare Lead Upsert').first().json; const status=Number(response.statusCode??0); const body=response.body??response; const fail=(code,message,retryable=false)=>[{json:{...request,ok:false,mutate:false,error:{code,message,retryable,httpStatus:status||null}}}]; if(status===401||status===403)return fail('AUTH_FAILED','CRM authentication or permission failed'); if(status===429)return fail('RATE_LIMITED','CRM rate limit exceeded',true); if(status===0||status>=500)return fail('CRM_UNAVAILABLE','CRM is unavailable',true); if(status<200||status>=300)return fail('CRM_API_ERROR','CRM duplicate lookup failed'); const items=Array.isArray(body.items)?body.items:Array.isArray(body.result)?body.result:null; if(!items)return fail('INVALID_CRM_RESPONSE','Duplicate lookup response has no items'); if(items.length>1)return fail('DUPLICATE_AMBIGUOUS','More than one lead matches; no mutation is allowed'); const id=items.length===1?String(items[0].id??items[0].ID??''):''; if(items.length===1&&!/^[A-Za-z0-9._:-]{1,128}$/.test(id))return fail('INVALID_CRM_RESPONSE','Matched lead has no safe id'); return [{json:{...request,ok:true,action:id?'update':'create',crmId:id||null,method:id?'PATCH':'POST',mutationPath:id?`/leads/${encodeURIComponent(id)}`:'/leads',mutationBody:{fields:request.fields,idempotencyKey:request.idempotencyKey}}}];"},
+      "id": "e1600000-0000-4666-8666-000000000006",
+      "name": "Plan Safe Lead Mutation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [260, 20]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"plan-ok","leftValue":"={{ $json.ok }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "e1700000-0000-4777-8777-000000000007",
+      "name": "Safe Mutation Planned?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [500, 20]
+    },
+    {
+      "parameters": {"method":"={{ $json.method }}","url":"={{ $json.profileBaseUrl.replace(/\\/$/, '') + $json.mutationPath }}","authentication":"genericCredentialType","genericAuthType":"oAuth2Api","sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{ JSON.stringify($json.mutationBody) }}","options":{"timeout":"={{ $json.profileTimeoutMs }}","response":{"response":{"fullResponse":true,"neverError":true,"responseFormat":"json"}}}},
+      "id": "e1800000-0000-4888-8888-000000000008",
+      "name": "Create or Update Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, -80],
+      "credentials": {"oAuth2Api":{"id":"REPLACE_WITH_GENERIC_CRM_OAUTH2_CREDENTIAL_ID","name":"Generic CRM OAuth2"}},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {"jsCode":"const response=$input.first().json; const plan=$('Plan Safe Lead Mutation').first().json; const status=Number(response.statusCode??0); const body=response.body??response; const error=(code,message,retryable=false)=>[{json:{ok:false,contractVersion:'1.0',testMode:false,correlationId:plan.correlationId,operation:'lead.upsert',mutated:false,idempotencyKey:plan.idempotencyKey,error:{code,message,retryable,httpStatus:status||null}}}]; if(status===401||status===403)return error('AUTH_FAILED','CRM authentication or permission failed'); if(status===409)return error('IDEMPOTENCY_CONFLICT','CRM rejected a duplicate idempotency key'); if(status===429)return error('RATE_LIMITED','CRM rate limit exceeded',true); if(status===0||status>=500)return error('CRM_UNAVAILABLE','CRM is unavailable',true); if(status<200||status>=300)return error('CRM_API_ERROR','CRM mutation failed'); const crmId=String(body.id??body.result?.id??plan.crmId??''); if(!crmId)return error('INVALID_CRM_RESPONSE','CRM response has no record id'); return [{json:{ok:true,contractVersion:'1.0',testMode:false,correlationId:plan.correlationId,operation:'lead.upsert',mutated:true,action:plan.action,crmId,idempotencyKey:plan.idempotencyKey,error:null}}];"},
+      "id": "e1900000-0000-4999-8999-000000000009",
+      "name": "Normalize Lead Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, -80]
+    },
+    {
+      "parameters": {"jsCode":"const request=$input.first().json; return [{json:{ok:true,contractVersion:'1.0',testMode:true,correlationId:request.correlationId,operation:'lead.upsert',mutated:false,action:'preview',idempotencyKey:request.idempotencyKey,lookup:request.lookup,fields:request.fields,error:null}}];"},
+      "id": "e1a00000-0000-4aaa-8aaa-00000000000a",
+      "name": "Return Lead Preview",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [20, 220]
+    },
+    {
+      "parameters": {"content":"## Generic CRM lead upsert v1.0\n`testMode=true` is the default and bypasses every HTTP node.\n\n- Configure an HTTPS API profile and OAuth2 credential in this workflow, never in caller input.\n- The adapter contract expects `POST /leads/search`, `POST /leads`, and `PATCH /leads/{id}`.\n- Omitted fields remain untouched; empty strings are rejected; clearing requires `clearFields`.\n- More than one duplicate is fail-closed. Every mutable value needs non-LLM provenance.","height":330,"width":460,"color":5},
+      "id": "e1b00000-0000-4bbb-8bbb-00000000000b",
+      "name": "Generic CRM Contract Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-920, -310]
+    }
+  ],
+  "connections": {
+    "Called by Business Workflow":{"main":[[{"node":"Generic CRM Profile","type":"main","index":0}]]},
+    "Generic CRM Profile":{"main":[[{"node":"Prepare Lead Upsert","type":"main","index":0}]]},
+    "Prepare Lead Upsert":{"main":[[{"node":"Mutation Enabled?","type":"main","index":0}]]},
+    "Mutation Enabled?":{"main":[[{"node":"Find Duplicate Lead","type":"main","index":0}],[{"node":"Return Lead Preview","type":"main","index":0}]]},
+    "Find Duplicate Lead":{"main":[[{"node":"Plan Safe Lead Mutation","type":"main","index":0}]]},
+    "Plan Safe Lead Mutation":{"main":[[{"node":"Safe Mutation Planned?","type":"main","index":0}]]},
+    "Safe Mutation Planned?":{"main":[[{"node":"Create or Update Lead","type":"main","index":0}],[]]},
+    "Create or Update Lead":{"main":[[{"node":"Normalize Lead Result","type":"main","index":0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder":"v1","saveDataErrorExecution":"all","saveDataSuccessExecution":"none","saveManualExecutions":false},
+  "active": false,
+  "versionId": "e1c00000-0000-4ccc-8ccc-00000000000c",
+  "meta": {"templateCredsSetupCompleted":false},
+  "tags": []
+}

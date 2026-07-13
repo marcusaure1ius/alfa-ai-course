@@ -1,0 +1,37 @@
+[
+  {
+    "name":"valid preview preserves absent fields",
+    "input":{"idempotencyKey":"lead-0001","lead":{"externalId":"ext-1","title":"Website lead","provenance":{"title":"user"}}},
+    "expected":{"ok":true,"valid":true,"testMode":true,"mutate":false,"lookup":{"field":"externalId","value":"ext-1"},"fields":{"externalId":"ext-1","title":"Website lead"}}
+  },
+  {
+    "name":"explicit clear is represented as null",
+    "input":{"idempotencyKey":"lead-0002","lead":{"externalId":"ext-2","title":"Known lead","clearFields":["company"],"provenance":{"title":"crm","company":"user"}}},
+    "expected":{"ok":true,"fields":{"externalId":"ext-2","title":"Known lead","company":null}}
+  },
+  {
+    "name":"empty value is not treated as absent",
+    "input":{"idempotencyKey":"lead-0003","lead":{"externalId":"ext-3","title":"","provenance":{"title":"user"}}},
+    "expected":{"ok":false,"error":{"code":"EMPTY_OR_INVALID_FIELD"}}
+  },
+  {
+    "name":"unknown invented field is rejected",
+    "input":{"idempotencyKey":"lead-0004","lead":{"externalId":"ext-4","title":"Lead","budget":"100","provenance":{"title":"user"}}},
+    "expected":{"ok":false,"error":{"code":"INVENTED_FIELD"}}
+  },
+  {
+    "name":"llm provenance is rejected",
+    "input":{"idempotencyKey":"lead-0005","lead":{"externalId":"ext-5","title":"Generated title","provenance":{"title":"llm"}}},
+    "expected":{"ok":false,"error":{"code":"UNTRUSTED_VALUE"}}
+  },
+  {
+    "name":"duplicate lookup key is required",
+    "input":{"idempotencyKey":"lead-0006","lead":{"title":"Lead","provenance":{"title":"user"}}},
+    "expected":{"ok":false,"error":{"code":"MISSING_MATCH_KEY"}}
+  },
+  {
+    "name":"production mode enables planned mutation",
+    "input":{"testMode":false,"idempotencyKey":"lead-0007","lead":{"email":"contact@example.test","title":"Approved lead","provenance":{"email":"import","title":"user"}}},
+    "expected":{"ok":true,"testMode":false,"mutate":true,"lookup":{"field":"email","value":"contact@example.test"}}
+  }
+]

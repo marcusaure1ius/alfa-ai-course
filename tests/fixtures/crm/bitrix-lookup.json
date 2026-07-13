@@ -1,0 +1,7 @@
+[
+  {"name":"no integration lead uses crm item add","response":{"statusCode":200,"body":{"result":{"items":[]}}},"expected":{"ok":true,"action":"create","methodPath":"/crm.item.add.json"}},
+  {"name":"one integration lead uses crm item update","response":{"statusCode":200,"body":{"result":{"items":[{"id":77}]}}},"expected":{"ok":true,"action":"update","methodPath":"/crm.item.update.json","mutationBody":{"entityTypeId":1,"id":77}}},
+  {"name":"multiple integration leads fail closed","response":{"statusCode":200,"body":{"result":{"items":[{"id":77},{"id":78}]}}},"expected":{"ok":false,"mutate":false,"error":{"code":"DUPLICATE_AMBIGUOUS"}}},
+  {"name":"bitrix token error is redacted","response":{"statusCode":200,"body":{"error":"expired_token","error_description":"sensitive provider text"}},"expected":{"ok":false,"error":{"code":"AUTH_FAILED","message":"Bitrix24 authentication or CRM permission failed"}}},
+  {"name":"bitrix limit error is retryable","response":{"statusCode":429,"body":{"error":"QUERY_LIMIT_EXCEEDED"}},"expected":{"ok":false,"error":{"code":"RATE_LIMITED","retryable":true}}}
+]

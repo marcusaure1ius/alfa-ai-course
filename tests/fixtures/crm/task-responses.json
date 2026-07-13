@@ -1,0 +1,7 @@
+[
+  {"name":"task creation success","response":{"statusCode":201,"body":{"id":"501"}},"expected":{"ok":true,"mutated":true,"crmTaskId":"501"}},
+  {"name":"task idempotency conflict","response":{"statusCode":409,"body":{}},"expected":{"ok":false,"mutated":false,"error":{"code":"IDEMPOTENCY_CONFLICT"}}},
+  {"name":"task auth error","response":{"statusCode":403,"body":{}},"expected":{"ok":false,"error":{"code":"AUTH_FAILED"}}},
+  {"name":"task rate error","response":{"statusCode":429,"body":{}},"expected":{"ok":false,"error":{"code":"RATE_LIMITED","retryable":true}}},
+  {"name":"task service error","response":{"statusCode":503,"body":{}},"expected":{"ok":false,"error":{"code":"CRM_UNAVAILABLE","retryable":true}}}
+]

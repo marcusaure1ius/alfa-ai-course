@@ -1,0 +1,7 @@
+[
+  {"name":"bitrix lead success","operation":"lead.upsert","response":{"statusCode":200,"body":{"result":{"item":{"id":77}}}},"expected":{"ok":true,"mutated":true,"operation":"lead.upsert","crmId":"77"}},
+  {"name":"bitrix task success","operation":"task.create","response":{"statusCode":200,"body":{"result":{"task":{"id":"501"}}}},"expected":{"ok":true,"mutated":true,"operation":"task.create","crmId":"501"}},
+  {"name":"task service error requires reconciliation","operation":"task.create","response":{"statusCode":503,"body":{}},"expected":{"ok":false,"mutated":false,"error":{"code":"AMBIGUOUS_TASK_STATE","retryable":false}}},
+  {"name":"task rate response is not automatically retried","operation":"task.create","response":{"statusCode":429,"body":{"error":"QUERY_LIMIT_EXCEEDED"}},"expected":{"ok":false,"error":{"code":"AMBIGUOUS_TASK_STATE","retryable":false}}},
+  {"name":"bitrix auth response is normalized","operation":"task.create","response":{"statusCode":401,"body":{"error":"expired_token","error_description":"must not escape"}},"expected":{"ok":false,"error":{"code":"AUTH_FAILED","message":"Bitrix24 authentication or permission failed"}}}
+]
