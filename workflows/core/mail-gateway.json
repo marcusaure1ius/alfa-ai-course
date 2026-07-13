@@ -1,0 +1,98 @@
+{
+  "id": "coreMailGatewayV1",
+  "name": "Core - Provider-Neutral Mail Gateway",
+  "nodes": [
+    {
+      "parameters": {"inputSource": "passthrough"},
+      "id": "d9100000-0000-4111-8111-000000000001",
+      "name": "Called by Business Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-620, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst VERSION = '1.0';\nconst MARKER = 'alfa-mail-gateway-v1';\nconst MAX_BODY = 12000;\nconst safeId = (value, max = 200) => typeof value === 'string' && value.length <= max && /^[A-Za-z0-9.!#$%&'*+\\/=?^_`{|}~@<>:;,.() \\-[\\]]+$/.test(value) ? value.trim() : '';\nconst correlationId = typeof input.correlationId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId) ? input.correlationId : crypto.randomUUID();\nconst testMode = input.testMode !== false;\nconst base = {contractVersion: VERSION, correlationId, testMode, operation: input.operation ?? ''};\nconst result = (ok, status, extra = {}) => [{json:{...base, ok, status, sendAuthorized:false, ...extra}}];\nconst fail = (code, message, extra = {}) => result(false, 'rejected', {error:{code,message}, ...extra});\nconst only = (object, keys) => object && typeof object === 'object' && !Array.isArray(object) && Object.keys(object).every((key) => keys.has(key));\nif (!only(input, new Set(['contractVersion','testMode','operation','correlationId','message','draft','approval','sender']))) return fail('INVALID_REQUEST','Input contains unknown fields');\nif (input.contractVersion !== undefined && input.contractVersion !== VERSION) return fail('UNSUPPORTED_CONTRACT','contractVersion must be 1.0');\nconst operation = input.operation;\nif (!['normalizeIncoming','createDraft','authorizeSend'].includes(operation)) return fail('INVALID_OPERATION','operation must be normalizeIncoming, createDraft, or authorizeSend');\nconst cleanText = (value, max = MAX_BODY) => {\n  const raw = typeof value === 'string' ? value : '';\n  const clean = raw.replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]/g, '').replace(/\\r\\n?/g, '\\n').trim();\n  return {value: clean.slice(0, max), truncated: clean.length > max};\n};\nconst htmlToText = (value) => {\n  const raw = typeof value === 'string' ? value.slice(0, 100000) : '';\n  const stripped = raw.replace(/<(script|style|head|iframe|object|embed|form|svg|math)[^>]*>[\\s\\S]*?<\\/\\1\\s*>/gi, ' ').replace(/<!--([\\s\\S]*?)-->/g, ' ').replace(/<\\s*br\\s*\\/?\\s*>/gi, '\\n').replace(/<\\/\\s*(p|div|li|tr|h[1-6])\\s*>/gi, '\\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '\"').replace(/&#39;|&apos;/gi, \"'\").replace(/&#(\\d{1,6});/g, (_, n) => { const cp = Number(n); return cp > 31 && cp <= 0x10ffff ? String.fromCodePoint(cp) : ' '; }).replace(/javascript\\s*:|data\\s*:\\s*text\\/html/gi, '[blocked-uri]').replace(/[ \\t]+/g, ' ').replace(/ *\\n */g, '\\n').replace(/\\n{3,}/g, '\\n\\n').trim();\n  return cleanText(stripped);\n};\nconst mailbox = (value, maxCount) => {\n  const source = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];\n  if (source.length > maxCount) return null;\n  const normalized = [];\n  for (const entry of source) {\n    if (typeof entry !== 'string' || /[\\r\\n]/.test(entry)) return null;\n    const match = entry.trim().match(/^(?:[^<>]{1,80}<)?([A-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[A-Z0-9.-]+\\.[A-Z]{2,63})>?$/i);\n    if (!match) return null;\n    normalized.push(match[1].toLowerCase());\n  }\n  return [...new Set(normalized)];\n};\nconst attachments = (value) => {\n  if (value === undefined) return {ok:true, items:[], totalBytes:0};\n  if (!Array.isArray(value) || value.length > 10) return {ok:false};\n  let totalBytes = 0;\n  const items = [];\n  for (const item of value) {\n    if (!only(item, new Set(['fileRef','fileName','mimeType','size']))) return {ok:false};\n    if (typeof item.fileRef !== 'string' || !/^[A-Za-z0-9._:-]{3,128}$/.test(item.fileRef)) return {ok:false};\n    if (typeof item.fileName !== 'string' || item.fileName.length < 1 || item.fileName.length > 160 || /[\\r\\n\\/\\\\]/.test(item.fileName)) return {ok:false};\n    if (typeof item.mimeType !== 'string' || !/^[a-z0-9.+-]{1,64}\\/[a-z0-9.+-]{1,64}$/i.test(item.mimeType)) return {ok:false};\n    if (!Number.isInteger(item.size) || item.size < 0 || item.size > 10 * 1024 * 1024) return {ok:false};\n    totalBytes += item.size;\n    if (totalBytes > 20 * 1024 * 1024) return {ok:false};\n    items.push({fileRef:item.fileRef,fileName:item.fileName,mimeType:item.mimeType,size:item.size});\n  }\n  return {ok:true,items,totalBytes};\n};\nconst normalizeDraft = (draft) => {\n  if (!only(draft, new Set(['idempotencyKey','to','cc','bcc','subject','bodyText','inReplyTo','references','attachments','draftOnly','processingMarker']))) return {error:['INVALID_DRAFT','Draft contains unknown fields']};\n  if (typeof draft.idempotencyKey !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(draft.idempotencyKey)) return {error:['INVALID_IDEMPOTENCY_KEY','A safe idempotencyKey is required']};\n  const to = mailbox(draft.to, 10); const cc = mailbox(draft.cc, 5); const bcc = mailbox(draft.bcc, 5);\n  if (!to || to.length === 0 || !cc || !bcc) return {error:['INVALID_RECIPIENT','Recipient addresses are invalid or exceed limits']};\n  if (typeof draft.subject !== 'string' || draft.subject.trim().length < 1 || draft.subject.length > 200 || /[\\r\\n]/.test(draft.subject)) return {error:['INVALID_SUBJECT','Subject must be 1..200 characters without line breaks']};\n  const body = cleanText(draft.bodyText);\n  if (!body.value) return {error:['INVALID_BODY','Plain-text body is required']};\n  const refs = Array.isArray(draft.references) ? draft.references : draft.references ? [draft.references] : [];\n  if (refs.length > 20 || refs.some((ref) => !safeId(ref))) return {error:['INVALID_THREAD','Thread identifiers are invalid']};\n  if (draft.inReplyTo !== undefined && !safeId(draft.inReplyTo)) return {error:['INVALID_THREAD','inReplyTo is invalid']};\n  if (draft.processingMarker !== undefined && draft.processingMarker !== MARKER) return {error:['INVALID_MARKER','Outgoing processingMarker must use the canonical marker']};\n  const files = attachments(draft.attachments);\n  if (!files.ok) return {error:['INVALID_ATTACHMENTS','Attachment metadata exceeds safety limits']};\n  return {draft:{idempotencyKey:draft.idempotencyKey,to,cc,bcc,subject:draft.subject.trim(),bodyText:body.value,bodyTruncated:body.truncated,inReplyTo:draft.inReplyTo ?? null,references:refs,attachments:files.items,draftOnly:draft.draftOnly !== false,processingMarker:MARKER}};\n};\nif (operation === 'normalizeIncoming') {\n  const message = input.message;\n  if (!only(message, new Set(['messageId','inReplyTo','references','from','to','cc','subject','text','html','receivedAt','attachments','processingMarker']))) return fail('INVALID_MESSAGE','Message contains unknown fields');\n  if (!safeId(message.messageId)) return fail('INVALID_MESSAGE_ID','A bounded messageId is required');\n  if (message.processingMarker === MARKER) return fail('LOOP_DETECTED','Message was produced by this mail gateway');\n  const from = mailbox(message.from, 1); const to = mailbox(message.to, 10); const cc = mailbox(message.cc, 5);\n  if (!from || from.length !== 1 || !to || !cc) return fail('INVALID_ADDRESS','Message addresses are invalid or exceed limits');\n  if (typeof message.subject !== 'string' || message.subject.length > 200 || /[\\r\\n]/.test(message.subject)) return fail('INVALID_SUBJECT','Subject is invalid');\n  const receivedAt = new Date(message.receivedAt);\n  if (Number.isNaN(receivedAt.getTime())) return fail('INVALID_TIME','receivedAt must be an ISO timestamp');\n  const refs = Array.isArray(message.references) ? message.references : message.references ? [message.references] : [];\n  if (refs.length > 20 || refs.some((ref) => !safeId(ref)) || (message.inReplyTo !== undefined && !safeId(message.inReplyTo))) return fail('INVALID_THREAD','Thread identifiers are invalid');\n  const files = attachments(message.attachments);\n  if (!files.ok) return fail('INVALID_ATTACHMENTS','Attachment metadata exceeds safety limits');\n  const plain = cleanText(message.text); const html = htmlToText(message.html); const content = plain.value ? plain : html;\n  if (!content.value) return fail('EMPTY_CONTENT','Message has no safe text content');\n  const threadRef = message.inReplyTo || refs.at(-1) || message.messageId;\n  return result(true,'normalized',{message:{messageId:message.messageId,inReplyTo:message.inReplyTo ?? null,references:refs,threadRef,from:from[0],to,cc,subject:message.subject.trim(),safeText:content.value,contentSource:plain.value?'text':'sanitized-html',contentTruncated:content.truncated,untrustedContent:true,receivedAt:receivedAt.toISOString(),attachments:files.items,totalAttachmentBytes:files.totalBytes,processingMarker:MARKER}});\n}\nconst prepared = normalizeDraft(input.draft);\nif (prepared.error) return fail(prepared.error[0],prepared.error[1]);\nif (operation === 'createDraft') return result(true,'draft',{draft:prepared.draft});\nconst sender = input.sender;\nif (!only(sender, new Set(['fromEmail','replyTo']))) return fail('INVALID_SENDER','Sender contains unknown fields',{draft:prepared.draft});\nconst from = mailbox(sender.fromEmail,1); const replyTo = sender.replyTo === undefined ? [] : mailbox(sender.replyTo,1);\nif (!from || from.length !== 1 || !replyTo) return fail('INVALID_SENDER','Sender addresses are invalid',{draft:prepared.draft});\nconst approval = input.approval;\nconst approved = only(approval,new Set(['contractVersion','testMode','correlationId','ok','status','reason','allowAction','idempotencyKey','expiresAt','decision'])) && approval.contractVersion === VERSION && approval.ok === true && approval.status === 'approved' && approval.allowAction === true && approval.idempotencyKey === prepared.draft.idempotencyKey;\nif (testMode) return result(true,'preview',{reason:'TEST_MODE',draft:prepared.draft});\nif (prepared.draft.draftOnly) return result(true,'draft',{reason:'DRAFT_ONLY',draft:prepared.draft});\nif (prepared.draft.attachments.length) return fail('ATTACHMENT_REVIEW_REQUIRED','SMTP attachments are disabled until a separate content-scan gate is implemented',{draft:prepared.draft});\nif (!approved) return result(true,'denied',{reason:'EXPLICIT_APPROVAL_REQUIRED',draft:prepared.draft});\nreturn [{json:{...base,ok:true,status:'authorized',sendAuthorized:true,draft:prepared.draft,smtp:{fromEmail:from[0],replyTo:replyTo[0] ?? ''}}}];"
+      },
+      "id": "d9200000-0000-4222-8222-000000000002",
+      "name": "Evaluate Mail Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-360, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"d9300000-0000-4333-8333-000000000003","leftValue":"={{ $json.sendAuthorized }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},
+        "options": {}
+      },
+      "id": "d9400000-0000-4444-8444-000000000004",
+      "name": "SMTP Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-80, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const current = $input.first().json;\nif (current.sendAuthorized !== true) return [{json:current}];\nconst original = $('Called by Business Workflow').first().json;\nconst approval = original.approval;\nconst only = (object, keys) => object && typeof object === 'object' && !Array.isArray(object) && Object.keys(object).every((key) => keys.has(key));\nconst expiry = new Date(approval?.expiresAt);\nconst exact = only(approval,new Set(['contractVersion','testMode','correlationId','ok','status','reason','allowAction','idempotencyKey','expiresAt','decision'])) && approval.contractVersion === '1.0' && approval.ok === true && approval.status === 'approved' && approval.allowAction === true && approval.idempotencyKey === current.draft?.idempotencyKey && !Number.isNaN(expiry.getTime()) && expiry > new Date() && only(approval.decision,new Set(['state','approverRef'])) && approval.decision.state === 'approved' && typeof approval.decision.approverRef === 'string' && /^[A-Za-z0-9._:-]{3,128}$/.test(approval.decision.approverRef);\nif (exact) return [{json:current}];\nreturn [{json:{...current,status:'denied',sendAuthorized:false,reason:'EXPLICIT_UNEXPIRED_APPROVAL_REQUIRED',smtp:undefined}}];"
+      },
+      "id": "d9350000-0000-4333-8333-000000000035",
+      "name": "Enforce Fresh Approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-140, 120]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.smtp.fromEmail }}",
+        "toEmail": "={{ $json.draft.to.join(',') }}",
+        "subject": "={{ $json.draft.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.draft.bodyText }}",
+        "options": {"appendAttribution":false,"ccEmail":"={{ $json.draft.cc.join(',') }}","bccEmail":"={{ $json.draft.bcc.join(',') }}","replyTo":"={{ $json.smtp.replyTo }}","allowUnauthorizedCerts":false}
+      },
+      "id": "d9500000-0000-4555-8555-000000000005",
+      "name": "Send Approved SMTP Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [200, 20],
+      "credentials": {"smtp":{"id":"REPLACE_WITH_SMTP_CREDENTIAL_ID","name":"REPLACE_WITH_SMTP_CREDENTIAL"}}
+    },
+    {
+      "parameters": {"jsCode":"const response = $input.first().json;\nreturn [{json:{contractVersion:'1.0',ok:true,status:'sent',sendAuthorized:false,messageId:typeof response.messageId === 'string' ? response.messageId : null,accepted:Array.isArray(response.accepted) ? response.accepted.length : null}}];"},
+      "id": "d9600000-0000-4666-8666-000000000006",
+      "name": "Normalize SMTP Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 20]
+    },
+    {
+      "parameters": {},
+      "id": "d9700000-0000-4777-8777-000000000007",
+      "name": "Safe Preview or Denial",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [200, 220]
+    },
+    {
+      "parameters": {"content":"## Provider-neutral mail contract v1.0\nOperations: normalizeIncoming, createDraft, authorizeSend.\n\nSMTP is reached only when testMode=false, draftOnly=false, attachments are empty, and the exact T-0017 approval result matches the draft idempotencyKey. Incoming HTML is converted to bounded untrusted text. Keep IMAP/SMTP credentials only in n8n Credentials.","height":300,"width":460,"color":5},
+      "id": "d9800000-0000-4888-8888-000000000008",
+      "name": "Mail Security Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-660, -260]
+    }
+  ],
+  "connections": {
+    "Called by Business Workflow":{"main":[[{"node":"Evaluate Mail Contract","type":"main","index":0}]]},
+    "Evaluate Mail Contract":{"main":[[{"node":"Enforce Fresh Approval","type":"main","index":0}]]},
+    "Enforce Fresh Approval":{"main":[[{"node":"SMTP Authorized?","type":"main","index":0}]]},
+    "SMTP Authorized?":{"main":[[{"node":"Send Approved SMTP Email","type":"main","index":0}],[{"node":"Safe Preview or Denial","type":"main","index":0}]]},
+    "Send Approved SMTP Email":{"main":[[{"node":"Normalize SMTP Result","type":"main","index":0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder":"v1","saveDataErrorExecution":"all","saveDataSuccessExecution":"none","saveManualExecutions":false},
+  "active": false,
+  "versionId": "d9900000-0000-4999-8999-000000000009",
+  "meta": {"templateCredsSetupCompleted":false},
+  "tags": []
+}

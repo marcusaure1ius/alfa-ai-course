@@ -44,6 +44,8 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Backup и restore](docs/backup-and-restore.md) — recovery archive, checksums, safety backup и rehearsal;
 - [Update и rollback](docs/update-and-rollback.md) — approved version pair, backup gate и restore-based recovery;
 - [Generic LLM provider](docs/generic-llm-provider.md) — gateway contract, Connection Test и credential-safe setup;
+- [Mail gateway contract](docs/contracts/mail.md) — IMAP normalization, safe drafts, approval-bound SMTP и loop protection;
+- [IMAP/SMTP setup](docs/credentials/mail.md) — credential-safe подключение и production checklist;
 - [License notes](LICENSE-NOTES.md) — границы допустимого использования и release checklist.
 
 ## Следующий шаг

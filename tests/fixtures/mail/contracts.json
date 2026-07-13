@@ -1,0 +1,102 @@
+[
+  {
+    "name": "plain IMAP message is normalized as untrusted text",
+    "input": {"operation":"normalizeIncoming","correlationId":"mail-001","message":{"messageId":"<msg-001@example.com>","from":"Alice <alice@example.com>","to":["inbox@example.com"],"subject":"Question","text":"  Hello\r\nworld  ","receivedAt":"2026-07-14T08:00:00Z"}},
+    "expected": {"ok":true,"status":"normalized","sendAuthorized":false,"message":{"from":"alice@example.com","safeText":"Hello\nworld","contentSource":"text","untrustedContent":true,"processingMarker":"alfa-mail-gateway-v1"}}
+  },
+  {
+    "name": "malicious HTML is reduced to safe bounded text",
+    "input": {"operation":"normalizeIncoming","message":{"messageId":"html-002@example.com","from":"evil@example.com","to":"inbox@example.com","subject":"HTML","html":"<style>body{display:none}</style><p>Hello <b>team</b></p><script>steal()</script><a href=\"javascript:alert(1)\">open</a>","receivedAt":"2026-07-14T08:01:00Z"}},
+    "expected": {"ok":true,"status":"normalized","message":{"safeText":"Hello team\nopen","contentSource":"sanitized-html","untrustedContent":true}}
+  },
+  {
+    "name": "canonical processing marker stops a mail loop",
+    "input": {"operation":"normalizeIncoming","message":{"messageId":"loop-003@example.com","from":"bot@example.com","to":"inbox@example.com","subject":"Loop","text":"Again","receivedAt":"2026-07-14T08:02:00Z","processingMarker":"alfa-mail-gateway-v1"}},
+    "expected": {"ok":false,"status":"rejected","error":{"code":"LOOP_DETECTED"}}
+  },
+  {
+    "name": "unknown raw provider payload is rejected",
+    "input": {"operation":"normalizeIncoming","message":{"messageId":"raw-004@example.com","from":"a@example.com","to":"b@example.com","subject":"Raw","text":"body","receivedAt":"2026-07-14T08:03:00Z","raw":"secret MIME payload"}},
+    "expected": {"ok":false,"error":{"code":"INVALID_MESSAGE"}}
+  },
+  {
+    "name": "safe attachment metadata is retained without binary data",
+    "input": {"operation":"normalizeIncoming","message":{"messageId":"file-005@example.com","from":"a@example.com","to":"b@example.com","subject":"File","text":"See attachment","receivedAt":"2026-07-14T08:04:00Z","attachments":[{"fileRef":"imap-file-005","fileName":"offer.pdf","mimeType":"application/pdf","size":1024}]}},
+    "expected": {"ok":true,"message":{"totalAttachmentBytes":1024,"attachments":[{"fileRef":"imap-file-005","fileName":"offer.pdf","mimeType":"application/pdf","size":1024}]}}
+  },
+  {
+    "name": "binary attachment content is rejected",
+    "input": {"operation":"normalizeIncoming","message":{"messageId":"file-006@example.com","from":"a@example.com","to":"b@example.com","subject":"File","text":"See attachment","receivedAt":"2026-07-14T08:05:00Z","attachments":[{"fileRef":"imap-file-006","fileName":"payload.bin","mimeType":"application/octet-stream","size":4,"data":"AAAA"}]}},
+    "expected": {"ok":false,"error":{"code":"INVALID_ATTACHMENTS"}}
+  },
+  {
+    "name": "oversized attachment metadata is rejected",
+    "input": {"operation":"normalizeIncoming","message":{"messageId":"file-007@example.com","from":"a@example.com","to":"b@example.com","subject":"File","text":"See attachment","receivedAt":"2026-07-14T08:06:00Z","attachments":[{"fileRef":"imap-file-007","fileName":"large.zip","mimeType":"application/zip","size":10485761}]}},
+    "expected": {"ok":false,"error":{"code":"INVALID_ATTACHMENTS"}}
+  },
+  {
+    "name": "empty sanitized content is rejected",
+    "input": {"operation":"normalizeIncoming","message":{"messageId":"empty-008@example.com","from":"a@example.com","to":"b@example.com","subject":"Empty","html":"<script>onlyBad()</script>","receivedAt":"2026-07-14T08:07:00Z"}},
+    "expected": {"ok":false,"error":{"code":"EMPTY_CONTENT"}}
+  },
+  {
+    "name": "draft defaults to draft only and canonical marker",
+    "input": {"operation":"createDraft","draft":{"idempotencyKey":"draft-key-009","to":"client@example.com","subject":"Draft","bodyText":"Review me"}},
+    "expected": {"ok":true,"status":"draft","sendAuthorized":false,"draft":{"to":["client@example.com"],"draftOnly":true,"processingMarker":"alfa-mail-gateway-v1"}}
+  },
+  {
+    "name": "subject header injection is rejected",
+    "input": {"operation":"createDraft","draft":{"idempotencyKey":"draft-key-010","to":"client@example.com","subject":"Hello\r\nBcc: victim@example.com","bodyText":"Unsafe"}},
+    "expected": {"ok":false,"error":{"code":"INVALID_SUBJECT"}}
+  },
+  {
+    "name": "recipient header injection is rejected",
+    "input": {"operation":"createDraft","draft":{"idempotencyKey":"draft-key-011","to":"client@example.com\nBcc: victim@example.com","subject":"Hello","bodyText":"Unsafe"}},
+    "expected": {"ok":false,"error":{"code":"INVALID_RECIPIENT"}}
+  },
+  {
+    "name": "unknown draft fields are rejected",
+    "input": {"operation":"createDraft","draft":{"idempotencyKey":"draft-key-012","to":"client@example.com","subject":"Hello","bodyText":"Body","html":"<b>not allowed</b>"}},
+    "expected": {"ok":false,"error":{"code":"INVALID_DRAFT"}}
+  },
+  {
+    "name": "test mode blocks SMTP despite approval",
+    "input": {"operation":"authorizeSend","draft":{"idempotencyKey":"send-key-013","to":"client@example.com","subject":"Approved","bodyText":"Body","draftOnly":false},"sender":{"fromEmail":"owner@example.com"},"approval":{"contractVersion":"1.0","ok":true,"status":"approved","allowAction":true,"idempotencyKey":"send-key-013","expiresAt":"2099-01-01T00:00:00Z","decision":{"state":"approved","approverRef":"owner-001"}}},
+    "expected": {"ok":true,"status":"preview","sendAuthorized":false,"reason":"TEST_MODE"}
+  },
+  {
+    "name": "draft only blocks SMTP in production",
+    "input": {"operation":"authorizeSend","testMode":false,"draft":{"idempotencyKey":"send-key-014","to":"client@example.com","subject":"Draft","bodyText":"Body"},"sender":{"fromEmail":"owner@example.com"},"approval":{"contractVersion":"1.0","ok":true,"status":"approved","allowAction":true,"idempotencyKey":"send-key-014","expiresAt":"2099-01-01T00:00:00Z","decision":{"state":"approved","approverRef":"owner-001"}}},
+    "expected": {"ok":true,"status":"draft","sendAuthorized":false,"reason":"DRAFT_ONLY"}
+  },
+  {
+    "name": "missing approval is denied",
+    "input": {"operation":"authorizeSend","testMode":false,"draft":{"idempotencyKey":"send-key-015","to":"client@example.com","subject":"No approval","bodyText":"Body","draftOnly":false},"sender":{"fromEmail":"owner@example.com"}},
+    "expected": {"ok":true,"status":"denied","sendAuthorized":false,"reason":"EXPLICIT_APPROVAL_REQUIRED"}
+  },
+  {
+    "name": "mismatched approval idempotency key is denied",
+    "input": {"operation":"authorizeSend","testMode":false,"draft":{"idempotencyKey":"send-key-016","to":"client@example.com","subject":"Mismatch","bodyText":"Body","draftOnly":false},"sender":{"fromEmail":"owner@example.com"},"approval":{"contractVersion":"1.0","ok":true,"status":"approved","allowAction":true,"idempotencyKey":"different-key-016","expiresAt":"2099-01-01T00:00:00Z","decision":{"state":"approved","approverRef":"owner-001"}}},
+    "expected": {"ok":true,"status":"denied","sendAuthorized":false,"reason":"EXPLICIT_APPROVAL_REQUIRED"}
+  },
+  {
+    "name": "attachment send requires a separate review gate",
+    "input": {"operation":"authorizeSend","testMode":false,"draft":{"idempotencyKey":"send-key-017","to":"client@example.com","subject":"Attachment","bodyText":"Body","draftOnly":false,"attachments":[{"fileRef":"out-file-017","fileName":"offer.pdf","mimeType":"application/pdf","size":1000}]},"sender":{"fromEmail":"owner@example.com"},"approval":{"contractVersion":"1.0","ok":true,"status":"approved","allowAction":true,"idempotencyKey":"send-key-017","expiresAt":"2099-01-01T00:00:00Z","decision":{"state":"approved","approverRef":"owner-001"}}},
+    "expected": {"ok":false,"status":"rejected","sendAuthorized":false,"error":{"code":"ATTACHMENT_REVIEW_REQUIRED"}}
+  },
+  {
+    "name": "exact production approval authorizes SMTP",
+    "input": {"operation":"authorizeSend","testMode":false,"correlationId":"mail-send-018","draft":{"idempotencyKey":"send-key-018","to":["client@example.com"],"cc":"audit@example.com","subject":"Approved","bodyText":"Plain text only","draftOnly":false,"processingMarker":"alfa-mail-gateway-v1"},"sender":{"fromEmail":"owner@example.com","replyTo":"support@example.com"},"approval":{"contractVersion":"1.0","ok":true,"status":"approved","allowAction":true,"idempotencyKey":"send-key-018","expiresAt":"2099-01-01T00:00:00Z","decision":{"state":"approved","approverRef":"owner-001"}}},
+    "expected": {"ok":true,"status":"authorized","sendAuthorized":true,"smtp":{"fromEmail":"owner@example.com","replyTo":"support@example.com"}}
+  },
+  {
+    "name": "unknown approval fields fail closed",
+    "input": {"operation":"authorizeSend","testMode":false,"draft":{"idempotencyKey":"send-key-019","to":"client@example.com","subject":"Unknown","bodyText":"Body","draftOnly":false},"sender":{"fromEmail":"owner@example.com"},"approval":{"contractVersion":"1.0","ok":true,"status":"approved","allowAction":true,"idempotencyKey":"send-key-019","expiresAt":"2099-01-01T00:00:00Z","decision":{"state":"approved","approverRef":"owner-001"},"providerDecision":"trust me"}},
+    "expected": {"ok":true,"status":"denied","sendAuthorized":false,"reason":"EXPLICIT_APPROVAL_REQUIRED"}
+  },
+  {
+    "name": "expired approval is denied",
+    "input": {"operation":"authorizeSend","testMode":false,"draft":{"idempotencyKey":"send-key-020","to":"client@example.com","subject":"Expired","bodyText":"Body","draftOnly":false},"sender":{"fromEmail":"owner@example.com"},"approval":{"contractVersion":"1.0","ok":true,"status":"approved","allowAction":true,"idempotencyKey":"send-key-020","expiresAt":"2020-01-01T00:00:00Z","decision":{"state":"approved","approverRef":"owner-001"}}},
+    "expected": {"ok":true,"status":"denied","sendAuthorized":false,"reason":"EXPLICIT_UNEXPIRED_APPROVAL_REQUIRED"}
+  }
+]
