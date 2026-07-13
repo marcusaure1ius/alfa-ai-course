@@ -587,6 +587,7 @@ validate_compose() {
 }
 
 start_stack() {
+  local doctor_code
   if (( DRY_RUN || CHECK_ONLY )); then
     info "Будут выполнены pinned image pull и docker compose up -d --wait; volumes не удаляются."
     return
@@ -597,6 +598,11 @@ start_stack() {
     || fatal "$EXIT_HEALTH" "Сервисы не достигли healthy за 300 секунд. Запустите docker compose ps и logs."
   "${DOCKER_CMD[@]}" compose --project-directory "$PROJECT_ROOT" --env-file "$ENV_FILE" ps --status running -q \
     | grep -q . || fatal "$EXIT_HEALTH" "После запуска нет работающих сервисов."
+  set +e
+  "$SCRIPT_DIR/doctor.sh" --env-file "$ENV_FILE" --local-only
+  doctor_code=$?
+  set -e
+  (( doctor_code < 2 )) || fatal "$EXIT_HEALTH" "Post-install doctor обнаружил FAIL. Запустите scripts/doctor.sh --local-only."
   pass "Compose stack запущен и достиг healthy."
 }
 
