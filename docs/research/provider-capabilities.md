@@ -1,7 +1,7 @@
 # Capability matrix: n8n, LLM и CRM providers
 
-- Статус: research complete, ожидает фиксации решений в `T-0004`
-- Проверено: 2026-07-13
+- Статус: research baseline принят в `T-0004`; Yandex evidence обновлён при реализации `T-0014`
+- Проверено: 2026-07-14
 - Базовая версия n8n: `2.29.10`
 - Источники: только официальная документация и исходный код n8n на закреплённом tag; один явно отмеченный HTTP probe без credentials
 
@@ -49,7 +49,7 @@
 | Provider/path | Auth | Chat Completions | `/models` | Manual model | Tools / AI Agent | Structured output | Решение для MVP |
 |---|---|---|---|---|---|---|---|
 | Generic OpenAI-compatible | Bearer key обязателен для native path | Candidate; проверяется реальным request/response contract | Candidate; обязателен для беспроблемного native credential test | Verified в n8n | Unverified до отдельного tool-call test | Unverified до JSON/Schema test | Native OpenAI Chat Model только после Connection Test; иначе HTTP Request adapter |
-| Yandex AI Studio OpenAI-compatible | API key через OpenAI-compatible client; точная связка с n8n требует test | Candidate; официальный пример использует OpenAI SDK и Base URL | Unverified официально для OpenAI-compatible API; защищённый route наблюдался probe | Verified: `gpt://<folder>/<model>/latest` | Provider capability задокументирована в SDK, совместимость с n8n schema unverified | Provider capability задокументирована в SDK, совместимость с n8n mode unverified | Сначала native candidate с manual URI и Responses API off; HTTP fallback при неуспехе `/models`/credential test |
+| Yandex AI Studio OpenAI-compatible | Verified docs: `Authorization: Api-Key ...`; `OpenAI-Project` for chat and `x-project` for model listing | Verified docs: `POST /v1/chat/completions`; authenticated account smoke pending | Verified docs: `GET /v1/models`; authenticated account smoke pending | Verified: full `gpt://<folder>/<model>/<version>` URI | Official API supports tools; MVP disabled pending authenticated model-specific test | Official API supports `json_schema`; MVP uses local validation pending authenticated model-specific test | Explicit HTTP Request adapter + early `/models` diagnostic; native path is optional only after credential/header smoke |
 | GigaChat REST | OAuth exchange Basic authorization key → short-lived Bearer token | Verified provider API, но не OpenAI-identical для всех options | Verified: `GET /v1/models` | Verified: явный GigaChat model ID | Provider использует `functions`/`function_call`; n8n OpenAI tool schema не подтверждена | `json_schema` доступен на business endpoint; не универсален для всех accounts | Provider-specific HTTP Request adapter; native OpenAI Chat Model не является default |
 | Bitrix24 REST | Incoming webhook для single-portal или OAuth 2.0 для app | N/A | N/A | IDs через REST (`entityTypeId`, user/task IDs) | N/A | REST JSON | HTTP Request CRM adapter; quick-start webhook с явным secret-handling constraint |
 
@@ -80,32 +80,35 @@ Tool calling, streaming и JSON Schema — отдельные capability flags. 
 
 ## Yandex AI Studio
 
-Официальный tutorial фиксирует:
+Официальные инструкции, повторно проверенные 2026-07-14, фиксируют:
 
 - Base URL `https://ai.api.cloud.yandex.net/v1`;
 - service account с ролью `ai.languageModels.user`;
-- API key со scope `yc.ai.languageModels.execute`;
-- model URI `gpt://<folder_ID>/<model_ID>/latest`;
-- использование OpenAI SDK через `chat.completions.create`.
+- API key в прямом REST request как `Authorization: Api-Key <API-ключ>`;
+- folder ID в `OpenAI-Project` для Chat Completions и `x-project` в documented Models cURL;
+- `POST /chat/completions` и `GET /models` как документированные OpenAI-compatible endpoints;
+- operation-specific scopes `yc.ai.foundationModels.execute` для Chat Completions и `yc.ai.models.viewer` для model listing;
+- полный model URI `gpt://<folder_ID>/<model>/<version>`.
 
-Это достаточное основание для **native candidate**, но не для статуса verified в n8n. Официальная ML SDK документация отдельно показывает model listing, tools, parallel tool calls, tool choice и response format. Она не доказывает, что OpenAI-compatible transport воспроизводит каждую из этих возможностей в формате, ожидаемом LangChain node n8n.
+Официальная документация теперь подтверждает transport contract, model listing и native `json_schema`, но без пользовательского credential всё ещё не подтверждает конкретный folder, model, quota или поведение native n8n credential. Поэтому default MVP реализован явным HTTP Request adapter: он точно задаёт документированные auth/project headers и безопасно нормализует errors. Native n8n, tools и provider-native schema остаются выключенными до authenticated model-specific smoke.
 
 Проверка без credentials 2026-07-13 получила `401` от `GET https://ai.api.cloud.yandex.net/v1/models`. Это подтверждает только наличие защищённого route на сетевом уровне и не заменяет официальный contract или authenticated smoke test.
 
-Решение-кандидат для `T-0004`:
+Решение реализации `T-0014`:
 
-- native OpenAI credential + OpenAI Chat Model;
-- manual full model URI;
-- Responses API выключен;
-- при failure `/models` — HTTP Request adapter к `/v1/chat/completions`;
-- tool calling и structured output выключены до provider-specific contract test.
+- HTTP Header Auth credential с `Authorization: Api-Key ...`;
+- non-secret folder profile и endpoint-specific project headers;
+- early `/models` diagnostics с точной проверкой configured model URI;
+- HTTP Request adapter к `/v1/chat/completions` и generic gateway output;
+- prompt + local schema validation для JSON; tools и provider-native structured output выключены до authenticated contract test.
 
 Официальные источники:
 
-- [Интеграция AI Studio как OpenAI Compatible API](https://yandex.cloud/en/docs/tutorials/ml-ai/ai-model-ide-integration)
-- [Yandex AI Studio SDK: chat completions, model listing, tools и response format](https://yandex.cloud/ru/docs/ai-studio/sdk-ref/sync/chat/completions)
+- [Базовый Chat Completions request](https://aistudio.yandex.ru/docs/ru/ai-studio/operations/generation/completions-basic.html)
+- [Получить список моделей](https://aistudio.yandex.ru/docs/ru/ai-studio/operations/models/get.html)
+- [REST List models](https://aistudio.yandex.ru/docs/ru/ai-studio/models/listModels)
 - [Авторизация API key в Yandex Cloud](https://yandex.cloud/ru/docs/iam/concepts/authorization/api-key)
-- [OpenAI-compatible chat completion REST reference](https://yandex.cloud/ru/docs/ai-studio/chat/createChatCompletion)
+- [Structured output в Chat Completions](https://aistudio.yandex.ru/docs/ru/ai-studio/operations/generation/completions-structured.html)
 
 ## GigaChat
 

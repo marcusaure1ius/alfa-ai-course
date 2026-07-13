@@ -100,7 +100,7 @@ Caddy выбран для базового профиля из-за неболь
 
 1. generic OpenAI-compatible endpoint использует native OpenAI Chat Model только после Connection Test; Responses API выключен, tool/JSON capabilities opt-in;
 2. при несовместимом или отсутствующем `/models` используется manual model ID, а при блокирующем credential test — HTTP Request adapter;
-3. Yandex AI Studio — native candidate с Base URL `https://ai.api.cloud.yandex.net/v1` и полным `gpt://.../latest` model URI; реальная совместимость остаётся implementation gate;
+3. Yandex AI Studio — provider-specific HTTP Request adapter к `https://ai.api.cloud.yandex.net/v1`: API key только в n8n credential, folder через `OpenAI-Project`, полный `gpt://<folder>/<model>/<version>` URI, обязательный `/models` connection diagnostic и локальная JSON Schema validation; native/provider schema modes требуют отдельного authenticated evidence;
 4. GigaChat — provider-specific HTTP Request adapter с execution-local token, ранним refresh по `expires_at` и максимум одним refresh/retry после `401`; long-lived authorization key хранится только в n8n credential, а host CA bundle подключается read-only без отключения TLS verification;
 5. другие endpoints добавляются только после capability matrix и contract tests.
 
@@ -142,6 +142,7 @@ Daily executive digest использует детерминированное �
 - Provider API keys, OAuth client secrets, refresh/access tokens и Bitrix24 webhook URL никогда не хранятся в workflow JSON, fixtures или business logs.
 - Canonical Bitrix24 adapter использует OAuth 2.0 credential с Bearer header. Incoming webhook допускается только как локальный ручной smoke test и не входит в экспортируемый workflow, пока нет проверенного encrypted credential path для URL secret.
 - GigaChat authorization key хранится в credential; временный access token живёт только внутри execution и маскируется в errors/logs.
+- Yandex API key хранится только в HTTP Header Auth credential; folder/model identifiers проверяются до provider call, а raw auth/model error bodies наружу не передаются.
 - Execution data может содержать ПДн. Default: pruning включён, max age `168` часов, max count `10000`; успешные и ошибочные executions сохраняются в пределах этих лимитов для учебной диагностики. Guide обязан объяснить уменьшение retention.
 - Diagnostics/personalization выключены в default profile; доступ к environment из workflow nodes не открывается ради обхода credential store.
 - TLS certificate verification не отключается. Необходимые доверенные root certificates устанавливаются и проверяются явно.

@@ -1,0 +1,133 @@
+{
+  "validation": [
+    {
+      "name": "valid text request",
+      "input": { "provider": "yandex", "messages": [{ "role": "user", "content": "Тест" }] },
+      "expected": { "valid": true, "provider": "yandex", "output": { "mode": "text", "schema": null } }
+    },
+    {
+      "name": "valid local JSON request",
+      "input": {
+        "provider": "yandex",
+        "messages": [{ "role": "user", "content": "Верни JSON" }],
+        "output": { "mode": "json", "schema": { "type": "object", "properties": { "status": { "type": "string" } }, "required": ["status"], "additionalProperties": false } }
+      },
+      "expected": { "valid": true, "output": { "mode": "json" } }
+    },
+    {
+      "name": "wrong provider rejected",
+      "input": { "provider": "generic", "messages": [{ "role": "user", "content": "Тест" }] },
+      "expected": { "valid": false, "result": { "error": { "code": "INVALID_REQUEST" } } }
+    },
+    {
+      "name": "unknown caller field rejected",
+      "input": { "provider": "yandex", "messages": [{ "role": "user", "content": "Тест" }], "credentialId": "not-allowed" },
+      "expected": { "valid": false, "result": { "error": { "code": "INVALID_REQUEST" } } }
+    },
+    {
+      "name": "base URL allowlist enforced",
+      "input": { "provider": "yandex", "messages": [{ "role": "user", "content": "Тест" }] },
+      "profile": { "profileBaseUrl": "https://example.invalid/v1" },
+      "expected": { "valid": false, "result": { "error": { "code": "CONFIGURATION_ERROR" } } }
+    },
+    {
+      "name": "folder placeholder rejected before HTTP",
+      "input": { "provider": "yandex", "messages": [{ "role": "user", "content": "Тест" }] },
+      "profile": { "profileFolderId": "REPLACE_WITH_YANDEX_FOLDER_ID" },
+      "expected": { "valid": false, "result": { "error": { "code": "CONFIGURATION_ERROR", "attempts": 0 } } }
+    },
+    {
+      "name": "model must be full gpt URI",
+      "input": { "provider": "yandex", "model": "yandexgpt/latest", "messages": [{ "role": "user", "content": "Тест" }] },
+      "expected": { "valid": false, "result": { "error": { "code": "INVALID_REQUEST" } } }
+    },
+    {
+      "name": "model folder mismatch rejected",
+      "input": { "provider": "yandex", "model": "gpt://b1g00000000000000000/yandexgpt/latest", "messages": [{ "role": "user", "content": "Тест" }] },
+      "expected": { "valid": false, "result": { "error": { "code": "CONFIGURATION_ERROR" } } }
+    },
+    {
+      "name": "tools remain disabled",
+      "input": { "provider": "yandex", "messages": [{ "role": "user", "content": "Тест" }], "capabilities": { "tools": true } },
+      "expected": { "valid": false, "result": { "error": { "code": "CAPABILITY_UNSUPPORTED" } } }
+    },
+    {
+      "name": "provider-native structured output remains disabled",
+      "input": { "provider": "yandex", "messages": [{ "role": "user", "content": "Тест" }], "capabilities": { "providerStructuredOutput": true } },
+      "expected": { "valid": false, "result": { "error": { "code": "CAPABILITY_UNSUPPORTED" } } }
+    },
+    {
+      "name": "unsupported local schema rejected",
+      "input": { "provider": "yandex", "messages": [{ "role": "user", "content": "Тест" }], "output": { "mode": "json", "schema": { "type": "object", "$ref": "https://example.invalid/schema" } } },
+      "expected": { "valid": false, "result": { "error": { "code": "INVALID_REQUEST" } } }
+    },
+    {
+      "name": "invalid timeout rejected",
+      "input": { "provider": "yandex", "messages": [{ "role": "user", "content": "Тест" }] },
+      "profile": { "profileTimeoutMs": 999 },
+      "expected": { "valid": false, "result": { "error": { "code": "CONFIGURATION_ERROR" } } }
+    }
+  ],
+  "completion": [
+    {
+      "name": "text success",
+      "mode": "text",
+      "response": { "statusCode": 200, "body": { "model": "gpt://b1g1234567890abcdefg/yandexgpt/latest", "choices": [{ "message": { "content": "Готово" } }], "usage": { "prompt_tokens": 10, "completion_tokens": 3, "total_tokens": 13 } } },
+      "expected": { "ok": true, "provider": "yandex", "content": "Готово", "json": null, "usage": { "inputTokens": 10, "outputTokens": 3, "totalTokens": 13 } }
+    },
+    {
+      "name": "local JSON success",
+      "mode": "json",
+      "response": { "statusCode": 200, "body": { "choices": [{ "message": { "content": "{\"status\":\"ok\"}" } }] } },
+      "expected": { "ok": true, "content": null, "json": { "status": "ok" }, "warnings": ["PROVIDER_STRUCTURED_OUTPUT_DISABLED"] }
+    },
+    {
+      "name": "authentication failure",
+      "mode": "text",
+      "response": { "statusCode": 401, "body": { "message": "credential rejected" } },
+      "expected": { "ok": false, "error": { "code": "AUTH_FAILED", "retryable": false, "httpStatus": 401, "attempts": 1 } }
+    },
+    {
+      "name": "permission failure",
+      "mode": "text",
+      "response": { "statusCode": 403, "body": { "message": "scope detail" } },
+      "expected": { "ok": false, "error": { "code": "AUTH_FAILED", "httpStatus": 403 } }
+    },
+    {
+      "name": "model failure",
+      "mode": "text",
+      "response": { "statusCode": 400, "body": { "message": "unknown model uri" } },
+      "expected": { "ok": false, "error": { "code": "MODEL_NOT_FOUND", "retryable": false } }
+    },
+    {
+      "name": "rate limit",
+      "mode": "text",
+      "response": { "statusCode": 429, "body": { "message": "too many requests" } },
+      "expected": { "ok": false, "error": { "code": "RATE_LIMITED", "retryable": true } }
+    },
+    {
+      "name": "timeout",
+      "mode": "text",
+      "response": { "statusCode": 408, "body": {} },
+      "expected": { "ok": false, "error": { "code": "PROVIDER_TIMEOUT", "retryable": true } }
+    },
+    {
+      "name": "provider unavailable",
+      "mode": "text",
+      "response": { "statusCode": 503, "body": { "message": "temporary" } },
+      "expected": { "ok": false, "error": { "code": "PROVIDER_UNAVAILABLE", "retryable": true } }
+    },
+    {
+      "name": "malformed success body",
+      "mode": "text",
+      "response": { "statusCode": 200, "body": { "choices": [] } },
+      "expected": { "ok": false, "error": { "code": "INVALID_PROVIDER_RESPONSE" } }
+    },
+    {
+      "name": "JSON schema mismatch",
+      "mode": "json",
+      "response": { "statusCode": 200, "body": { "choices": [{ "message": { "content": "{\"status\":42}" } }] } },
+      "expected": { "ok": false, "error": { "code": "OUTPUT_VALIDATION_FAILED" } }
+    }
+  ]
+}

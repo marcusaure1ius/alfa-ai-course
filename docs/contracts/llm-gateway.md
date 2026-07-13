@@ -6,6 +6,7 @@
 - Architecture decision: [ADR-0002](../../adr/0002-llm-integration-strategy.md)
 - Capability evidence: [provider matrix](../research/provider-capabilities.md)
 - Generic implementation: [workflow and setup reference](../generic-llm-provider.md)
+- Yandex implementation: [adapter and provider setup](../llm-providers.md#yandex-ai-studio)
 - GigaChat implementation: [adapter and provider setup](../llm-providers.md#gigachat)
 
 ## Назначение
@@ -151,8 +152,10 @@ Tool calling is disabled in contract `1.0.0` by default. `capabilities.tools=tru
 ### `yandex`
 
 - Base URL: `https://ai.api.cloud.yandex.net/v1`.
-- Model is a full `gpt://.../latest` URI.
-- Native path remains disabled until authenticated n8n contract test succeeds; HTTP adapter is fallback.
+- HTTP Request adapter uses an encrypted `Authorization: Api-Key ...` credential and a non-secret `OpenAI-Project` folder header.
+- Model is a full `gpt://<folder>/<model>/<version>` URI for the same configured folder.
+- Connection diagnostics requires successful official `/models` discovery and exact model presence before minimal completion.
+- JSON mode uses prompt + local schema validation; native n8n/provider paths remain opt-in until authenticated contract evidence exists.
 - Tools and provider-native structured output are off until separately verified.
 
 ### `gigachat`

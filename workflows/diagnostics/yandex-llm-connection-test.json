@@ -1,0 +1,179 @@
+{
+  "id": "diagnosticYandexAiStudioConnectionV1",
+  "name": "Diagnostics - Yandex AI Studio Connection Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b2000001-0001-4001-8001-000000000001",
+      "name": "Run Yandex Connection Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-900, 120]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "connection-base", "name": "baseUrl", "value": "https://ai.api.cloud.yandex.net/v1", "type": "string" },
+            { "id": "connection-folder", "name": "folderId", "value": "REPLACE_WITH_YANDEX_FOLDER_ID", "type": "string" },
+            { "id": "connection-model", "name": "model", "value": "gpt://REPLACE_WITH_YANDEX_FOLDER_ID/yandexgpt/latest", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2000002-0002-4002-8002-000000000002",
+      "name": "Yandex Test Profile - Edit Me",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-680, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first().json;const fail=(code,message)=>[{json:{valid:false,result:{ok:false,provider:'yandex',model:typeof input.model==='string'?input.model:'',modelDiscovery:'not-run',completionShape:'not-run',error:{code,message,retryable:false,httpStatus:null},warnings:[]}}}];if(input.baseUrl!=='https://ai.api.cloud.yandex.net/v1')return fail('CONFIGURATION_ERROR','Yandex API Base URL is not allowlisted');if(typeof input.folderId!=='string'||!/^[a-z0-9]{20}$/.test(input.folderId))return fail('CONFIGURATION_ERROR','Yandex folder ID is not configured');if(typeof input.model!=='string')return fail('CONFIGURATION_ERROR','Yandex model URI is not configured');const match=input.model.match(new RegExp('^gpt://([a-z0-9]{20})/[A-Za-z0-9._@/-]{1,220}$'));if(!match||match[1]!==input.folderId)return fail('CONFIGURATION_ERROR','Yandex model URI must use the configured folder');return [{json:{valid:true,baseUrl:input.baseUrl,folderId:input.folderId,model:input.model}}];"
+      },
+      "id": "b2000003-0003-4003-8003-000000000003",
+      "name": "Validate Yandex Connection Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-450, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [{ "id": "profile-valid", "leftValue": "={{ $json.valid }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b2000004-0004-4004-8004-000000000004",
+      "name": "Connection Profile Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-220, 120]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.baseUrl + '/models' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-project", "value": "={{ $json.folderId }}" }] },
+        "options": {
+          "timeout": 30000,
+          "response": { "response": { "fullResponse": true, "neverError": true, "responseFormat": "json" } }
+        }
+      },
+      "id": "b2000005-0005-4005-8005-000000000005",
+      "name": "Discover Yandex Models",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [20, 20],
+      "credentials": { "httpHeaderAuth": { "id": "REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID", "name": "Yandex AI Studio Api-Key" } },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response=$input.first().json;const profile=$('Validate Yandex Connection Profile').first().json;const status=Number(response.statusCode??0);const body=response.body??response;const fail=(code,message,retryable=false)=>[{json:{ready:false,result:{ok:false,provider:'yandex',model:profile.model,modelDiscovery:'failed',completionShape:'not-run',error:{code,message,retryable,httpStatus:status||null},warnings:[]}}}];if(status===401||status===403)return fail('AUTH_FAILED','Yandex model discovery authentication or permission failed');if(status===408)return fail('PROVIDER_TIMEOUT','Yandex model discovery timed out',true);if(status===429)return fail('RATE_LIMITED','Yandex model discovery rate limit exceeded',true);if(status===0||status>=500)return fail('PROVIDER_UNAVAILABLE','Yandex model discovery is unavailable',true);if(status<200||status>=300||!Array.isArray(body?.data))return fail('INVALID_PROVIDER_RESPONSE','Yandex models response is invalid');const models=body.data.map(item=>item?.id).filter(id=>typeof id==='string');if(!models.includes(profile.model))return fail('MODEL_NOT_FOUND','Configured Yandex model is not available to this folder');return [{json:{ready:true,baseUrl:profile.baseUrl,folderId:profile.folderId,model:profile.model,modelDiscovery:'available',modelCount:models.length}}];"
+      },
+      "id": "b2000006-0006-4006-8006-000000000006",
+      "name": "Normalize Yandex Model Discovery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [260, 20]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [{ "id": "discovery-ready", "leftValue": "={{ $json.ready }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b2000007-0007-4007-8007-000000000007",
+      "name": "Model Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [500, 20]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl + '/chat/completions' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "OpenAI-Project", "value": "={{ $json.folderId }}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({model:$json.model,messages:[{role:'user',content:'Reply with exactly: connection-ok'}],temperature:0,max_tokens:16,stream:false}) }}",
+        "options": {
+          "timeout": 120000,
+          "response": { "response": { "fullResponse": true, "neverError": true, "responseFormat": "json" } }
+        }
+      },
+      "id": "b2000008-0008-4008-8008-000000000008",
+      "name": "Minimal Yandex Completion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, -80],
+      "credentials": { "httpHeaderAuth": { "id": "REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID", "name": "Yandex AI Studio Api-Key" } },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response=$input.first().json;const discovery=$('Normalize Yandex Model Discovery').first().json;const status=Number(response.statusCode??0);const body=response.body??response;let code=null;let message=null;if(status===401||status===403){code='AUTH_FAILED';message='Yandex completion authentication or permission failed';}else if(status===404||(status===400&&/(model|uri)/i.test(JSON.stringify(body)))){code='MODEL_NOT_FOUND';message='Configured Yandex model is unavailable';}else if(status===408){code='PROVIDER_TIMEOUT';message='Yandex completion timed out';}else if(status===429){code='RATE_LIMITED';message='Yandex completion rate limit exceeded';}else if(status===0||status>=500){code='PROVIDER_UNAVAILABLE';message='Yandex completion is unavailable';}else if(status<200||status>=300||typeof body?.choices?.[0]?.message?.content!=='string'){code='INVALID_PROVIDER_RESPONSE';message='Yandex completion response is invalid';}return [{json:{ok:code===null,provider:'yandex',model:discovery.model,modelDiscovery:'available',completionShape:code===null?'valid':'invalid',error:code?{code,message,retryable:['PROVIDER_TIMEOUT','RATE_LIMITED','PROVIDER_UNAVAILABLE'].includes(code),httpStatus:status||null}:null,warnings:[]}}];"
+      },
+      "id": "b2000009-0009-4009-8009-000000000009",
+      "name": "Safe Yandex Connection Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, -80]
+    },
+    {
+      "parameters": { "jsCode": "return [{json:$input.first().json.result}];" },
+      "id": "b2000010-0010-4010-8010-000000000010",
+      "name": "Return Safe Diagnostic Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 160]
+    },
+    {
+      "parameters": {
+        "content": "## Yandex connection test\n- Configure the exact folder and full model URI before binding the credential.\n- Credential: HTTP Header Auth, `Authorization: Api-Key <secret>`.\n- The test first calls official `/models`; it stops on missing `yc.ai.models.viewer`, wrong folder, or unavailable model.\n- It then sends one non-personal minimal completion.\n- Reports never include response bodies, prompts, headers, or credential values.",
+        "height": 300,
+        "width": 500,
+        "color": 5
+      },
+      "id": "b2000011-0011-4011-8011-000000000011",
+      "name": "Connection Test Safety",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-900, -260]
+    }
+  ],
+  "connections": {
+    "Run Yandex Connection Test": { "main": [[{ "node": "Yandex Test Profile - Edit Me", "type": "main", "index": 0 }]] },
+    "Yandex Test Profile - Edit Me": { "main": [[{ "node": "Validate Yandex Connection Profile", "type": "main", "index": 0 }]] },
+    "Validate Yandex Connection Profile": { "main": [[{ "node": "Connection Profile Valid?", "type": "main", "index": 0 }]] },
+    "Connection Profile Valid?": { "main": [[{ "node": "Discover Yandex Models", "type": "main", "index": 0 }],[{ "node": "Return Safe Diagnostic Error", "type": "main", "index": 0 }]] },
+    "Discover Yandex Models": { "main": [[{ "node": "Normalize Yandex Model Discovery", "type": "main", "index": 0 }]] },
+    "Normalize Yandex Model Discovery": { "main": [[{ "node": "Model Available?", "type": "main", "index": 0 }]] },
+    "Model Available?": { "main": [[{ "node": "Minimal Yandex Completion", "type": "main", "index": 0 }],[{ "node": "Return Safe Diagnostic Error", "type": "main", "index": 0 }]] },
+    "Minimal Yandex Completion": { "main": [[{ "node": "Safe Yandex Connection Report", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  },
+  "active": false,
+  "versionId": "b2000012-0012-4012-8012-000000000012",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

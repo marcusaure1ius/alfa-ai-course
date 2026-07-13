@@ -1,0 +1,135 @@
+{
+  "id": "adapterYandexAiStudioLlmV1",
+  "name": "Adapter - Yandex AI Studio LLM",
+  "nodes": [
+    {
+      "parameters": { "inputSource": "passthrough" },
+      "id": "b1000001-0001-4001-8001-000000000001",
+      "name": "Called by LLM Gateway",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-700, 120]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "yandex-base", "name": "profileBaseUrl", "value": "https://ai.api.cloud.yandex.net/v1", "type": "string" },
+            { "id": "yandex-folder", "name": "profileFolderId", "value": "REPLACE_WITH_YANDEX_FOLDER_ID", "type": "string" },
+            { "id": "yandex-timeout", "name": "profileTimeoutMs", "value": 120000, "type": "number" }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "b1000002-0002-4002-8002-000000000002",
+      "name": "Yandex Provider Profile",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-480, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first().json;const requestId=typeof input.requestId==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(input.requestId)?input.requestId:crypto.randomUUID();const result=(code,message)=>({ok:false,requestId,provider:'yandex',model:typeof input.model==='string'?input.model:'',error:{code,message,retryable:false,httpStatus:null,attempts:0},warnings:[]});const fail=(code,message)=>[{json:{valid:false,result:result(code,message)}}];const allowed=new Set(['requestId','provider','model','messages','temperature','maxTokens','output','capabilities','profileBaseUrl','profileFolderId','profileTimeoutMs']);if(!input||Array.isArray(input)||typeof input!=='object'||Object.keys(input).some(k=>!allowed.has(k)))return fail('INVALID_REQUEST','Input contains unknown fields');if(input.provider!=='yandex')return fail('INVALID_REQUEST','Yandex adapter requires provider=yandex');if(input.profileBaseUrl!=='https://ai.api.cloud.yandex.net/v1')return fail('CONFIGURATION_ERROR','Yandex API Base URL is not allowlisted');if(typeof input.profileFolderId!=='string'||!/^[a-z0-9]{20}$/.test(input.profileFolderId))return fail('CONFIGURATION_ERROR','Yandex folder ID is not configured');if(!Number.isInteger(input.profileTimeoutMs)||input.profileTimeoutMs<1000||input.profileTimeoutMs>120000)return fail('CONFIGURATION_ERROR','Yandex timeout is invalid');if(typeof input.model!=='string'||input.model.length>256)return fail('INVALID_REQUEST','Yandex model URI is invalid');const modelMatch=input.model.match(new RegExp('^gpt://([a-z0-9]{20})/[A-Za-z0-9._@/-]{1,220}$'));if(!modelMatch)return fail('INVALID_REQUEST','Yandex model must be a full gpt URI');if(modelMatch[1]!==input.profileFolderId)return fail('CONFIGURATION_ERROR','Yandex model folder does not match the configured folder');if(!Array.isArray(input.messages)||input.messages.length<1||input.messages.length>100||input.messages.some(m=>!m||Array.isArray(m)||typeof m!=='object'||Object.keys(m).some(k=>!['role','content'].includes(k))||!['system','user','assistant'].includes(m.role)||typeof m.content!=='string'||m.content.length<1||m.content.length>100000))return fail('INVALID_REQUEST','Messages are invalid');const temperature=input.temperature??0.2;const maxTokens=input.maxTokens??1000;if(typeof temperature!=='number'||temperature<0||temperature>1)return fail('INVALID_REQUEST','Temperature must be 0..1');if(!Number.isInteger(maxTokens)||maxTokens<1||maxTokens>8192)return fail('INVALID_REQUEST','maxTokens must be 1..8192');const output=input.output??{mode:'text',schema:null};if(!output||Array.isArray(output)||typeof output!=='object'||Object.keys(output).some(k=>!['mode','schema'].includes(k))||!['text','json'].includes(output.mode??'text'))return fail('INVALID_REQUEST','Output contract is invalid');const capabilities=input.capabilities??{};if(!capabilities||Array.isArray(capabilities)||typeof capabilities!=='object'||Object.keys(capabilities).some(k=>!['tools','providerStructuredOutput'].includes(k)))return fail('INVALID_REQUEST','Capabilities contract is invalid');if(capabilities.tools===true||capabilities.providerStructuredOutput===true)return fail('CAPABILITY_UNSUPPORTED','Tools and provider-native structured output are disabled');const schemaKeys=new Set(['type','properties','required','additionalProperties','items','enum','minLength','maxLength','minimum','maximum','minItems','maxItems']);const schemaOk=(schema,depth=0)=>{if(!schema||Array.isArray(schema)||typeof schema!=='object'||depth>5||Object.keys(schema).some(k=>!schemaKeys.has(k))||!['object','array','string','number','integer','boolean','null'].includes(schema.type))return false;if(schema.enum!==undefined&&(!Array.isArray(schema.enum)||schema.enum.length<1||schema.enum.length>100))return false;if(schema.type==='object'){if(schema.properties!==undefined&&(!schema.properties||Array.isArray(schema.properties)||typeof schema.properties!=='object'||Object.values(schema.properties).some(v=>!schemaOk(v,depth+1))))return false;if(schema.required!==undefined&&(!Array.isArray(schema.required)||schema.required.some(v=>typeof v!=='string')))return false;if(schema.additionalProperties!==undefined&&typeof schema.additionalProperties!=='boolean')return false;}if(schema.type==='array'&&schema.items!==undefined&&!schemaOk(schema.items,depth+1))return false;return true;};const mode=output.mode??'text';if(mode==='json'&&(!schemaOk(output.schema)||JSON.stringify(output.schema).length>20000))return fail('INVALID_REQUEST','JSON mode requires a supported local schema');if(mode==='text'&&output.schema!==undefined&&output.schema!==null)return fail('INVALID_REQUEST','Text mode cannot include a schema');const messages=mode==='json'?[{role:'system',content:'Return only valid JSON matching this schema: '+JSON.stringify(output.schema)},...input.messages]:input.messages;return [{json:{valid:true,requestId,provider:'yandex',model:input.model,messages,temperature,maxTokens,output:{mode,schema:output.schema??null},profileBaseUrl:input.profileBaseUrl,profileFolderId:input.profileFolderId,profileTimeoutMs:input.profileTimeoutMs}}];"
+      },
+      "id": "b1000003-0003-4003-8003-000000000003",
+      "name": "Validate Yandex Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-250, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            { "id": "yandex-valid", "leftValue": "={{ $json.valid }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1000004-0004-4004-8004-000000000004",
+      "name": "Yandex Contract Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-20, 120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.profileBaseUrl + '/chat/completions' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "OpenAI-Project", "value": "={{ $json.profileFolderId }}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({model:$json.model,messages:$json.messages,temperature:$json.temperature,max_tokens:$json.maxTokens,stream:false}) }}",
+        "options": {
+          "timeout": "={{ $json.profileTimeoutMs }}",
+          "response": { "response": { "fullResponse": true, "neverError": true, "responseFormat": "json" } }
+        }
+      },
+      "id": "b1000005-0005-4005-8005-000000000005",
+      "name": "Yandex Chat Completion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 40],
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID", "name": "Yandex AI Studio Api-Key" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response=$input.first().json;const request=$('Validate Yandex Contract').first().json;const status=Number(response.statusCode??0);const body=response.body??response;const safe=(code,message,retryable=false)=>({ok:false,requestId:request.requestId,provider:'yandex',model:request.model,error:{code,message,retryable,httpStatus:status||null,attempts:1},warnings:[]});if(status===401||status===403)return [{json:safe('AUTH_FAILED','Yandex AI Studio authentication or authorization failed')}];if(status===404||(status===400&&/(model|uri)/i.test(JSON.stringify(body))))return [{json:safe('MODEL_NOT_FOUND','Requested Yandex model is unavailable')}];if(status===408)return [{json:safe('PROVIDER_TIMEOUT','Yandex AI Studio request timed out',true)}];if(status===429)return [{json:safe('RATE_LIMITED','Yandex AI Studio rate limit exceeded',true)}];if(status===0||status>=500)return [{json:safe('PROVIDER_UNAVAILABLE','Yandex AI Studio is unavailable',true)}];if(status<200||status>=300)return [{json:safe('INVALID_PROVIDER_RESPONSE','Yandex AI Studio returned an unsupported response')}];const content=body?.choices?.[0]?.message?.content;if(typeof content!=='string')return [{json:safe('INVALID_PROVIDER_RESPONSE','Yandex response cannot be normalized')}];let parsed=null;if(request.output.mode==='json'){try{parsed=JSON.parse(content);}catch{return [{json:safe('OUTPUT_VALIDATION_FAILED','Yandex output is not valid JSON')}];}const validate=(value,schema)=>{if(schema.enum&&!schema.enum.some(v=>JSON.stringify(v)===JSON.stringify(value)))return false;if(schema.type==='null')return value===null;if(schema.type==='string')return typeof value==='string'&&(schema.minLength===undefined||value.length>=schema.minLength)&&(schema.maxLength===undefined||value.length<=schema.maxLength);if(schema.type==='number'||schema.type==='integer')return typeof value==='number'&&Number.isFinite(value)&&(schema.type!=='integer'||Number.isInteger(value))&&(schema.minimum===undefined||value>=schema.minimum)&&(schema.maximum===undefined||value<=schema.maximum);if(schema.type==='boolean')return typeof value==='boolean';if(schema.type==='array')return Array.isArray(value)&&(schema.minItems===undefined||value.length>=schema.minItems)&&(schema.maxItems===undefined||value.length<=schema.maxItems)&&(!schema.items||value.every(v=>validate(v,schema.items)));if(schema.type==='object'){if(!value||Array.isArray(value)||typeof value!=='object')return false;const props=schema.properties??{};if((schema.required??[]).some(k=>!(k in value)))return false;if(schema.additionalProperties===false&&Object.keys(value).some(k=>!(k in props)))return false;return Object.entries(props).every(([k,s])=>!(k in value)||validate(value[k],s));}return false;};if(!validate(parsed,request.output.schema))return [{json:safe('OUTPUT_VALIDATION_FAILED','Yandex JSON output does not match the local schema')}];}const usage=body.usage??{};return [{json:{ok:true,requestId:request.requestId,provider:'yandex',model:body.model??request.model,content:request.output.mode==='text'?content:null,json:request.output.mode==='json'?parsed:null,usage:{inputTokens:Number.isInteger(usage.prompt_tokens)?usage.prompt_tokens:null,outputTokens:Number.isInteger(usage.completion_tokens)?usage.completion_tokens:null,totalTokens:Number.isInteger(usage.total_tokens)?usage.total_tokens:null},capabilitiesUsed:[],warnings:request.output.mode==='json'?['PROVIDER_STRUCTURED_OUTPUT_DISABLED']:[]}}];"
+      },
+      "id": "b1000006-0006-4006-8006-000000000006",
+      "name": "Normalize Yandex Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 40]
+    },
+    {
+      "parameters": { "jsCode": "return [{json:$input.first().json.result}];" },
+      "id": "b1000007-0007-4007-8007-000000000007",
+      "name": "Return Safe Adapter Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 220]
+    },
+    {
+      "parameters": {
+        "content": "## Yandex AI Studio adapter\n1. Set the 20-character folder ID in **Yandex Provider Profile**.\n2. Bind HTTP Header Auth: name `Authorization`, value `Api-Key <secret>`.\n3. Caller model must be a full `gpt://<folder>/<model>/<version>` URI for the same folder.\n4. The exact API base and `OpenAI-Project` header follow current official documentation.\n5. Tools and provider-native structured output stay disabled until an authenticated capability test.",
+        "height": 310,
+        "width": 470,
+        "color": 5
+      },
+      "id": "b1000008-0008-4008-8008-000000000008",
+      "name": "Setup and Secret Boundary",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-700, -260]
+    }
+  ],
+  "connections": {
+    "Called by LLM Gateway": { "main": [[{ "node": "Yandex Provider Profile", "type": "main", "index": 0 }]] },
+    "Yandex Provider Profile": { "main": [[{ "node": "Validate Yandex Contract", "type": "main", "index": 0 }]] },
+    "Validate Yandex Contract": { "main": [[{ "node": "Yandex Contract Valid?", "type": "main", "index": 0 }]] },
+    "Yandex Contract Valid?": { "main": [[{ "node": "Yandex Chat Completion", "type": "main", "index": 0 }],[{ "node": "Return Safe Adapter Error", "type": "main", "index": 0 }]] },
+    "Yandex Chat Completion": { "main": [[{ "node": "Normalize Yandex Result", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  },
+  "active": false,
+  "versionId": "b1000009-0009-4009-8009-000000000009",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}
