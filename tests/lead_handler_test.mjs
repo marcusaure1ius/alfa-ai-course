@@ -96,7 +96,15 @@ assert.equal(senderPreview.ok,true);assert.equal(senderPreview.status,'preview')
 assert.ok(pendingState.leadHandlerPending[extracted.approvalKey]);
 const pendingResult=executeCode(workflow,'Return Pending Approval',senderPreview,{lookups:{'Store Pending and Notify Owner':ownerNotice,'Validate Conservative Extraction':extracted}});
 assert.equal(pendingResult.approvalKey,extracted.approvalKey);
-ok('pending state and exact Telegram contract preserve approval key without leaking extra sender fields');
+const productionExtracted={...extracted,testMode:false,draftOnly:false,correlationId:'lead-prod-flow-0001',eventId:'prod-flow-0001',idempotencyKey:'prod-flow-0001',approvalKey:'lead-approval-prod-flow-0001'};
+const productionApprovalRequest=executeCode(workflow,'Prepare Mutation Approval',productionExtracted);
+const productionPendingApproval=executeCode(approvalWorkflow,'Evaluate Approval Contract',productionApprovalRequest);
+const productionPendingState={};
+const productionNotice=executeCode(workflow,'Store Pending and Notify Owner',productionPendingApproval,{lookups:{'Validate Conservative Extraction':productionExtracted},staticData:productionPendingState});
+assert.equal(productionNotice.testMode,false);assert.equal(productionNotice.draftOnly,false);
+const senderAuthorized=executeCode(telegramWorkflow,'Validate Telegram Send Contract',{...productionNotice,profileAllowedChatIds:'123450099',profileTestMode:false,profileDraftOnly:false},{staticData:{}});
+assert.equal(senderAuthorized.ok,true);assert.equal(senderAuthorized.status,'authorized');assert.equal(senderAuthorized.sendAuthorized,true);
+ok('test notice previews, production notice authorizes send, and approval key stays outside sender fields');
 
 const resolveInput={...baseProfile,phase:'resolve',approvalKey:extracted.approvalKey,decision:{state:'approved',approverRef:'owner-001'},now:new Date(Date.parse(pendingApproval.request.expiresAt)-1000).toISOString()};
 const resolved=executeCode(workflow,'Validate Normalize and Deduplicate',resolveInput,{staticData:pendingState});
@@ -110,9 +118,14 @@ assert.equal(backdated.now,undefined);
 const expiredResolution=executeCode(workflow,'Prepare Approval Resolution',backdated);
 const expiredApproval=executeCode(approvalWorkflow,'Evaluate Approval Contract',expiredResolution);
 assert.equal(expiredApproval.status,'expired');assert.equal(expiredApproval.allowAction,false);
+const safeTransition=executeCode(workflow,'Validate Normalize and Deduplicate',{...baseProfile,phase:'resolve',approvalKey:productionExtracted.approvalKey,decision:{state:'approved',approverRef:'owner-001'},now:new Date(Date.parse(productionPendingApproval.request.expiresAt)-1000).toISOString()},{staticData:productionPendingState});
+const safeTransitionResolution=executeCode(workflow,'Prepare Approval Resolution',safeTransition);
+const safeTransitionApproval=executeCode(approvalWorkflow,'Evaluate Approval Contract',safeTransitionResolution);
+const safeTransitionLead=executeCode(workflow,'Prepare Approved Lead Upsert',safeTransitionApproval,{lookups:{'Validate Normalize and Deduplicate':safeTransition}});
+assert.equal(safeTransitionLead.testMode,true);
 const preparedLead=executeCode(workflow,'Prepare Approved Lead Upsert',approved,{lookups:{'Validate Normalize and Deduplicate':resolved}});
 assert.equal(preparedLead.testMode,true);assert.equal(preparedLead.lead.provenance.notes,'user');assert.ok(!('approved' in preparedLead.lead));
-ok('exact owner approval works in tests while production ignores caller time and enforces real expiry');
+ok('production ignores caller time and any current or pending safe mode keeps CRM in preview');
 
 const genericProfile={profileBaseUrl:'https://crm.example.invalid/v1',profileTimeoutMs:30000};
 const leadPreview=executeCode(leadWorkflow,'Prepare Lead Upsert',{...preparedLead,...genericProfile});

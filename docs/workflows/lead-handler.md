@@ -98,6 +98,8 @@ Lead Handler принимает заявку через закрытый webhook
 
 Intake создаёт pending approval на 3600 секунд и сообщает `approvalKey` владельцу через Telegram. Для решения отправьте новый аутентифицированный POST:
 
+В test/draft profile уведомление остаётся preview/draft. При обоих выключенных safe flags общий Telegram sender авторизует реальную отправку владельцу. Сам `approvalKey` хранится в pending state и тексте уведомления, но не добавляется как неизвестное поле sender contract.
+
 ```json
 {
   "phase": "resolve",
@@ -112,6 +114,8 @@ Intake создаёт pending approval на 3600 секунд и сообщае�
 Для отказа используйте `state: denied`. Workflow проверяет одновременно approval key, owner ref, сохранённую заявку и срок действия. При отказе или expiry возвращается `mutated: false`; CRM и внешнее сообщение о завершении не вызываются.
 
 Поле `now` допускается только для локального test-mode contract test. В production caller не управляет временем: workflow игнорирует переданное значение и проверяет expiry по времени исполнения n8n.
+
+Safe mode монотонный для уже ожидающей заявки: если `testMode` или `draftOnly` включён либо в сохранённом pending state, либо в текущем profile, CRM path остаётся preview и не выполняет HTTP mutation.
 
 ## CRM mapping
 
