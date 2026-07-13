@@ -28,6 +28,7 @@
         {"id":"digest-source-name","name":"profileSourceName","value":"business-event-source","type":"string"},
         {"id":"digest-source-configured","name":"profileSourceConfigured","value":false,"type":"boolean"},
         {"id":"digest-source-complete","name":"profileSourceComplete","value":false,"type":"boolean"},
+        {"id":"digest-source-workflow","name":"profileSourceWorkflowId","value":"REPLACE_WITH_EVENT_SOURCE_WORKFLOW_ID","type":"string"},
         {"id":"digest-events","name":"profileEventsJson","value":"[]","type":"string"}
       ]},"includeOtherFields":true,"options":{}},
       "id": "d2400000-0000-4333-8333-000000000003",
@@ -37,12 +38,69 @@
       "position": [-1100, -40]
     },
     {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-supplied-source","leftValue":"={{ Array.isArray($json.events) || ($json.source !== undefined && $json.source !== null) }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "d2400000-0000-4070-8070-000000000023",
+      "name": "Use Supplied Event Batch?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-990, -40]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-adapter-enabled","leftValue":"={{ $json.profileSourceConfigured }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "d2400000-0000-4080-8080-000000000024",
+      "name": "Source Adapter Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-880, 80]
+    },
+    {
+      "parameters": {"jsCode":"const input=$input.first().json;const correlationId=typeof input.correlationId==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId)?input.correlationId:`digest-${Date.now()}`;const fail=(code,message)=>[{json:{ok:false,correlationId,testMode:true,draftOnly:true,error:{code,message,retryable:false}}}];const workflowId=String(input.profileSourceWorkflowId??'');if(workflowId.startsWith('REPLACE_WITH_')||!/^[A-Za-z0-9_-]{3,128}$/.test(workflowId))return fail('SOURCE_ADAPTER_NOT_CONFIGURED','Configure a valid event source workflow ID');if(input.profileTimezone!=='Europe/Moscow'||input.profileDigestHour!==9)return fail('INVALID_SCHEDULE_PROFILE','Digest requires Europe/Moscow at 09:00');const now=new Date(input.runAt??Date.now());if(Number.isNaN(now.getTime()))return fail('INVALID_RUN_TIME','runAt must be an ISO timestamp');const offsetMs=3*60*60*1000;const local=new Date(now.getTime()+offsetMs);let endMs=Date.UTC(local.getUTCFullYear(),local.getUTCMonth(),local.getUTCDate(),9)-offsetMs;if(endMs>now.getTime())endMs-=24*60*60*1000;const startMs=endMs-24*60*60*1000;return [{json:{ok:true,contractVersion:'1.0',operation:'listBusinessEvents',correlationId,testMode:input.profileTestMode!==false,window:{timezone:'Europe/Moscow',semantics:'[start,end)',start:new Date(startMs).toISOString(),end:new Date(endMs).toISOString()}}}];"},
+      "id": "d2400000-0000-4090-8090-000000000025",
+      "name": "Build Event Source Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-660, 80]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-source-request-ok","leftValue":"={{ $json.ok }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "d2400000-0000-40a0-80a0-000000000026",
+      "name": "Source Request Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-440, 80]
+    },
+    {
+      "parameters": {"workflowId":"={{ $('Digest Profile and Source Defaults').first().json.profileSourceWorkflowId }}","options":{"waitForSubWorkflow":true}},
+      "id": "d2400000-0000-40b0-80b0-000000000027",
+      "name": "Load Scheduled Business Events",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [-220, 80],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {"jsCode":"const response=$input.first().json;const profile=$('Digest Profile and Source Defaults').first().json;const request=$('Build Event Source Request').first().json;const fail=(code,message)=>[{json:{ok:false,correlationId:request.correlationId,testMode:true,draftOnly:true,error:{code,message,retryable:false}}}];if(response.error)return fail('SOURCE_ADAPTER_FAILED','Event source workflow failed');const allowed=new Set(['contractVersion','correlationId','source','events']);if(!response||Array.isArray(response)||typeof response!=='object'||Object.keys(response).some(k=>!allowed.has(k)))return fail('SOURCE_ADAPTER_INVALID','Event source returned unknown or invalid fields');if(response.contractVersion!=='1.0'||response.correlationId!==request.correlationId||!Array.isArray(response.events))return fail('SOURCE_ADAPTER_INVALID','Event source contract version, correlation ID or events is invalid');const source=response.source;if(!source||Array.isArray(source)||typeof source!=='object')return fail('SOURCE_ADAPTER_INVALID','Event source metadata is required');const sourceAllowed=new Set(['name','configured','complete','coverageStart','coverageEnd']);if(Object.keys(source).some(k=>!sourceAllowed.has(k))||source.configured!==true||typeof source.complete!=='boolean'||typeof source.name!=='string'||source.name.length<1||source.name.length>128)return fail('SOURCE_ADAPTER_INVALID','Event source metadata is invalid');return [{json:{...profile,events:response.events,source}}];"},
+      "id": "d2400000-0000-40c0-80c0-000000000028",
+      "name": "Validate Event Source Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 80]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-source-response-ok","leftValue":"={{ $json.ok !== false }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "d2400000-0000-40d0-80d0-000000000029",
+      "name": "Source Response Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [220, 80]
+    },
+    {
       "parameters": {"jsCode":"const input=$input.first().json;const correlationId=typeof input.correlationId==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId)?input.correlationId:`digest-${Date.now()}`;const testMode=input.profileTestMode!==false;const draftOnly=input.profileDraftOnly!==false;const fail=(code,message)=>[{json:{ok:false,correlationId,testMode:true,draftOnly:true,error:{code,message,retryable:false}}}];if(input.profileTimezone!=='Europe/Moscow'||input.profileDigestHour!==9)return fail('INVALID_SCHEDULE_PROFILE','Digest requires Europe/Moscow at 09:00');const now=new Date(input.runAt??Date.now());if(Number.isNaN(now.getTime()))return fail('INVALID_RUN_TIME','runAt must be an ISO timestamp');const offsetMs=3*60*60*1000;const local=new Date(now.getTime()+offsetMs);let endMs=Date.UTC(local.getUTCFullYear(),local.getUTCMonth(),local.getUTCDate(),9)-offsetMs;if(endMs>now.getTime())endMs-=24*60*60*1000;const startMs=endMs-24*60*60*1000;const window={timezone:'Europe/Moscow',semantics:'[start,end)',start:new Date(startMs).toISOString(),end:new Date(endMs).toISOString(),localLabel:`${new Date(startMs+offsetMs).toISOString().slice(0,16)}+03:00 — ${new Date(endMs+offsetMs).toISOString().slice(0,16)}+03:00`};let events=input.events;let parseError=false;if(events===undefined){try{events=JSON.parse(input.profileEventsJson??'[]');}catch{events=[];parseError=true;}}if(!Array.isArray(events))return fail('INVALID_EVENT_SOURCE','events must be an array');const sourceInput=input.source&&typeof input.source==='object'&&!Array.isArray(input.source)?input.source:{};const configured=sourceInput.configured??input.profileSourceConfigured===true;const declaredComplete=sourceInput.complete??input.profileSourceComplete===true;const sourceName=String(sourceInput.name??input.profileSourceName??'business-event-source').slice(0,128);const coverageStart=new Date(sourceInput.coverageStart??'invalid');const coverageEnd=new Date(sourceInput.coverageEnd??'invalid');const coverageValid=!Number.isNaN(coverageStart.getTime())&&!Number.isNaN(coverageEnd.getTime())&&coverageStart.getTime()<=startMs&&coverageEnd.getTime()>=endMs;const eventAllowed=new Set(['eventType','outcome','correlationId','occurredAt','subjectRef','metadata']);const metadataAllowed=new Set(['workflowKey','actionType','channel','durationMs','retryCount','errorCode']);const normalized=[];let invalidEvents=0;let outsideWindow=0;for(const raw of events){const event=raw&&typeof raw==='object'&&!Array.isArray(raw)&&raw.record&&typeof raw.record==='object'?raw.record:raw;if(!event||Array.isArray(event)||typeof event!=='object'||Object.keys(event).some(k=>!eventAllowed.has(k))){invalidEvents++;continue;}const occurredAt=new Date(event.occurredAt);const metadata=event.metadata??{};const valid=typeof event.eventType==='string'&&/^[a-z][a-z0-9._-]{2,63}$/.test(event.eventType)&&['success','failure','denied','skipped'].includes(event.outcome)&&typeof event.correlationId==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(event.correlationId)&&!Number.isNaN(occurredAt.getTime())&&metadata&&typeof metadata==='object'&&!Array.isArray(metadata)&&Object.keys(metadata).every(k=>metadataAllowed.has(k));if(!valid){invalidEvents++;continue;}if(occurredAt.getTime()<startMs||occurredAt.getTime()>=endMs){outsideWindow++;continue;}normalized.push({eventType:event.eventType,outcome:event.outcome,correlationId:event.correlationId,occurredAt:occurredAt.toISOString(),metadata});}const unique=[];const seen=new Set();let duplicatesIgnored=0;for(const event of normalized){const key=`${event.eventType}|${event.correlationId}|${event.occurredAt}`;if(seen.has(key)){duplicatesIgnored++;continue;}seen.add(key);unique.push(event);}let sourceStatus='missing';if(configured)sourceStatus=declaredComplete&&coverageValid&&!parseError&&invalidEvents===0?'complete':'partial';const available=sourceStatus!=='missing';const count=(predicate)=>unique.filter(predicate).length;const metrics=available?{eventsObserved:unique.length,leadsProcessed:count(e=>e.eventType==='lead.handler.processed'),errors:count(e=>e.outcome==='failure'||typeof e.metadata.errorCode==='string'),unhandledEmails:count(e=>e.eventType==='email.assistant.processed'&&(e.outcome!=='success'||['unhandled','manual_review','failed'].includes(e.metadata.actionType))),pendingApprovals:count(e=>['pending','pending_approval'].includes(e.metadata.actionType)),otherEvents:0,invalidEvents:invalidEvents+(parseError?1:0),duplicatesIgnored,outsideWindow}: {eventsObserved:null,leadsProcessed:null,errors:null,unhandledEmails:null,pendingApprovals:null,otherEvents:null,invalidEvents:parseError?1:0,duplicatesIgnored:0,outsideWindow:0};if(available)metrics.otherEvents=Math.max(0,metrics.eventsObserved-metrics.leadsProcessed-count(e=>e.eventType==='email.assistant.processed'));return [{json:{ok:true,contractVersion:'1.0',correlationId,testMode,draftOnly,ownerChatId:String(input.profileOwnerChatId??''),model:String(input.profileModel??''),window,source:{name:sourceName,status:sourceStatus,configured,declaredComplete,coverageValid,coverageStart:Number.isNaN(coverageStart.getTime())?null:coverageStart.toISOString(),coverageEnd:Number.isNaN(coverageEnd.getTime())?null:coverageEnd.toISOString(),parseError},metrics,summarizable:sourceStatus==='complete'}}];"},
       "id": "d2400000-0000-4444-8444-000000000004",
       "name": "Aggregate Documented Business Events",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-880, -40]
+      "position": [440, -40]
     },
     {
       "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-ok","leftValue":"={{ $json.ok }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
@@ -181,7 +239,7 @@
       "position": [1760, 60]
     },
     {
-      "parameters": {"content":"## Daily executive digest v1\n\n- Runs at 09:00 with workflow timezone Europe/Moscow. Window is previous local 09:00 inclusive to current 09:00 exclusive.\n- Source adapter must provide canonical Log Business Event records plus coverageStart/coverageEnd.\n- Missing source produces null/н/д; partial source exposes observed counts and warnings.\n- LLM sees only window, coverage status and aggregates. Telegram and errors use shared workflows.\n- Defaults are testMode and draftOnly; no credentials or personal examples are stored.","height":370,"width":500,"color":5},
+      "parameters": {"content":"## Daily executive digest v1\n\n- Built-in schedule is the only scheduler: at 09:00 Europe/Moscow it calls the configured source workflow for the exact [start,end) window.\n- Source adapter must return canonical Log Business Event records plus coverageStart/coverageEnd. Direct trigger is for test/manual batches.\n- Missing source produces null/н/д; partial source exposes observed counts and warnings.\n- LLM sees only window, coverage status and aggregates. Telegram and errors use shared workflows.\n- Defaults are testMode and draftOnly; no credentials or personal examples are stored.","height":390,"width":520,"color":5},
       "id": "d2400000-0000-4060-8060-000000000021",
       "name": "Metrics Source Privacy and Setup Notes",
       "type": "n8n-nodes-base.stickyNote",
@@ -193,7 +251,14 @@
   "connections": {
     "Daily at 09:00 Moscow":{"main":[[{"node":"Digest Profile and Source Defaults","type":"main","index":0}]]},
     "Called by Test or Source Workflow":{"main":[[{"node":"Digest Profile and Source Defaults","type":"main","index":0}]]},
-    "Digest Profile and Source Defaults":{"main":[[{"node":"Aggregate Documented Business Events","type":"main","index":0}]]},
+    "Digest Profile and Source Defaults":{"main":[[{"node":"Use Supplied Event Batch?","type":"main","index":0}]]},
+    "Use Supplied Event Batch?":{"main":[[{"node":"Aggregate Documented Business Events","type":"main","index":0}],[{"node":"Source Adapter Enabled?","type":"main","index":0}]]},
+    "Source Adapter Enabled?":{"main":[[{"node":"Build Event Source Request","type":"main","index":0}],[{"node":"Aggregate Documented Business Events","type":"main","index":0}]]},
+    "Build Event Source Request":{"main":[[{"node":"Source Request Valid?","type":"main","index":0}]]},
+    "Source Request Valid?":{"main":[[{"node":"Load Scheduled Business Events","type":"main","index":0}],[{"node":"Prepare Shared Error Contract","type":"main","index":0}]]},
+    "Load Scheduled Business Events":{"main":[[{"node":"Validate Event Source Response","type":"main","index":0}]]},
+    "Validate Event Source Response":{"main":[[{"node":"Source Response Valid?","type":"main","index":0}]]},
+    "Source Response Valid?":{"main":[[{"node":"Aggregate Documented Business Events","type":"main","index":0}],[{"node":"Prepare Shared Error Contract","type":"main","index":0}]]},
     "Aggregate Documented Business Events":{"main":[[{"node":"Aggregation Valid?","type":"main","index":0}]]},
     "Aggregation Valid?":{"main":[[{"node":"Source Complete?","type":"main","index":0}],[{"node":"Prepare Shared Error Contract","type":"main","index":0}]]},
     "Source Complete?":{"main":[[{"node":"Build Minimized Digest Prompt","type":"main","index":0}],[{"node":"Prepare Coverage Alert Telegram Contract","type":"main","index":0}]]},

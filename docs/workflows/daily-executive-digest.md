@@ -27,12 +27,33 @@ Daily Executive Digest формирует короткую сводку за п�
 
 ## Источник business events
 
-`Log Business Event` определяет каноническую схему и возвращает нормализованную запись, но текущая foundation-реализация не сохраняет историю и не предоставляет запрос за интервал. Поэтому сам logger нельзя считать источником метрик. Для production нужен отдельно проверенный source adapter или event store, который передаёт в Execute Workflow Trigger массив записей и явное покрытие окна.
+`Log Business Event` определяет каноническую схему и возвращает нормализованную запись, но текущая foundation-реализация не сохраняет историю и не предоставляет запрос за интервал. Поэтому сам logger нельзя считать источником метрик. Для production нужен отдельно проверенный source adapter или event store.
 
-Вход source adapter:
+Встроенный Schedule Trigger — единственный планировщик production-цепочки. В 09:00 он формирует точный запрос окна и синхронно вызывает sub-workflow, указанный в `profileSourceWorkflowId`. Сам source adapter не должен иметь отдельный schedule: иначе появятся двойные дайджесты. `Called by Test or Source Workflow` сохраняется только для ручной проверки и прямой передачи fixture batch.
+
+Запрос к source adapter:
 
 ```json
 {
+  "ok": true,
+  "contractVersion": "1.0",
+  "operation": "listBusinessEvents",
+  "correlationId": "digest-run-2026-07-14",
+  "testMode": true,
+  "window": {
+    "timezone": "Europe/Moscow",
+    "semantics": "[start,end)",
+    "start": "2026-07-13T06:00:00.000Z",
+    "end": "2026-07-14T06:00:00.000Z"
+  }
+}
+```
+
+Ответ source adapter:
+
+```json
+{
+  "contractVersion": "1.0",
   "correlationId": "digest-run-2026-07-14",
   "source": {
     "name": "approved-business-event-store",
@@ -67,7 +88,7 @@ Daily Executive Digest формирует короткую сводку за п�
 | `subjectRef` | допустим на входе, но не передаётся LLM |
 | `metadata` | только `workflowKey`, `actionType`, `channel`, `durationMs`, `retryCount`, `errorCode` |
 
-Adapter может передавать как саму запись, так и logger envelope `{"record": {...}}`. Повтор с одинаковыми `eventType + correlationId + occurredAt` считается один раз.
+Ответ допускает только `contractVersion`, совпадающий `correlationId`, `source` и массив `events`. Неизвестные поля, ошибка sub-workflow, несовпадающий correlation ID или неверная metadata источника fail-closed направляются в общий error workflow. Adapter может передавать как саму запись, так и logger envelope `{"record": {...}}`. Повтор с одинаковыми `eventType + correlationId + occurredAt` считается один раз.
 
 `complete=true` принимается только если `coverageStart` не позже начала окна, `coverageEnd` не раньше конца окна, JSON разобран и нет невалидных событий. Иначе статус автоматически становится `partial`.
 
@@ -95,13 +116,14 @@ Raw events, `subjectRef`, event correlation IDs и metadata не передаю�
 
 ## Настройка test mode
 
-1. В `Digest Profile and Source Defaults` укажите проверенный `profileModel` и разрешённый `profileOwnerChatId`.
-2. Оставьте `profileTestMode=true` и `profileDraftOnly=true`.
-3. В общем Telegram workflow добавьте тот же chat ID в allowlist и настройте credential внутри n8n.
-4. Передайте fixture через `Called by Test or Source Workflow` с покрытием ровно одного завершённого окна.
-5. Убедитесь, что Telegram sender вернул `preview`, а внешний запрос не выполнялся.
-6. Проверьте отдельно `partial` и `missing`: в тексте должно быть явное предупреждение.
-7. Production delivery разрешайте только после controlled smoke с пользовательскими credentials и evidence.
+1. Импортируйте проверенный source adapter как неактивный вызываемый sub-workflow с Execute Workflow Trigger и контрактом выше.
+2. В `Digest Profile and Source Defaults` укажите его ID в `profileSourceWorkflowId`, включите `profileSourceConfigured=true`, затем укажите проверенный `profileModel` и разрешённый `profileOwnerChatId`.
+3. Оставьте `profileTestMode=true` и `profileDraftOnly=true`.
+4. В общем Telegram workflow добавьте тот же chat ID в allowlist и настройте credential внутри n8n.
+5. Запустите Daily Executive Digest вручную через Schedule Trigger или передайте fixture через test trigger с покрытием ровно одного завершённого окна.
+6. Убедитесь, что Telegram sender вернул `preview`, а внешний запрос не выполнялся.
+7. Проверьте отдельно `partial` и `missing`: в тексте должно быть явное предупреждение.
+8. Production delivery разрешайте только после controlled smoke с пользовательскими credentials и evidence.
 
 Не помещайте Telegram token, LLM API key, email, телефон, имя клиента или текст переписки в profile, workflow JSON, fixtures и business events.
 
@@ -111,4 +133,4 @@ Raw events, `subjectRef`, event correlation IDs и metadata не передаю�
 ./tests/executive_digest_test.sh
 ```
 
-Тест исполняет Code nodes прямо из workflow JSON и проверяет 14 fixtures, расписание, deterministic window, coverage semantics, метрики, privacy-minimized LLM prompt, строгий LLM output, общий Telegram contract, error branches и отсутствие секретов. Чистый импорт проверяется отдельно на закреплённой версии n8n. Реальная доставка Telegram, LLM provider и production event store без credentials и controlled smoke не считаются проверенными.
+Тест исполняет Code nodes прямо из workflow JSON и проверяет 14 fixtures, schedule → source-adapter graph, точный request window, response correlation, coverage semantics, метрики, privacy-minimized LLM prompt, строгий LLM output, общий Telegram contract, error branches и отсутствие секретов. Чистый импорт проверяется отдельно на закреплённой версии n8n. Реальная доставка Telegram, LLM provider и production event store без credentials и controlled smoke не считаются проверенными.

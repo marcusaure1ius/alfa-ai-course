@@ -41,11 +41,17 @@ assert.equal(profileValues.profileTimezone,'Europe/Moscow');assert.equal(profile
 ok('inactive workflow is pinned to Europe/Moscow 09:00 with safe source and delivery defaults');
 
 const calls=workflow.nodes.filter((node)=>node.type==='n8n-nodes-base.executeWorkflow');
-assert.deepEqual(calls.map((node)=>node.parameters.workflowId),['coreGenericLlmGatewayV1','coreSendTelegramMessageV1','coreWorkflowErrorV1','coreBusinessEventLogV1']);
+assert.deepEqual(calls.map((node)=>node.parameters.workflowId),["={{ $('Digest Profile and Source Defaults').first().json.profileSourceWorkflowId }}",'coreGenericLlmGatewayV1','coreSendTelegramMessageV1','coreWorkflowErrorV1','coreBusinessEventLogV1']);
 assert.ok(calls.every((node)=>node.parameters.options.waitForSubWorkflow===true));
+assert.equal(workflow.connections['Daily at 09:00 Moscow'].main[0][0].node,'Digest Profile and Source Defaults');
+assert.equal(workflow.connections['Digest Profile and Source Defaults'].main[0][0].node,'Use Supplied Event Batch?');
+assert.equal(workflow.connections['Source Adapter Enabled?'].main[0][0].node,'Build Event Source Request');
+assert.equal(workflow.connections['Load Scheduled Business Events'].main[0][0].node,'Validate Event Source Response');
+assert.equal(workflow.connections['Source Response Valid?'].main[0][0].node,'Aggregate Documented Business Events');
+assert.equal(workflow.nodes.find((node)=>node.name==='Load Scheduled Business Events').onError,'continueRegularOutput');
 assert.equal(workflow.connections['Telegram Delivery Succeeded?'].main[1][0].node,'Prepare Shared Error Contract');
 assert.equal(workflow.connections['Summary Valid?'].main[1][0].node,'Prepare Shared Error Contract');
-ok('LLM, Telegram, errors, and event logging use shared workflows with explicit failure branches');
+ok('schedule calls a configurable source adapter before shared LLM, Telegram, error, and logging workflows');
 
 const baseProfile={profileTimezone:'Europe/Moscow',profileDigestHour:9,profileTestMode:true,profileDraftOnly:true,profileOwnerChatId:'123450099',profileModel:'fixture-model',profileSourceName:'fixture-store',profileSourceConfigured:false,profileSourceComplete:false,profileEventsJson:'[]',correlationId:'digest-test-001'};
 for(const fixture of fixtures.aggregation){
@@ -54,6 +60,20 @@ for(const fixture of fixtures.aggregation){
 }
 assert.ok(fixtures.aggregation.length>=10);
 ok(`${fixtures.aggregation.length} window, coverage, schema, boundary, duplicate, and failure fixtures pass`);
+
+const scheduledProfile={...baseProfile,profileSourceConfigured:true,profileSourceWorkflowId:'fixtureEventSourceV1',runAt:'2026-07-14T06:00:00.000Z'};
+const sourceRequest=executeCode(workflow,'Build Event Source Request',scheduledProfile);
+assert.deepEqual(sourceRequest.window,{timezone:'Europe/Moscow',semantics:'[start,end)',start:'2026-07-13T06:00:00.000Z',end:'2026-07-14T06:00:00.000Z'});
+assert.deepEqual(Object.keys(sourceRequest).sort(),['contractVersion','correlationId','ok','operation','testMode','window']);
+const sourceResponse={contractVersion:'1.0',correlationId:sourceRequest.correlationId,source:{name:'fixture-store',configured:true,complete:true,coverageStart:sourceRequest.window.start,coverageEnd:sourceRequest.window.end},events:fixtures.aggregation[0].input.events};
+const scheduledBatch=executeCode(workflow,'Validate Event Source Response',sourceResponse,{lookups:{'Digest Profile and Source Defaults':scheduledProfile,'Build Event Source Request':sourceRequest}});
+const scheduledDigest=executeCode(workflow,'Aggregate Documented Business Events',scheduledBatch);
+assert.equal(scheduledDigest.source.status,'complete');assert.equal(scheduledDigest.metrics.eventsObserved,5);assert.equal(scheduledDigest.metrics.leadsProcessed,2);
+const wrongCorrelation=executeCode(workflow,'Validate Event Source Response',{...sourceResponse,correlationId:'other-run'},{lookups:{'Digest Profile and Source Defaults':scheduledProfile,'Build Event Source Request':sourceRequest}});
+assert.equal(wrongCorrelation.ok,false);assert.equal(wrongCorrelation.error.code,'SOURCE_ADAPTER_INVALID');
+const missingAdapter=executeCode(workflow,'Build Event Source Request',{...scheduledProfile,profileSourceWorkflowId:'REPLACE_WITH_EVENT_SOURCE_WORKFLOW_ID'});
+assert.equal(missingAdapter.ok,false);assert.equal(missingAdapter.error.code,'SOURCE_ADAPTER_NOT_CONFIGURED');
+ok('scheduled source request uses the exact window and only a correlated valid adapter response reaches aggregation');
 
 const complete=executeCode(workflow,'Aggregate Documented Business Events',{...baseProfile,...fixtures.aggregation[0].input});
 const llmRequest=executeCode(workflow,'Build Minimized Digest Prompt',complete);
