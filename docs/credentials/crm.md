@@ -165,3 +165,19 @@ Raw response, `error_description`, Authorization header и webhook URL не во
 ```
 
 Тест исполняет Code nodes прямо из workflow JSON на contract fixtures. Реальный Bitrix24 smoke не заявляется без user-provided portal и credential.
+
+## Ожидаемый результат controlled smoke
+
+1. С `testMode: true` получите preview с `mutated: false`; в portal ничего не меняется.
+2. На отдельном test portal или test lead выполните lookup: ожидается 0 или 1 точное совпадение по `originatorId + originId`.
+3. Один approved upsert должен вернуть `mutated: true`, action `created`/`updated` и safe entity ID.
+4. Один task rehearsal должен вернуть task ID и traceable `XML_ID`.
+5. Повтор lead с тем же `idempotencyKey` не создаёт дубль. Task после неоднозначной ошибки автоматически не повторяется.
+
+## Ротация и отзыв Bitrix24
+
+1. Создайте новую local application/credential только со scopes `crm` и `task` и доступом технического пользователя к тестовым сущностям.
+2. Обновите OAuth2 credential в n8n и повторите preview, read, lead upsert и task rehearsal.
+3. Отключите старую application или отзовите её credentials в Bitrix24; не полагайтесь на удаление значения из n8n как на provider-side revoke.
+4. Удалите старый credential из n8n только после проверки bindings и успешного smoke нового.
+5. При утечке немедленно отключите application/token pair, остановите production mutations и проверьте portal audit/history.

@@ -60,3 +60,28 @@ Send Email настроен на `Text`, без HTML и без attachments. Send
 ## Что проверено локально
 
 Репозиторные tests проверяют importability, contract code, TLS/text settings, отсутствие secret-like values и 20 fixtures. Соединение с реальным provider, delivery, SPF/DKIM/DMARC и попадание в spam требуют user-owned domain и credentials и должны фиксироваться отдельным external smoke evidence.
+
+## Ожидаемый результат и ошибки
+
+| Проверка | Ожидаемый результат |
+|---|---|
+| IMAP controlled smoke | одно новое тестовое письмо нормализовано; attachment не скачан |
+| `createDraft` | bounded plain-text draft, внешней отправки нет |
+| `authorizeSend` с safe defaults | `preview`/`draft`, SMTP node не вызывается |
+| Approved SMTP smoke | одно письмо появляется у тестового получателя и в Sent/provider history |
+
+| Симптом | Безопасное действие |
+|---|---|
+| IMAP authentication failed | проверьте app password/OAuth, username и provider access policy |
+| SMTP rejected sender/recipient | проверьте подтверждённый sender, relay policy и тестовый recipient |
+| TLS/certificate error | проверьте host, port, implicit TLS/STARTTLS и системное время; не включайте Ignore SSL Issues |
+| Письмо читается повторно | проверьте `Fetch Only New`, `Mark as Read`, `messageId` и processing marker |
+| Timeout/5xx после send | сначала проверьте Sent/provider history; blind retry может создать дубль |
+
+## Ротация и отзыв
+
+1. Создайте новый app password/OAuth credential с доступом только к тестируемому mailbox.
+2. Обновите IMAP и SMTP credentials раздельно; не используйте основной пароль пользователя.
+3. Повторите одно IMAP receive и один approval-bound SMTP smoke.
+4. Отзовите старый app password/token в панели mail provider и проверьте, что старый credential больше не проходит connection test.
+5. При утечке сначала отзовите secret и остановите workflow, затем расследуйте executions; не прикладывайте письмо или password к evidence.

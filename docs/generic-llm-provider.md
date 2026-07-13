@@ -1,5 +1,7 @@
 # Generic OpenAI-compatible provider
 
+Проверено: 2026-07-14 для n8n `2.29.10`.
+
 Реализация contract `1.0.0` состоит из [`Core - LLM Gateway (Generic)`](../workflows/core/llm-gateway.json) и [`Diagnostics - Generic LLM Connection Test`](../workflows/diagnostics/generic-llm-connection-test.json). Оба workflow импортируются выключенными и требуют user-side configuration.
 
 ## Настройка
@@ -27,5 +29,12 @@ Gateway возвращает только нормализованный success
 ## Evidence boundary
 
 Clean import и fixture tests подтверждают schema, secret boundary и error mapping. Единая [проверочная матрица](llm-providers.md#единая-проверочная-матрица) прогоняет тот же контракт для Generic, Yandex и GigaChat. Эти проверки не подтверждают конкретного внешнего provider без его Base URL/credential. Заполненный Connection Test с реальными credentials должен быть приложен как отдельное redacted evidence; до этого capability остаётся `external_unverified`.
+
+## Ожидаемый результат, ротация и отзыв
+
+- Успех Connection Test: `ok: true`, `completionShape: valid`; `modelDiscovery` может быть `unavailable`, если manual model проверен, тогда остаётся warning `MODEL_DISCOVERY_UNAVAILABLE`.
+- `AUTH_FAILED` требует проверки Bearer credential и provider account; `MODEL_NOT_FOUND` — точного manual model ID; `RATE_LIMITED`/`PROVIDER_UNAVAILABLE` не разрешают blind retry billable request.
+- Для ротации создайте новый provider key с минимальными правами, обновите HTTP Header Auth credential, повторите Connection Test и controlled completion, затем отзовите старый key в панели provider.
+- При утечке сначала отзовите key и остановите workflow. Удаление credential из n8n не отзывает secret у provider.
 
 Официальные справочные материалы n8n: [Server CLI import](https://docs.n8n.io/hosting/cli-commands/#import-workflows-and-credentials), [HTTP Request node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/) и [sub-workflows](https://docs.n8n.io/flow-logic/subworkflows/).

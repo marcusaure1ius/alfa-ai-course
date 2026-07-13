@@ -45,10 +45,12 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Update и rollback](docs/update-and-rollback.md) — approved version pair, backup gate и restore-based recovery;
 - [Generic LLM provider](docs/generic-llm-provider.md) — gateway contract, Connection Test и credential-safe setup;
 - [LLM providers](docs/llm-providers.md) — Yandex AI Studio adapter/model diagnostics и GigaChat OAuth lifecycle, scopes, rotation и troubleshooting;
+- [Credentials и интеграции](docs/credentials.md) — единый безопасный порядок подключения, smoke, evidence, rotation и incident response;
 - [Mail gateway contract](docs/contracts/mail.md) — IMAP normalization, safe drafts, approval-bound SMTP и loop protection;
-- [IMAP/SMTP setup](docs/credentials/mail.md) — credential-safe подключение и production checklist;
+- [Email integration](docs/email.md) — порядок IMAP → draft → approval-bound SMTP и ссылка на credential setup;
 - [Telegram sender contract](docs/contracts/telegram.md) — allowlist, safe modes, idempotency и normalized errors;
-- [Telegram credential setup](docs/credentials/telegram.md) — token-safe настройка, allowlist и controlled smoke;
+- [Telegram integration](docs/telegram.md) — BotFather, token-safe credential, allowlist и controlled smoke;
+- [CRM integration](docs/crm.md) — OAuth2 Bitrix24, least privilege, preview/rehearsal и rotation;
 - [Telegram Assistant](docs/workflows/telegram-assistant.md) — draft-only demo, owner approval commands, dedupe и loop guards;
 - [Email Assistant](docs/workflows/email-assistant.md) — IMAP setup, guarded LLM extraction, draft-only output и privacy notes;
 - [Lead Handler](docs/workflows/lead-handler.md) — Header Auth webhook, нормализация контакта, approval-bound CRM mutation и recovery;

@@ -4,6 +4,8 @@
 
 Документ описывает provider-specific setup поверх общего [LLM Gateway contract](contracts/llm-gateway.md). Реальный provider smoke не выполнен: в репозитории нет пользовательских credentials, а локальные fixtures проверяют только exported workflow contract и безопасную нормализацию.
 
+Перед вводом key/token следуйте общему [credential-safe порядку](credentials.md). Secret вводится только в n8n credential; placeholder в workflow заменяется binding, а не значением secret.
+
 ## Единая проверочная матрица
 
 Контрольная точка `T-0016` выполнена 2026-07-14 для n8n `2.29.10`: Code nodes запускались локальным Node fixture harness, изменённые exports импортировались в чистый контейнер с закреплённой версией n8n. Внешних credentials в окружении не было, поэтому ни один внешний аккаунт не считается проверенным.
