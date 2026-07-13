@@ -1,0 +1,43 @@
+# n8n Entrepreneur Starter Kit
+
+Production-minded starter kit для самостоятельного развёртывания официального self-hosted n8n Community Edition предпринимателем без опыта DevOps.
+
+## Статус проекта
+
+Foundation/onboarding завершён. Владелец одобрил MVP backlog 2026-07-13; работа идёт по dependency-ready research-задачам Projects Control.
+
+> Реализация runtime начнётся только после завершения official research и финального evidence-backed ADR (`T-0004`).
+
+## Цель MVP
+
+Пользователь с чистым VPS на Ubuntu 24.04 LTS, доменом и sudo-доступом должен развернуть собственный экземпляр n8n с PostgreSQL и HTTPS за 15–30 минут, после чего подключить внешние credentials и импортировать диагностические и демонстрационные workflow.
+
+Starter kit не является SaaS, не перепродаёт доступ к n8n, не использует white label и не запускает LLM локально.
+
+## Зафиксированные границы
+
+- целевая ОС: Ubuntu 24.04 LTS x86_64;
+- оркестрация: Docker Compose;
+- обязательные сервисы: официальный образ n8n Community Edition, PostgreSQL и Caddy;
+- постоянные данные: отдельные Docker volumes;
+- внешний доступ: HTTPS, PostgreSQL наружу не публикуется;
+- LLM: внешние API через заменяемый LLM Gateway;
+- основной интерфейс установки: локальный Bash-скрипт, а не `curl | bash`;
+- версии контейнеров фиксируются явно после проверки официальных источников;
+- Redis, queue workers, Kubernetes, Ollama, Qdrant и LiteLLM не входят в базовый профиль.
+
+## Канонические документы
+
+- [Product brief](docs/product-brief.md) — пользователи, проблема, цели и критерии MVP;
+- [Архитектура](docs/architecture.md) — компоненты, потоки, trust boundaries и quality gates;
+- [MVP backlog](docs/backlog.md) — эпики, задачи и зависимости;
+- [AGENTS.md](AGENTS.md) — обязательный рабочий протокол для агентов;
+- [ADR-0001](adr/0001-platform-and-scope.md) — платформа и границы базового профиля;
+- [ADR-0002](adr/0002-llm-integration-strategy.md) — стратегия интеграции LLM;
+- [ADR-0003](adr/0003-version-pinning-policy.md) — политика выбора и фиксации версий.
+- [Platform/version/license research](docs/research/2026-07-13-platform-versions-and-license.md) — dated official-source baseline;
+- [License notes](LICENSE-NOTES.md) — границы допустимого использования и release checklist.
+
+## Следующий шаг
+
+Завершить official research (`T-0002`, `T-0003`), затем утвердить финальный evidence-backed ADR и contracts (`T-0004`). Задачи выполняются только в порядке зависимостей и через обязательный lifecycle Projects Control.
