@@ -15,6 +15,7 @@ N8N_WAS_RUNNING=0
 CADDY_WAS_RUNNING=0
 POSTGRES_DB_VALUE="n8n"
 POSTGRES_USER_VALUE="n8n"
+N8N_VERSION_VALUE="2.29.10"
 declare -a DOCKER_CMD=(docker)
 
 usage() {
@@ -119,6 +120,8 @@ main() {
   [[ "$mode" == 600 ]] || fatal "Env-файл должен иметь mode 0600."
   POSTGRES_DB_VALUE="$(read_env_key POSTGRES_DB "$ENV_FILE")"; POSTGRES_DB_VALUE="${POSTGRES_DB_VALUE:-n8n}"
   POSTGRES_USER_VALUE="$(read_env_key POSTGRES_USER "$ENV_FILE")"; POSTGRES_USER_VALUE="${POSTGRES_USER_VALUE:-n8n}"
+  N8N_VERSION_VALUE="$(read_env_key N8N_VERSION "$ENV_FILE")"; N8N_VERSION_VALUE="${N8N_VERSION_VALUE:-2.29.10}"
+  [[ "$N8N_VERSION_VALUE" == 2.29.9 || "$N8N_VERSION_VALUE" == 2.29.10 ]] || fatal "N8N_VERSION не входит в approved lifecycle pair."
   configure_docker
   compose config --quiet >/dev/null 2>&1 || fatal "Compose config невалиден."
   [[ -n "$(compose ps --status running -q postgres 2>/dev/null)" ]] || fatal "PostgreSQL должен быть running."
@@ -152,7 +155,7 @@ main() {
   "project": "alfa-ai-course",
   "createdAt": "$created_at",
   "consistency": "quiesced-n8n-logical-postgres",
-  "n8nImage": "docker.n8n.io/n8nio/n8n:2.29.10",
+  "n8nImage": "docker.n8n.io/n8nio/n8n:$N8N_VERSION_VALUE",
   "postgresImage": "postgres:17.10-bookworm",
   "caddyImage": "caddy:2.11.4-alpine"
 }

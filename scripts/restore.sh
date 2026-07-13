@@ -91,7 +91,7 @@ verify_archive() {
   postgres_image="$(sed -n 's/.*"postgresImage": "\([^"]*\)".*/\1/p' "$TEMP_DIR/manifest.json")"
   caddy_image="$(sed -n 's/.*"caddyImage": "\([^"]*\)".*/\1/p' "$TEMP_DIR/manifest.json")"
   [[ "$schema" == 1 && "$project" == alfa-ai-course ]] || fatal "Unsupported backup schema/project."
-  [[ "$n8n_image" == docker.n8n.io/n8nio/n8n:2.29.10 && "$postgres_image" == postgres:17.10-bookworm && "$caddy_image" == caddy:2.11.4-alpine ]] \
+  [[ ( "$n8n_image" == docker.n8n.io/n8nio/n8n:2.29.9 || "$n8n_image" == docker.n8n.io/n8nio/n8n:2.29.10 ) && "$postgres_image" == postgres:17.10-bookworm && "$caddy_image" == caddy:2.11.4-alpine ]] \
     || fatal "Backup image compatibility mismatch."
   for entry in n8n_data.tar.gz n8n_caddy_data.tar.gz n8n_caddy_config.tar.gz; do
     while IFS= read -r type; do

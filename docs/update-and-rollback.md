@@ -1,0 +1,39 @@
+# Update и rollback
+
+MVP разрешает только проверенную в dated research пару n8n `2.29.9 → 2.29.10`. Любая другая версия, floating tag, произвольный downgrade или PostgreSQL major migration отклоняются. Перед плановым release заново проверьте official release notes, security notices и [ADR-0003](../adr/0003-version-pinning-policy.md), затем обновите allowlist отдельной задачей.
+
+## Update
+
+Исходный `.env` должен явно содержать `N8N_VERSION=2.29.9`, а PostgreSQL и n8n должны работать:
+
+```bash
+./scripts/update.sh --to 2.29.10
+```
+
+Скрипт требует подтверждение, создаёт согласованный pre-update backup, сохраняет metadata атомарно в `.lifecycle/update-state.env`, загружает exact target image, меняет только `N8N_VERSION`, запускает stack и требует успешный local doctor. Secrets и env content не печатаются. Для automation доступен `--yes`, но target всё равно обязан входить в allowlist.
+
+Если backup или image pull не завершились, runtime не изменяется. Ошибка после mutation возвращает non-zero и печатает точную команду `rollback.sh` и путь pre-update archive. Metadata остаётся в `update_pending`, чтобы recovery был доступен.
+
+## Restore-based rollback
+
+```bash
+./scripts/rollback.sh
+```
+
+Rollback разрешён только для metadata `2.29.10 → 2.29.9`, требует локальное наличие exact old image и восстанавливает **полный pre-update backup** через `restore.sh`: env pin, PostgreSQL и n8n/Caddy volumes. Image-only downgrade запрещён, потому что database migration может быть необратима. Перед overwrite `restore.sh` создаёт дополнительный safety backup текущего state; его путь сохраняется как `FORWARD_BACKUP_ARCHIVE`.
+
+## Metadata и changelog procedure
+
+State-файл имеет mode `0600` и атомарно хранит status, current/previous version, pre-update archive и UTC timestamp. После rollback он также содержит forward safety archive. Не редактируйте metadata вручную.
+
+Для каждой новой пары отдельная research/change задача должна:
+
+1. записать дату, official sources, source/target versions и migration caveats в research и ADR-0003;
+2. добавить только эту exact pair в scripts и tests;
+3. выполнить disposable destructive rehearsal: old version с данными → backup → update → health/data verification → restore-based rollback → повторная verification;
+4. приложить resolved image digests и результаты проверок в Projects Control;
+5. пометить VPS/DNS/credential проверки как external, если они фактически не выполнялись.
+
+## Evidence status и границы
+
+Локальные syntax/unit/Compose проверки не доказывают migration safety. Pair считается проверенной только после destructive rehearsal с реальными pinned images и восстановлением данных. Unattended auto-update, arbitrary downgrade, PostgreSQL major upgrade и удалённое backup storage не входят в этот flow.

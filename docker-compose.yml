@@ -33,7 +33,7 @@ services:
     logging: *default-logging
 
   n8n:
-    image: docker.n8n.io/n8nio/n8n:2.29.10
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-2.29.10}
     platform: linux/amd64
     restart: unless-stopped
     init: true

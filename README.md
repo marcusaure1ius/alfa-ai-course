@@ -42,6 +42,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Установка](docs/installation.md) — preflight, interactive/non-interactive modes, rerun safety и exit codes;
 - [Диагностика](docs/diagnostics.md) — redacted OK/WARN/FAIL report и symptom mapping;
 - [Backup и restore](docs/backup-and-restore.md) — recovery archive, checksums, safety backup и rehearsal;
+- [Update и rollback](docs/update-and-rollback.md) — approved version pair, backup gate и restore-based recovery;
 - [License notes](LICENSE-NOTES.md) — границы допустимого использования и release checklist.
 
 ## Следующий шаг

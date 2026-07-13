@@ -5,6 +5,7 @@
 
 # Runtime and operation artifacts
 backups/
+.lifecycle/
 exports/
 *.dump
 *.tar
