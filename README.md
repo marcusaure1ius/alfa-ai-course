@@ -43,6 +43,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Диагностика](docs/diagnostics.md) — redacted OK/WARN/FAIL report и symptom mapping;
 - [Backup и restore](docs/backup-and-restore.md) — recovery archive, checksums, safety backup и rehearsal;
 - [Update и rollback](docs/update-and-rollback.md) — approved version pair, backup gate и restore-based recovery;
+- [Uninstall и перенос workflow](docs/uninstall-and-workflow-portability.md) — data-preserving uninstall, credential-free deterministic export и repeatable batch import;
 - [Generic LLM provider](docs/generic-llm-provider.md) — gateway contract, Connection Test и credential-safe setup;
 - [LLM providers](docs/llm-providers.md) — Yandex AI Studio adapter/model diagnostics и GigaChat OAuth lifecycle, scopes, rotation и troubleshooting;
 - [Credentials и интеграции](docs/credentials.md) — единый безопасный порядок подключения, smoke, evidence, rotation и incident response;
