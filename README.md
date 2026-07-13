@@ -50,6 +50,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Telegram credential setup](docs/credentials/telegram.md) — token-safe настройка, allowlist и controlled smoke;
 - [Telegram Assistant](docs/workflows/telegram-assistant.md) — draft-only demo, owner approval commands, dedupe и loop guards;
 - [Email Assistant](docs/workflows/email-assistant.md) — IMAP setup, guarded LLM extraction, draft-only output и privacy notes;
+- [Lead Handler](docs/workflows/lead-handler.md) — Header Auth webhook, нормализация контакта, approval-bound CRM mutation и recovery;
 - [License notes](LICENSE-NOTES.md) — границы допустимого использования и release checklist.
 
 ## Следующий шаг

@@ -126,6 +126,8 @@ Mail Gateway разделяет три операции одним строги�
 
 Business workflows: Telegram assistant, email assistant, lead handler и daily executive digest. Любое внешнее сообщение или изменение CRM требует human approval по умолчанию; Telegram assistant работает в `draft-only` по умолчанию.
 
+Lead handler реализован как Header Auth webhook с отдельными intake/resolve фазами: `eventId` останавливает replay до LLM, nullable extraction не может разрешить mutation, а точный owner-bound approval открывает последовательность lead upsert → task create → Telegram notice. Provider-neutral mapping, partial-failure reconciliation и setup зафиксированы в [руководстве Lead Handler](workflows/lead-handler.md).
+
 ## Trust boundaries и secrets
 
 - Internet → Caddy: разрешены только необходимые публичные порты 80/443.

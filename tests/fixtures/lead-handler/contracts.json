@@ -1,0 +1,112 @@
+{
+  "intake": [
+    {
+      "name": "Russian trunk phone and uppercase email normalize",
+      "input": {"eventId":"event-0001","idempotencyKey":"lead-0001","lead":{"name":" Анна ","email":"ANNA@EXAMPLE.COM","phone":"8 (999) 123-45-67","message":"Нужна автоматизация продаж"}},
+      "expected": {"accepted":true,"route":"intake","lead":{"name":"Анна","email":"anna@example.com","phone":"+79991234567"}}
+    },
+    {
+      "name": "international phone remains E164",
+      "input": {"eventId":"event-0002","idempotencyKey":"lead-0002","lead":{"phone":"+44 20 7946 0958","message":"Need a CRM setup"}},
+      "expected": {"accepted":true,"lead":{"phone":"+442079460958","email":null}}
+    },
+    {
+      "name": "email only is accepted",
+      "input": {"eventId":"event-0003","idempotencyKey":"lead-0003","lead":{"email":"owner@example.org"}},
+      "expected": {"accepted":true,"lead":{"phone":null,"email":"owner@example.org","message":null}}
+    },
+    {
+      "name": "missing contact is rejected",
+      "input": {"eventId":"event-0004","idempotencyKey":"lead-0004","lead":{"message":"Call me"}},
+      "expected": {"accepted":false,"error":{"code":"MISSING_CONTACT"}}
+    },
+    {
+      "name": "invalid email is rejected",
+      "input": {"eventId":"event-0005","idempotencyKey":"lead-0005","lead":{"email":"not-an-email"}},
+      "expected": {"accepted":false,"error":{"code":"INVALID_EMAIL"}}
+    },
+    {
+      "name": "short phone is rejected",
+      "input": {"eventId":"event-0006","idempotencyKey":"lead-0006","lead":{"phone":"123"}},
+      "expected": {"accepted":false,"error":{"code":"INVALID_PHONE"}}
+    },
+    {
+      "name": "unknown lead field is rejected",
+      "input": {"eventId":"event-0007","idempotencyKey":"lead-0007","lead":{"email":"a@example.org","approved":true}},
+      "expected": {"accepted":false,"error":{"code":"INVALID_LEAD_FIELD"}}
+    },
+    {
+      "name": "unknown envelope field is rejected",
+      "input": {"eventId":"event-0008","idempotencyKey":"lead-0008","lead":{"email":"a@example.org"},"token":"fixture"},
+      "expected": {"accepted":false,"error":{"code":"INVALID_REQUEST"}}
+    },
+    {
+      "name": "invalid event id is rejected",
+      "input": {"eventId":"short","idempotencyKey":"lead-0009","lead":{"email":"a@example.org"}},
+      "expected": {"accepted":false,"error":{"code":"INVALID_EVENT_ID"}}
+    },
+    {
+      "name": "invalid idempotency key is rejected",
+      "input": {"eventId":"event-0010","idempotencyKey":"bad key","lead":{"email":"a@example.org"}},
+      "expected": {"accepted":false,"error":{"code":"INVALID_IDEMPOTENCY_KEY"}}
+    },
+    {
+      "name": "empty optional name is rejected",
+      "input": {"eventId":"event-0011","idempotencyKey":"lead-0011","lead":{"email":"a@example.org","name":"  "}},
+      "expected": {"accepted":false,"error":{"code":"INVALID_LEAD_VALUE"}}
+    },
+    {
+      "name": "invalid due date is rejected",
+      "input": {"eventId":"event-0012","idempotencyKey":"lead-0012","lead":{"email":"a@example.org","taskDueAt":"tomorrow-ish"}},
+      "expected": {"accepted":false,"error":{"code":"INVALID_DUE_AT"}}
+    },
+    {
+      "name": "unconfigured owner fails closed",
+      "profile": {"profileOwnerRef":"REPLACE_WITH_OWNER_REF"},
+      "input": {"eventId":"event-0013","idempotencyKey":"lead-0013","lead":{"email":"a@example.org"}},
+      "expected": {"accepted":false,"error":{"code":"PROFILE_NOT_CONFIGURED"}}
+    },
+    {
+      "name": "unsupported phase is rejected",
+      "input": {"phase":"delete","eventId":"event-0014","idempotencyKey":"lead-0014","lead":{"email":"a@example.org"}},
+      "expected": {"accepted":false,"error":{"code":"INVALID_PHASE"}}
+    }
+  ],
+  "llm": [
+    {
+      "name": "all explicit fields are accepted",
+      "input": {"ok":true,"json":{"need":"Автоматизировать продажи","product":"CRM","priority":"high","nextStep":"Позвонить"}},
+      "expected": {"ok":true,"extraction":{"need":"Автоматизировать продажи","product":"CRM","priority":"high","nextStep":"Позвонить"}}
+    },
+    {
+      "name": "missing facts remain null",
+      "input": {"ok":true,"json":{"need":null,"product":null,"priority":null,"nextStep":null}},
+      "expected": {"ok":true,"extraction":{"need":null,"product":null,"priority":null,"nextStep":null}}
+    },
+    {
+      "name": "invented output field is rejected",
+      "input": {"ok":true,"json":{"need":null,"product":null,"priority":null,"nextStep":null,"approved":true}},
+      "expected": {"ok":false,"error":{"code":"LLM_OUTPUT_INVALID"}}
+    },
+    {
+      "name": "missing output field is rejected",
+      "input": {"ok":true,"json":{"need":null,"product":null,"priority":null}},
+      "expected": {"ok":false,"error":{"code":"LLM_OUTPUT_INVALID"}}
+    },
+    {
+      "name": "unknown priority is rejected",
+      "input": {"ok":true,"json":{"need":"Need","product":null,"priority":"urgent","nextStep":null}},
+      "expected": {"ok":false,"error":{"code":"LLM_OUTPUT_INVALID"}}
+    },
+    {
+      "name": "blank fact is rejected",
+      "input": {"ok":true,"json":{"need":" ","product":null,"priority":null,"nextStep":null}},
+      "expected": {"ok":false,"error":{"code":"LLM_OUTPUT_INVALID"}}
+    },
+    {
+      "name": "gateway error is preserved safely",
+      "input": {"ok":false,"error":{"code":"RATE_LIMITED","message":"sensitive provider response"}},
+      "expected": {"ok":false,"error":{"code":"RATE_LIMITED","message":"Lead extraction failed"}}
+    }
+  ]
+}
