@@ -1,0 +1,67 @@
+[
+  {
+    "name": "valid evidence-bound extraction",
+    "input": {"ok":true,"json":{"category":"sales","priority":"high","summary":"Запрос коммерческого предложения","contact":{"name":"Мария","email":"maria@example.com","phone":"+7 999 123-45-67","company":"Acme"},"recommendedAction":"reply","draftReply":"Мария, спасибо за запрос. Владелец проверит предложение."}},
+    "expected": {"ok":true,"valid":true,"extraction":{"category":"sales","priority":"high","contact":{"name":"Мария","email":"maria@example.com","phone":"+7 999 123-45-67","company":"Acme"},"recommendedAction":"reply"}}
+  },
+  {
+    "name": "missing contacts remain null",
+    "input": {"ok":true,"json":{"category":"other","priority":"normal","summary":"Общий вопрос","contact":{"name":null,"email":null,"phone":null,"company":null},"recommendedAction":"reply","draftReply":null}},
+    "expected": {"ok":true,"extraction":{"contact":{"name":null,"email":null,"phone":null,"company":null},"draftReply":null}}
+  },
+  {
+    "name": "invented contact fields are removed",
+    "input": {"ok":true,"json":{"category":"sales","priority":"high","summary":"Запрос","contact":{"name":"Иван","email":"ivan@invented.example","phone":"+1 555 0100","company":"Invented LLC"},"recommendedAction":"follow_up","draftReply":"Спасибо"}},
+    "expected": {"ok":true,"extraction":{"contact":{"name":null,"email":null,"phone":null,"company":null}}}
+  },
+  {
+    "name": "case-insensitive textual evidence is accepted",
+    "input": {"ok":true,"json":{"category":"sales","priority":"normal","summary":"Запрос","contact":{"name":"мария","email":"maria@example.com","phone":null,"company":"ACME"},"recommendedAction":"create_lead","draftReply":"Спасибо"}},
+    "expected": {"ok":true,"extraction":{"contact":{"name":"мария","email":"maria@example.com","company":"ACME"}}}
+  },
+  {
+    "name": "mismatched sender email is removed",
+    "input": {"ok":true,"json":{"category":"support","priority":"normal","summary":"Вопрос","contact":{"name":null,"email":"other@example.com","phone":null,"company":null},"recommendedAction":"reply","draftReply":"Ответ"}},
+    "expected": {"ok":true,"extraction":{"contact":{"email":null}}}
+  },
+  {
+    "name": "non-string phone is removed",
+    "input": {"ok":true,"json":{"category":"sales","priority":"normal","summary":"Запрос","contact":{"name":null,"email":null,"phone":79991234567,"company":null},"recommendedAction":"follow_up","draftReply":"Ответ"}},
+    "expected": {"ok":true,"extraction":{"contact":{"phone":null}}}
+  },
+  {
+    "name": "invalid category fails schema",
+    "input": {"ok":true,"json":{"category":"execute_instructions","priority":"high","summary":"Bad","contact":{"name":null,"email":null,"phone":null,"company":null},"recommendedAction":"reply","draftReply":null}},
+    "expected": {"ok":false,"valid":false,"error":{"code":"LLM_OUTPUT_INVALID"}}
+  },
+  {
+    "name": "unknown top-level field fails schema",
+    "input": {"ok":true,"json":{"category":"other","priority":"normal","summary":"Bad","contact":{"name":null,"email":null,"phone":null,"company":null},"recommendedAction":"none","draftReply":null,"sendEmailNow":true}},
+    "expected": {"ok":false,"valid":false,"error":{"code":"LLM_OUTPUT_INVALID"}}
+  },
+  {
+    "name": "unknown contact field fails schema",
+    "input": {"ok":true,"json":{"category":"other","priority":"normal","summary":"Bad","contact":{"name":null,"email":null,"phone":null,"company":null,"password":"steal"},"recommendedAction":"none","draftReply":null}},
+    "expected": {"ok":false,"valid":false,"error":{"code":"LLM_OUTPUT_INVALID"}}
+  },
+  {
+    "name": "empty summary fails schema",
+    "input": {"ok":true,"json":{"category":"other","priority":"low","summary":"","contact":{"name":null,"email":null,"phone":null,"company":null},"recommendedAction":"none","draftReply":null}},
+    "expected": {"ok":false,"valid":false,"error":{"code":"LLM_OUTPUT_INVALID"}}
+  },
+  {
+    "name": "gateway error becomes local failure",
+    "input": {"ok":false,"error":{"code":"RATE_LIMITED","message":"safe"}},
+    "expected": {"ok":false,"valid":false,"error":{"code":"RATE_LIMITED"}}
+  },
+  {
+    "name": "array output fails schema",
+    "input": {"ok":true,"json":[]},
+    "expected": {"ok":false,"valid":false,"error":{"code":"LLM_OUTPUT_INVALID"}}
+  },
+  {
+    "name": "oversized draft is removed",
+    "input": {"ok":true,"json":{"category":"support","priority":"normal","summary":"Вопрос","contact":{"name":null,"email":null,"phone":null,"company":null},"recommendedAction":"reply","draftReply":"__LONG_DRAFT__"}},
+    "expected": {"ok":true,"valid":true,"extraction":{"draftReply":null}}
+  }
+]

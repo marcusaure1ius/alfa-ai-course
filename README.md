@@ -46,6 +46,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Generic LLM provider](docs/generic-llm-provider.md) — gateway contract, Connection Test и credential-safe setup;
 - [Mail gateway contract](docs/contracts/mail.md) — IMAP normalization, safe drafts, approval-bound SMTP и loop protection;
 - [IMAP/SMTP setup](docs/credentials/mail.md) — credential-safe подключение и production checklist;
+- [Email Assistant](docs/workflows/email-assistant.md) — IMAP setup, guarded LLM extraction, draft-only output и privacy notes;
 - [License notes](LICENSE-NOTES.md) — границы допустимого использования и release checklist.
 
 ## Следующий шаг
