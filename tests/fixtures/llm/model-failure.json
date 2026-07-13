@@ -1,0 +1,1 @@
+{"statusCode":404,"body":{"error":{"message":"fixture model unavailable"}},"expected":{"ok":false,"code":"MODEL_NOT_FOUND"}}

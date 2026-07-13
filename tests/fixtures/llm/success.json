@@ -1,0 +1,1 @@
+{"statusCode":200,"body":{"model":"fixture-model","choices":[{"message":{"content":"connection-ok"}}],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}},"expected":{"ok":true,"code":null}}

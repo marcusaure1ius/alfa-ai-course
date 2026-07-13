@@ -1,0 +1,106 @@
+{
+  "id": "coreGenericLlmGatewayV1",
+  "name": "Core - LLM Gateway (Generic)",
+  "nodes": [
+    {
+      "parameters": {"inputSource": "passthrough"},
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Called by Business Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-760, 80]
+    },
+    {
+      "parameters": {
+        "assignments": {"assignments": [
+          {"id": "profile-base-url", "name": "profileBaseUrl", "value": "https://api.example.invalid/v1", "type": "string"},
+          {"id": "profile-timeout", "name": "profileTimeoutMs", "value": 120000, "type": "number"}
+        ]},
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "22222222-2222-4222-8222-222222222222",
+      "name": "Generic Provider Profile",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-540, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst requestId = typeof input.requestId === 'string' && input.requestId ? input.requestId : crypto.randomUUID();\nconst fail = (message) => [{json:{valid:false,result:{ok:false,requestId,provider:'generic',model:typeof input.model === 'string' ? input.model : '',error:{code:'INVALID_REQUEST',message,retryable:false,httpStatus:null,attempts:0},warnings:[]}}}];\nconst allowed = new Set(['requestId','provider','model','messages','temperature','maxTokens','output','capabilities','profileBaseUrl','profileTimeoutMs']);\nif (Object.keys(input).some((key) => !allowed.has(key))) return fail('Input contains unknown fields');\nif (input.provider !== 'generic') return fail('Generic workflow requires provider=generic');\nif (typeof input.model !== 'string' || !input.model.trim()) return fail('Model is required');\nif (!Array.isArray(input.messages) || input.messages.length < 1 || input.messages.length > 100) return fail('Messages must contain 1..100 items');\nif (input.messages.some((m) => !['system','user','assistant'].includes(m?.role) || typeof m?.content !== 'string' || !m.content)) return fail('Message role/content is invalid');\nconst temperature = input.temperature ?? 0.2; const maxTokens = input.maxTokens ?? 1000;\nif (typeof temperature !== 'number' || temperature < 0 || temperature > 1) return fail('Temperature must be 0..1');\nif (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 8192) return fail('maxTokens must be 1..8192');\nconst mode = input.output?.mode ?? 'text';\nif (!['text','json'].includes(mode)) return fail('Output mode must be text or json');\nif (input.capabilities?.tools || input.capabilities?.providerStructuredOutput) return [{json:{valid:false,result:{ok:false,requestId,provider:'generic',model:input.model,error:{code:'CAPABILITY_UNSUPPORTED',message:'Requested capability is not enabled for this profile',retryable:false,httpStatus:null,attempts:0},warnings:[]}}}];\nreturn [{json:{valid:true,requestId,provider:'generic',model:input.model,messages:input.messages,temperature,maxTokens,output:{mode,schema:input.output?.schema ?? null},profileBaseUrl:input.profileBaseUrl,profileTimeoutMs:input.profileTimeoutMs}}];"
+      },
+      "id": "33333333-3333-4333-8333-333333333333",
+      "name": "Validate Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, 80]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"valid-contract","leftValue":"={{ $json.valid }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "44444444-4444-4444-8444-444444444444",
+      "name": "Contract Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-60, 80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.profileBaseUrl.replace(/\\/$/, '') + '/chat/completions' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({model:$json.model,messages:$json.messages,temperature:$json.temperature,max_tokens:$json.maxTokens}) }}",
+        "options": {"timeout": "={{ $json.profileTimeoutMs }}", "response":{"response":{"fullResponse":true,"neverError":true,"responseFormat":"json"}}}
+      },
+      "id": "55555555-5555-4555-8555-555555555555",
+      "name": "Generic Chat Completion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [180, 0],
+      "credentials": {"httpHeaderAuth":{"id":"REPLACE_WITH_GENERIC_LLM_CREDENTIAL_ID","name":"Generic LLM Bearer Header"}},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response=$input.first().json; const request=$('Validate Contract').first().json; const status=Number(response.statusCode ?? 0); const body=response.body ?? response;\nconst error=(code,message,retryable)=>[{json:{ok:false,requestId:request.requestId,provider:'generic',model:request.model,error:{code,message,retryable,httpStatus:status || null,attempts:1},warnings:[]}}];\nif (status===401 || status===403) return error('AUTH_FAILED','Provider authentication failed',false);\nif (status===404 || (status===400 && /model/i.test(JSON.stringify(body)))) return error('MODEL_NOT_FOUND','Requested model is unavailable',false);\nif (status===429) return error('RATE_LIMITED','Provider rate limit exceeded',true);\nif (status>=500 || status===0) return error(status===0?'PROVIDER_UNAVAILABLE':'PROVIDER_UNAVAILABLE','Provider is unavailable',true);\nif (status<200 || status>=300) return error('INVALID_PROVIDER_RESPONSE','Provider returned an unsupported response',false);\nconst content=body?.choices?.[0]?.message?.content; if (typeof content!=='string') return error('INVALID_PROVIDER_RESPONSE','Provider response cannot be normalized',false);\nlet parsed=null; if (request.output.mode==='json') { try { parsed=JSON.parse(content); } catch { return error('OUTPUT_VALIDATION_FAILED','Provider output is not valid JSON',false); } }\nconst usage=body.usage ?? {}; return [{json:{ok:true,requestId:request.requestId,provider:'generic',model:body.model ?? request.model,content:request.output.mode==='text'?content:null,json:request.output.mode==='json'?parsed:null,usage:{inputTokens:usage.prompt_tokens ?? null,outputTokens:usage.completion_tokens ?? null,totalTokens:usage.total_tokens ?? null},capabilitiesUsed:[],warnings:[]}}];"
+      },
+      "id": "66666666-6666-4666-8666-666666666666",
+      "name": "Normalize Safe Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [430, 0]
+    },
+    {
+      "parameters": {"jsCode":"return [{json:$input.first().json.result}];"},
+      "id": "77777777-7777-4777-8777-777777777777",
+      "name": "Return Contract Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [180, 180]
+    },
+    {
+      "parameters": {"content":"## Generic LLM Gateway\n1. Replace the profile Base URL with an HTTPS `/v1` endpoint.\n2. Bind an HTTP Header Auth credential whose **name** is `Authorization` and value is `Bearer <key>`.\n3. Never put a key, Base URL, or credential ID into caller input.\n4. Responses API, tools and provider-native structured output are disabled until separate contract tests.","height":300,"width":420,"color":5},
+      "id": "88888888-8888-4888-8888-888888888888",
+      "name": "Setup and Secret Boundary",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-760, -280]
+    }
+  ],
+  "connections": {
+    "Called by Business Workflow":{"main":[[{"node":"Generic Provider Profile","type":"main","index":0}]]},
+    "Generic Provider Profile":{"main":[[{"node":"Validate Contract","type":"main","index":0}]]},
+    "Validate Contract":{"main":[[{"node":"Contract Valid?","type":"main","index":0}]]},
+    "Contract Valid?":{"main":[[{"node":"Generic Chat Completion","type":"main","index":0}],[{"node":"Return Contract Error","type":"main","index":0}]]},
+    "Generic Chat Completion":{"main":[[{"node":"Normalize Safe Result","type":"main","index":0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder":"v1","saveDataErrorExecution":"all","saveDataSuccessExecution":"none","saveManualExecutions":false},
+  "active": false,
+  "versionId": "99999999-9999-4999-8999-999999999999",
+  "meta": {"templateCredsSetupCompleted":false},
+  "tags": []
+}

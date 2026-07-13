@@ -5,6 +5,7 @@
 - Проверено: 2026-07-13
 - Architecture decision: [ADR-0002](../../adr/0002-llm-integration-strategy.md)
 - Capability evidence: [provider matrix](../research/provider-capabilities.md)
+- Generic implementation: [workflow and setup reference](../generic-llm-provider.md)
 
 ## Назначение
 
