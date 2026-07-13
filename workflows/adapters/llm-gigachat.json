@@ -1,0 +1,193 @@
+{
+  "id": "adapterGigaChatLlmV1",
+  "name": "Adapter - GigaChat LLM OAuth",
+  "nodes": [
+    {
+      "parameters": {"inputSource":"passthrough"},
+      "id": "a1500000-0000-4111-8111-000000000001",
+      "name": "Called by LLM Gateway",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-1160, 40]
+    },
+    {
+      "parameters": {"assignments":{"assignments":[
+        {"id":"giga-oauth-url","name":"profileOAuthUrl","value":"https://ngw.devices.sberbank.ru:9443/api/v2/oauth","type":"string"},
+        {"id":"giga-api-base","name":"profileApiBaseUrl","value":"https://gigachat.devices.sberbank.ru/api/v1","type":"string"},
+        {"id":"giga-scope","name":"profileScope","value":"GIGACHAT_API_PERS","type":"string"},
+        {"id":"giga-timeout","name":"profileTimeoutMs","value":120000,"type":"number"},
+        {"id":"giga-skew","name":"profileRefreshSkewMs","value":60000,"type":"number"}
+      ]},"includeOtherFields":true,"options":{}},
+      "id": "a1500000-0000-4222-8222-000000000002",
+      "name": "GigaChat Provider Profile",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-940, 40]
+    },
+    {
+      "parameters": {"jsCode":"const input=$input.first().json;const requestId=typeof input.requestId==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(input.requestId)?input.requestId:crypto.randomUUID();const result=(code,message)=>({ok:false,requestId,provider:'gigachat',model:typeof input.model==='string'?input.model:'',error:{code,message,retryable:false,httpStatus:null,attempts:0},warnings:[]});const fail=(code,message)=>[{json:{valid:false,result:result(code,message)}}];const allowed=new Set(['requestId','provider','model','messages','temperature','maxTokens','output','capabilities','profileOAuthUrl','profileApiBaseUrl','profileScope','profileTimeoutMs','profileRefreshSkewMs']);if(!input||Array.isArray(input)||typeof input!=='object'||Object.keys(input).some(k=>!allowed.has(k)))return fail('INVALID_REQUEST','Input contains unknown fields');if(input.provider!=='gigachat')return fail('INVALID_REQUEST','GigaChat adapter requires provider=gigachat');if(typeof input.model!=='string'||!/^[A-Za-z0-9._:-]{1,128}$/.test(input.model))return fail('INVALID_REQUEST','Model is invalid');if(!Array.isArray(input.messages)||input.messages.length<1||input.messages.length>100||input.messages.some(m=>!m||Array.isArray(m)||typeof m!=='object'||Object.keys(m).some(k=>!['role','content'].includes(k))||!['system','user','assistant'].includes(m.role)||typeof m.content!=='string'||m.content.length<1||m.content.length>100000))return fail('INVALID_REQUEST','Messages are invalid');const temperature=input.temperature??0.2;const maxTokens=input.maxTokens??1000;if(typeof temperature!=='number'||temperature<0||temperature>1)return fail('INVALID_REQUEST','Temperature must be 0..1');if(!Number.isInteger(maxTokens)||maxTokens<1||maxTokens>8192)return fail('INVALID_REQUEST','maxTokens must be 1..8192');const output=input.output??{mode:'text',schema:null};if(!output||Array.isArray(output)||typeof output!=='object'||Object.keys(output).some(k=>!['mode','schema'].includes(k))||!['text','json'].includes(output.mode??'text'))return fail('INVALID_REQUEST','Output contract is invalid');const capabilities=input.capabilities??{};if(!capabilities||Array.isArray(capabilities)||typeof capabilities!=='object'||Object.keys(capabilities).some(k=>!['tools','providerStructuredOutput'].includes(k)))return fail('INVALID_REQUEST','Capabilities contract is invalid');if(capabilities.tools===true||capabilities.providerStructuredOutput===true)return fail('CAPABILITY_UNSUPPORTED','Tools and provider-native structured output are disabled');const schemaKeys=new Set(['type','properties','required','additionalProperties','items','enum','minLength','maxLength','minimum','maximum','minItems','maxItems']);const schemaOk=(schema,depth=0)=>{if(!schema||Array.isArray(schema)||typeof schema!=='object'||depth>5||Object.keys(schema).some(k=>!schemaKeys.has(k))||!['object','array','string','number','integer','boolean','null'].includes(schema.type))return false;if(schema.enum!==undefined&&(!Array.isArray(schema.enum)||schema.enum.length<1||schema.enum.length>100))return false;if(schema.type==='object'){if(schema.properties!==undefined&&(!schema.properties||Array.isArray(schema.properties)||typeof schema.properties!=='object'||Object.values(schema.properties).some(v=>!schemaOk(v,depth+1))))return false;if(schema.required!==undefined&&(!Array.isArray(schema.required)||schema.required.some(v=>typeof v!=='string')))return false;if(schema.additionalProperties!==undefined&&typeof schema.additionalProperties!=='boolean')return false;}if(schema.type==='array'&&schema.items!==undefined&&!schemaOk(schema.items,depth+1))return false;return true;};const mode=output.mode??'text';if(mode==='json'&&!schemaOk(output.schema))return fail('INVALID_REQUEST','JSON mode requires a supported local schema');if(mode==='text'&&output.schema!==undefined&&output.schema!==null)return fail('INVALID_REQUEST','Text mode cannot include a schema');if(input.profileOAuthUrl!=='https://ngw.devices.sberbank.ru:9443/api/v2/oauth')return fail('CONFIGURATION_ERROR','OAuth URL is not allowlisted');if(!['https://gigachat.devices.sberbank.ru/api/v1','https://api.giga.chat/v1'].includes(input.profileApiBaseUrl))return fail('CONFIGURATION_ERROR','API Base URL is not allowlisted');if(!['GIGACHAT_API_PERS','GIGACHAT_API_B2B','GIGACHAT_API_CORP'].includes(input.profileScope))return fail('CONFIGURATION_ERROR','GigaChat scope is invalid');if(!Number.isInteger(input.profileTimeoutMs)||input.profileTimeoutMs<1000||input.profileTimeoutMs>120000||!Number.isInteger(input.profileRefreshSkewMs)||input.profileRefreshSkewMs<0||input.profileRefreshSkewMs>300000)return fail('CONFIGURATION_ERROR','Timeout or refresh skew is invalid');return [{json:{valid:true,requestId,provider:'gigachat',model:input.model,messages:input.messages,temperature,maxTokens,output:{mode,schema:output.schema??null},profileOAuthUrl:input.profileOAuthUrl,profileApiBaseUrl:input.profileApiBaseUrl,profileScope:input.profileScope,profileTimeoutMs:input.profileTimeoutMs,profileRefreshSkewMs:input.profileRefreshSkewMs,oauthRqUid:crypto.randomUUID()}}];"},
+      "id": "a1500000-0000-4333-8333-000000000003",
+      "name": "Validate GigaChat Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-720, 40]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"giga-contract-valid","leftValue":"={{ $json.valid }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "a1500000-0000-4444-8444-000000000004",
+      "name": "Contract Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-500, 40]
+    },
+    {
+      "parameters": {"method":"POST","url":"={{ $json.profileOAuthUrl }}","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendHeaders":true,"headerParameters":{"parameters":[{"name":"Accept","value":"application/json"},{"name":"RqUID","value":"={{ $json.oauthRqUid }}"}]},"sendBody":true,"contentType":"form-urlencoded","bodyParameters":{"parameters":[{"name":"scope","value":"={{ $json.profileScope }}"}]},"options":{"timeout":"={{ $json.profileTimeoutMs }}","response":{"response":{"fullResponse":true,"neverError":true,"responseFormat":"json"}}}},
+      "id": "a1500000-0000-4555-8555-000000000005",
+      "name": "Exchange Initial OAuth Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-280, -80],
+      "credentials": {"httpHeaderAuth":{"id":"REPLACE_WITH_GIGACHAT_AUTH_CREDENTIAL_ID","name":"GigaChat Basic Authorization Key"}},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {"jsCode":"const response=$input.first().json;const request=$('Validate GigaChat Contract').first().json;const status=Number(response.statusCode??0);const body=response.body??response;const safe=(code,message,retryable=false)=>({ok:false,requestId:request.requestId,provider:'gigachat',model:request.model,error:{code,message,retryable,httpStatus:status||null,attempts:1},warnings:[]});if(status===401||status===403)return [{json:{valid:false,refreshNeeded:false,result:safe('AUTH_FAILED','GigaChat OAuth authentication failed')}}];if(status===429)return [{json:{valid:false,refreshNeeded:false,result:safe('RATE_LIMITED','GigaChat OAuth rate limit exceeded',true)}}];if(status===0||status>=500)return [{json:{valid:false,refreshNeeded:false,result:safe('PROVIDER_UNAVAILABLE','GigaChat OAuth service is unavailable',true)}}];if(status<200||status>=300)return [{json:{valid:false,refreshNeeded:false,result:safe('AUTH_FAILED','GigaChat OAuth exchange failed')}}];const token=body?.access_token;const rawExpires=Number(body?.expires_at);const expiresAt=rawExpires>1e12?rawExpires:rawExpires*1000;if(typeof token!=='string'||token.length<8||!Number.isFinite(expiresAt))return [{json:{valid:false,refreshNeeded:false,result:safe('INVALID_PROVIDER_RESPONSE','GigaChat OAuth response is invalid')}}];if(expiresAt<=Date.now()+request.profileRefreshSkewMs)return [{json:{valid:false,refreshNeeded:true,requestId:request.requestId,profileOAuthUrl:request.profileOAuthUrl,profileScope:request.profileScope,profileTimeoutMs:request.profileTimeoutMs,oauthRqUid:crypto.randomUUID(),result:safe('AUTH_FAILED','GigaChat OAuth token is already expiring')}}];return [{json:{...request,valid:true,accessToken:token,tokenExpiresAt:expiresAt,oauthAttempts:1}}];"},
+      "id": "a1500000-0000-4666-8666-000000000006",
+      "name": "Validate Initial OAuth Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-60, -80]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"giga-initial-token-valid","leftValue":"={{ $json.valid }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "a1500000-0000-4777-8777-000000000007",
+      "name": "Initial Token Usable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [160, -80]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"giga-initial-refresh","leftValue":"={{ $json.refreshNeeded }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "a1500000-0000-4888-8888-000000000008",
+      "name": "Refresh Expiring Token?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [380, 40]
+    },
+    {
+      "parameters": {"method":"POST","url":"={{ $json.profileOAuthUrl }}","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendHeaders":true,"headerParameters":{"parameters":[{"name":"Accept","value":"application/json"},{"name":"RqUID","value":"={{ $json.oauthRqUid }}"}]},"sendBody":true,"contentType":"form-urlencoded","bodyParameters":{"parameters":[{"name":"scope","value":"={{ $json.profileScope }}"}]},"options":{"timeout":"={{ $json.profileTimeoutMs }}","response":{"response":{"fullResponse":true,"neverError":true,"responseFormat":"json"}}}},
+      "id": "a1500000-0000-4999-8999-000000000009",
+      "name": "Exchange Refreshed OAuth Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [600, 40],
+      "credentials": {"httpHeaderAuth":{"id":"REPLACE_WITH_GIGACHAT_AUTH_CREDENTIAL_ID","name":"GigaChat Basic Authorization Key"}},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {"jsCode":"const response=$input.first().json;const request=$('Validate GigaChat Contract').first().json;const status=Number(response.statusCode??0);const body=response.body??response;const safe=(code,message,retryable=false)=>({ok:false,requestId:request.requestId,provider:'gigachat',model:request.model,error:{code,message,retryable,httpStatus:status||null,attempts:2},warnings:[]});if(status===401||status===403)return [{json:{valid:false,result:safe('AUTH_FAILED','GigaChat OAuth refresh failed')}}];if(status===429)return [{json:{valid:false,result:safe('RATE_LIMITED','GigaChat OAuth rate limit exceeded',true)}}];if(status===0||status>=500)return [{json:{valid:false,result:safe('PROVIDER_UNAVAILABLE','GigaChat OAuth service is unavailable',true)}}];if(status<200||status>=300)return [{json:{valid:false,result:safe('AUTH_FAILED','GigaChat OAuth refresh failed')}}];const token=body?.access_token;const rawExpires=Number(body?.expires_at);const expiresAt=rawExpires>1e12?rawExpires:rawExpires*1000;if(typeof token!=='string'||token.length<8||!Number.isFinite(expiresAt)||expiresAt<=Date.now()+request.profileRefreshSkewMs)return [{json:{valid:false,result:safe('AUTH_FAILED','GigaChat refreshed token is unusable')}}];return [{json:{...request,valid:true,accessToken:token,tokenExpiresAt:expiresAt,oauthAttempts:2}}];"},
+      "id": "a1500000-0000-4aaa-8aaa-000000000010",
+      "name": "Validate Refreshed OAuth Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [820, 40]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"giga-refreshed-valid","leftValue":"={{ $json.valid }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "a1500000-0000-4bbb-8bbb-000000000011",
+      "name": "Refreshed Token Usable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1040, 40]
+    },
+    {
+      "parameters": {"method":"POST","url":"={{ $json.profileApiBaseUrl + '/chat/completions' }}","sendHeaders":true,"headerParameters":{"parameters":[{"name":"Accept","value":"application/json"},{"name":"Authorization","value":"={{ 'Bearer ' + $json.accessToken }}"}]},"sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{ JSON.stringify({model:$json.model,messages:$json.messages,temperature:$json.temperature,max_tokens:$json.maxTokens,stream:false}) }}","options":{"timeout":"={{ $json.profileTimeoutMs }}","response":{"response":{"fullResponse":true,"neverError":true,"responseFormat":"json"}}}},
+      "id": "a1500000-0000-4ccc-8ccc-000000000012",
+      "name": "Initial GigaChat Completion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [380, -180],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {"jsCode":"const response=$input.first().json;const request=$('Validate GigaChat Contract').first().json;const status=Number(response.statusCode??0);const body=response.body??response;const safe=(code,message,retryable=false)=>({ok:false,requestId:request.requestId,provider:'gigachat',model:request.model,error:{code,message,retryable,httpStatus:status||null,attempts:1},warnings:[]});if(status===401)return [{json:{refreshAuth:true,requestId:request.requestId,profileOAuthUrl:request.profileOAuthUrl,profileScope:request.profileScope,profileTimeoutMs:request.profileTimeoutMs,oauthRqUid:crypto.randomUUID()}}];const normalize=()=>{if(status===403)return safe('AUTH_FAILED','GigaChat authorization failed');if(status===404||(status===400&&/model/i.test(JSON.stringify(body))))return safe('MODEL_NOT_FOUND','Requested GigaChat model is unavailable');if(status===429)return safe('RATE_LIMITED','GigaChat rate limit exceeded',true);if(status===0||status>=500)return safe('PROVIDER_UNAVAILABLE','GigaChat service is unavailable',true);if(status<200||status>=300)return safe('INVALID_PROVIDER_RESPONSE','GigaChat returned an unsupported response');const content=body?.choices?.[0]?.message?.content;if(typeof content!=='string')return safe('INVALID_PROVIDER_RESPONSE','GigaChat response cannot be normalized');let parsed=null;if(request.output.mode==='json'){try{parsed=JSON.parse(content);}catch{return safe('OUTPUT_VALIDATION_FAILED','GigaChat output is not valid JSON');}const validate=(value,schema)=>{if(schema.enum&&!schema.enum.some(v=>JSON.stringify(v)===JSON.stringify(value)))return false;if(schema.type==='null')return value===null;if(schema.type==='string')return typeof value==='string'&&(schema.minLength===undefined||value.length>=schema.minLength)&&(schema.maxLength===undefined||value.length<=schema.maxLength);if(schema.type==='number'||schema.type==='integer')return typeof value==='number'&&Number.isFinite(value)&&(schema.type!=='integer'||Number.isInteger(value))&&(schema.minimum===undefined||value>=schema.minimum)&&(schema.maximum===undefined||value<=schema.maximum);if(schema.type==='boolean')return typeof value==='boolean';if(schema.type==='array')return Array.isArray(value)&&(schema.minItems===undefined||value.length>=schema.minItems)&&(schema.maxItems===undefined||value.length<=schema.maxItems)&&(!schema.items||value.every(v=>validate(v,schema.items)));if(schema.type==='object'){if(!value||Array.isArray(value)||typeof value!=='object')return false;const props=schema.properties??{};if((schema.required??[]).some(k=>!(k in value)))return false;if(schema.additionalProperties===false&&Object.keys(value).some(k=>!(k in props)))return false;return Object.entries(props).every(([k,s])=>!(k in value)||validate(value[k],s));}return false;};if(!validate(parsed,request.output.schema))return safe('OUTPUT_VALIDATION_FAILED','GigaChat JSON output does not match the local schema');}const usage=body.usage??{};return {ok:true,requestId:request.requestId,provider:'gigachat',model:body.model??request.model,content:request.output.mode==='text'?content:null,json:request.output.mode==='json'?parsed:null,usage:{inputTokens:Number.isInteger(usage.prompt_tokens)?usage.prompt_tokens:null,outputTokens:Number.isInteger(usage.completion_tokens)?usage.completion_tokens:null,totalTokens:Number.isInteger(usage.total_tokens)?usage.total_tokens:null},capabilitiesUsed:[],warnings:[]};};return [{json:{refreshAuth:false,result:normalize()}}];"},
+      "id": "a1500000-0000-4ddd-8ddd-000000000013",
+      "name": "Normalize Initial Chat Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, -180]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"giga-refresh-401","leftValue":"={{ $json.refreshAuth }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "a1500000-0000-4eee-8eee-000000000014",
+      "name": "Refresh After First 401?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [820, -180]
+    },
+    {
+      "parameters": {"jsCode":"return [{json:$input.first().json.result}];"},
+      "id": "a1500000-0000-4fff-8fff-000000000015",
+      "name": "Return Initial Chat Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, -180]
+    },
+    {
+      "parameters": {"method":"POST","url":"={{ $json.profileApiBaseUrl + '/chat/completions' }}","sendHeaders":true,"headerParameters":{"parameters":[{"name":"Accept","value":"application/json"},{"name":"Authorization","value":"={{ 'Bearer ' + $json.accessToken }}"}]},"sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{ JSON.stringify({model:$json.model,messages:$json.messages,temperature:$json.temperature,max_tokens:$json.maxTokens,stream:false}) }}","options":{"timeout":"={{ $json.profileTimeoutMs }}","response":{"response":{"fullResponse":true,"neverError":true,"responseFormat":"json"}}}},
+      "id": "a1500000-0000-4010-8010-000000000016",
+      "name": "Retry GigaChat Completion Once",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1260, 0],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {"jsCode":"const response=$input.first().json;const request=$('Validate GigaChat Contract').first().json;const status=Number(response.statusCode??0);const body=response.body??response;const safe=(code,message,retryable=false)=>({ok:false,requestId:request.requestId,provider:'gigachat',model:request.model,error:{code,message,retryable,httpStatus:status||null,attempts:2},warnings:[]});if(status===401||status===403)return [{json:safe('AUTH_FAILED','GigaChat authorization failed after one refresh')}];if(status===404||(status===400&&/model/i.test(JSON.stringify(body))))return [{json:safe('MODEL_NOT_FOUND','Requested GigaChat model is unavailable')}];if(status===429)return [{json:safe('RATE_LIMITED','GigaChat rate limit exceeded',true)}];if(status===0||status>=500)return [{json:safe('PROVIDER_UNAVAILABLE','GigaChat service is unavailable',true)}];if(status<200||status>=300)return [{json:safe('INVALID_PROVIDER_RESPONSE','GigaChat returned an unsupported response')}];const content=body?.choices?.[0]?.message?.content;if(typeof content!=='string')return [{json:safe('INVALID_PROVIDER_RESPONSE','GigaChat response cannot be normalized')}];let parsed=null;if(request.output.mode==='json'){try{parsed=JSON.parse(content);}catch{return [{json:safe('OUTPUT_VALIDATION_FAILED','GigaChat output is not valid JSON')}];}const validate=(value,schema)=>{if(schema.enum&&!schema.enum.some(v=>JSON.stringify(v)===JSON.stringify(value)))return false;if(schema.type==='null')return value===null;if(schema.type==='string')return typeof value==='string'&&(schema.minLength===undefined||value.length>=schema.minLength)&&(schema.maxLength===undefined||value.length<=schema.maxLength);if(schema.type==='number'||schema.type==='integer')return typeof value==='number'&&Number.isFinite(value)&&(schema.type!=='integer'||Number.isInteger(value))&&(schema.minimum===undefined||value>=schema.minimum)&&(schema.maximum===undefined||value<=schema.maximum);if(schema.type==='boolean')return typeof value==='boolean';if(schema.type==='array')return Array.isArray(value)&&(schema.minItems===undefined||value.length>=schema.minItems)&&(schema.maxItems===undefined||value.length<=schema.maxItems)&&(!schema.items||value.every(v=>validate(v,schema.items)));if(schema.type==='object'){if(!value||Array.isArray(value)||typeof value!=='object')return false;const props=schema.properties??{};if((schema.required??[]).some(k=>!(k in value)))return false;if(schema.additionalProperties===false&&Object.keys(value).some(k=>!(k in props)))return false;return Object.entries(props).every(([k,s])=>!(k in value)||validate(value[k],s));}return false;};if(!validate(parsed,request.output.schema))return [{json:safe('OUTPUT_VALIDATION_FAILED','GigaChat JSON output does not match the local schema')}];}const usage=body.usage??{};return [{json:{ok:true,requestId:request.requestId,provider:'gigachat',model:body.model??request.model,content:request.output.mode==='text'?content:null,json:request.output.mode==='json'?parsed:null,usage:{inputTokens:Number.isInteger(usage.prompt_tokens)?usage.prompt_tokens:null,outputTokens:Number.isInteger(usage.completion_tokens)?usage.completion_tokens:null,totalTokens:Number.isInteger(usage.total_tokens)?usage.total_tokens:null},capabilitiesUsed:[],warnings:[]}}];"},
+      "id": "a1500000-0000-4020-8020-000000000017",
+      "name": "Normalize Retried Chat Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1480, 0]
+    },
+    {
+      "parameters": {"jsCode":"return [{json:$input.first().json.result}];"},
+      "id": "a1500000-0000-4030-8030-000000000018",
+      "name": "Return Safe Adapter Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [820, 180]
+    },
+    {
+      "parameters": {"content":"## GigaChat OAuth adapter v1\n\n- Bind both OAuth nodes to one HTTP Header Auth credential: header `Authorization`, value `Basic <authorization_key>`. Never put the key in JSON.\n- Scope: PERS, B2B or CORP according to the account contract. API base is allowlisted.\n- Token is execution-local, refreshed once when expiring or after the first chat 401, never stored in static data or returned.\n- No automatic HTTP retry. A second 401 fails safely. Tools/provider-native schema are disabled; JSON is parsed and validated locally.\n- TLS verification stays enabled. Install the Russian trusted root/subordinate CAs on the Ubuntu host/container trust path before production.","height":410,"width":540,"color":5},
+      "id": "a1500000-0000-4040-8040-000000000019",
+      "name": "OAuth Scope TLS Rotation and Retry Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1160, -420]
+    }
+  ],
+  "connections": {
+    "Called by LLM Gateway":{"main":[[{"node":"GigaChat Provider Profile","type":"main","index":0}]]},
+    "GigaChat Provider Profile":{"main":[[{"node":"Validate GigaChat Contract","type":"main","index":0}]]},
+    "Validate GigaChat Contract":{"main":[[{"node":"Contract Valid?","type":"main","index":0}]]},
+    "Contract Valid?":{"main":[[{"node":"Exchange Initial OAuth Token","type":"main","index":0}],[{"node":"Return Safe Adapter Error","type":"main","index":0}]]},
+    "Exchange Initial OAuth Token":{"main":[[{"node":"Validate Initial OAuth Token","type":"main","index":0}]]},
+    "Validate Initial OAuth Token":{"main":[[{"node":"Initial Token Usable?","type":"main","index":0}]]},
+    "Initial Token Usable?":{"main":[[{"node":"Initial GigaChat Completion","type":"main","index":0}],[{"node":"Refresh Expiring Token?","type":"main","index":0}]]},
+    "Refresh Expiring Token?":{"main":[[{"node":"Exchange Refreshed OAuth Token","type":"main","index":0}],[{"node":"Return Safe Adapter Error","type":"main","index":0}]]},
+    "Initial GigaChat Completion":{"main":[[{"node":"Normalize Initial Chat Result","type":"main","index":0}]]},
+    "Normalize Initial Chat Result":{"main":[[{"node":"Refresh After First 401?","type":"main","index":0}]]},
+    "Refresh After First 401?":{"main":[[{"node":"Exchange Refreshed OAuth Token","type":"main","index":0}],[{"node":"Return Initial Chat Result","type":"main","index":0}]]},
+    "Exchange Refreshed OAuth Token":{"main":[[{"node":"Validate Refreshed OAuth Token","type":"main","index":0}]]},
+    "Validate Refreshed OAuth Token":{"main":[[{"node":"Refreshed Token Usable?","type":"main","index":0}]]},
+    "Refreshed Token Usable?":{"main":[[{"node":"Retry GigaChat Completion Once","type":"main","index":0}],[{"node":"Return Safe Adapter Error","type":"main","index":0}]]},
+    "Retry GigaChat Completion Once":{"main":[[{"node":"Normalize Retried Chat Result","type":"main","index":0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder":"v1","saveDataErrorExecution":"none","saveDataSuccessExecution":"none","saveManualExecutions":false},
+  "active": false,
+  "versionId": "a1500000-0000-4000-8000-000000000001",
+  "meta": {"templateCredsSetupCompleted":false},
+  "tags": []
+}

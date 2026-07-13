@@ -101,7 +101,7 @@ Caddy выбран для базового профиля из-за неболь
 1. generic OpenAI-compatible endpoint использует native OpenAI Chat Model только после Connection Test; Responses API выключен, tool/JSON capabilities opt-in;
 2. при несовместимом или отсутствующем `/models` используется manual model ID, а при блокирующем credential test — HTTP Request adapter;
 3. Yandex AI Studio — native candidate с Base URL `https://ai.api.cloud.yandex.net/v1` и полным `gpt://.../latest` model URI; реальная совместимость остаётся implementation gate;
-4. GigaChat — provider-specific HTTP Request adapter с одним OAuth exchange на execution и максимум одним refresh/retry после `401`;
+4. GigaChat — provider-specific HTTP Request adapter с execution-local token, ранним refresh по `expires_at` и максимум одним refresh/retry после `401`; long-lived authorization key хранится только в n8n credential, а host CA bundle подключается read-only без отключения TLS verification;
 5. другие endpoints добавляются только после capability matrix и contract tests.
 
 Нормализованные inputs, outputs, errors, provider flags и secret rules заданы в [LLM Gateway contract](contracts/llm-gateway.md). Credentials создаются в n8n и никогда не встраиваются в workflow JSON. LiteLLM рассматривается только как отдельный optional profile, если нативный n8n + gateway workflow не закрывает подтверждённые требования.

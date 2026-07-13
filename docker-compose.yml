@@ -71,8 +71,10 @@ services:
       EXECUTIONS_DATA_MAX_AGE: ${EXECUTIONS_DATA_MAX_AGE:-168}
       EXECUTIONS_DATA_PRUNE_MAX_COUNT: ${EXECUTIONS_DATA_PRUNE_MAX_COUNT:-10000}
       N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+      NODE_EXTRA_CA_CERTS: /etc/n8n/host-ca-bundle.pem
     volumes:
       - n8n_data:/home/node/.n8n
+      - /etc/ssl/certs/ca-certificates.crt:/etc/n8n/host-ca-bundle.pem:ro
     expose:
       - "5678"
     networks:

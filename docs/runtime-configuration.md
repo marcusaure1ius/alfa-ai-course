@@ -40,6 +40,7 @@ Internet → Caddy :80/:443 → n8n :5678 → PostgreSQL :5432
 - `frontend` connects Caddy and n8n and permits n8n outbound provider calls.
 - internal `backend` connects only n8n and PostgreSQL; PostgreSQL has no host port.
 - Named volumes preserve PostgreSQL, n8n identity/config/binary data and Caddy certificates/config.
+- На поддерживаемом Ubuntu host системный CA bundle `/etc/ssl/certs/ca-certificates.crt` монтируется в n8n read-only и подключается через `NODE_EXTRA_CA_CERTS`. Это позволяет доверять явно установленным дополнительным CA, не отключая TLS verification; источник и установка дополнительных CA остаются отдельным контролируемым действием.
 - Each service explicitly targets `linux/amd64`, matching the only supported MVP architecture and the verified image manifests.
 - `docker compose down` preserves volumes. Do not use `down --volumes` outside an explicit destructive procedure.
 

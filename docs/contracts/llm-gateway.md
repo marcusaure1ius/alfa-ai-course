@@ -6,6 +6,7 @@
 - Architecture decision: [ADR-0002](../../adr/0002-llm-integration-strategy.md)
 - Capability evidence: [provider matrix](../research/provider-capabilities.md)
 - Generic implementation: [workflow and setup reference](../generic-llm-provider.md)
+- GigaChat implementation: [adapter and provider setup](../llm-providers.md#gigachat)
 
 ## Назначение
 
@@ -158,7 +159,8 @@ Tool calling is disabled in contract `1.0.0` by default. `capabilities.tools=tru
 
 - HTTP Request adapter only in default profile.
 - Authorization key and scope live in encrypted credential.
-- OAuth access token is acquired once per execution and never persisted or returned.
+- OAuth access token is cached only inside the current execution and never persisted or returned.
+- Near-expiry token or the first chat `401` causes exactly one new OAuth exchange and one bounded retry; the second `401` is terminal.
 - API base is selected by account contract; business-only structured output is not assumed.
 
 ## Secret rules
