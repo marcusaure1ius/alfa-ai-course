@@ -1,0 +1,22 @@
+[
+  {
+    "name": "normalizes first error",
+    "input": {"workflowKey":"lead-handler","correlationId":"corr-err-1","error":{"code":"CRM_FAILED","message":"CRM request failed","retryable":true,"httpStatus":503}},
+    "expected": {"ok":true,"handled":true,"recursionPrevented":false,"correlationId":"corr-err-1","recursionDepth":1,"error":{"code":"CRM_FAILED","retryable":true,"httpStatus":503}}
+  },
+  {
+    "name": "prevents recursive invocation by depth",
+    "input": {"workflowKey":"lead-handler","recursionDepth":1,"error":{"message":"again"}},
+    "expected": {"ok":true,"handled":false,"recursionPrevented":true,"error":{"code":"RECURSION_PREVENTED"}}
+  },
+  {
+    "name": "redacts bearer and token values",
+    "input": {"workflowKey":"mail-assistant","error":{"code":"AUTH_FAILED","message":"Bearer abc.def.ghi token=super-secret","retryable":false}},
+    "expected": {"ok":true,"handled":true,"error":{"code":"AUTH_FAILED","message":"Bearer [REDACTED] token=[REDACTED]"}}
+  },
+  {
+    "name": "rejects missing error object",
+    "input": {"workflowKey":"mail-assistant"},
+    "expected": {"ok":false,"handled":false,"error":{"code":"INVALID_ERROR"}}
+  }
+]

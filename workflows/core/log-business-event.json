@@ -1,0 +1,41 @@
+{
+  "id": "coreBusinessEventLogV1",
+  "name": "Core - Log Business Event",
+  "nodes": [
+    {
+      "parameters": {"inputSource": "passthrough"},
+      "id": "c1100000-0000-4111-8111-000000000001",
+      "name": "Called by Business Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-420, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst contractVersion = '1.0';\nconst testMode = input.testMode !== false;\nconst correlationId = typeof input.correlationId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId) ? input.correlationId : crypto.randomUUID();\nconst fail = (code,message) => [{json:{ok:false,contractVersion,testMode,correlationId,logged:false,error:{code,message}}}];\nconst allowed = new Set(['contractVersion','testMode','correlationId','eventType','outcome','subjectRef','occurredAt','metadata']);\nif (Object.keys(input).some((key) => !allowed.has(key))) return fail('INVALID_REQUEST','Input contains unknown fields');\nif (input.contractVersion !== undefined && input.contractVersion !== contractVersion) return fail('UNSUPPORTED_CONTRACT','contractVersion must be 1.0');\nif (typeof input.eventType !== 'string' || !/^[a-z][a-z0-9._-]{2,63}$/.test(input.eventType)) return fail('INVALID_EVENT_TYPE','eventType must be a stable taxonomy key');\nif (!['success','failure','denied','skipped'].includes(input.outcome)) return fail('INVALID_OUTCOME','outcome is not supported');\nif (input.subjectRef !== undefined && (typeof input.subjectRef !== 'string' || !/^[A-Za-z0-9._:-]{3,128}$/.test(input.subjectRef))) return fail('PII_NOT_ALLOWED','subjectRef must be an opaque non-PII reference');\nconst occurredAt = new Date(input.occurredAt ?? Date.now());\nif (Number.isNaN(occurredAt.getTime())) return fail('INVALID_TIME','occurredAt must be an ISO timestamp');\nconst metadata = input.metadata ?? {};\nconst metadataAllowed = new Set(['workflowKey','actionType','channel','durationMs','retryCount','errorCode']);\nif (!metadata || Array.isArray(metadata) || typeof metadata !== 'object' || Object.keys(metadata).some((key) => !metadataAllowed.has(key))) return fail('PII_NOT_ALLOWED','metadata key is not on the minimal allowlist');\nif (Object.values(metadata).some((value) => !['string','number','boolean'].includes(typeof value) || (typeof value === 'string' && value.length > 128) || (typeof value === 'number' && !Number.isFinite(value)))) return fail('INVALID_METADATA','metadata values must be short primitives');\nconst record = {eventType:input.eventType,outcome:input.outcome,correlationId,occurredAt:occurredAt.toISOString(),subjectRef:input.subjectRef ?? null,metadata};\nif (!testMode) console.log(JSON.stringify({businessEvent:record}));\nreturn [{json:{ok:true,contractVersion,testMode,correlationId,logged:!testMode,disposition:testMode?'preview':'emit',record}}];"
+      },
+      "id": "c1200000-0000-4222-8222-000000000002",
+      "name": "Build Minimal Event Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-140, 80]
+    },
+    {
+      "parameters": {"content":"## Business event contract v1.0\nThe default `testMode=true` returns a preview and does not claim persistence. Production callers receive a minimal `emit` record for their approved sink. Raw payloads, message text, names, email, phone, tokens and arbitrary metadata are rejected.","height":260,"width":430,"color":5},
+      "id": "c1300000-0000-4333-8333-000000000003",
+      "name": "Minimal Log Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-480, -260]
+    }
+  ],
+  "connections": {
+    "Called by Business Workflow":{"main":[[{"node":"Build Minimal Event Record","type":"main","index":0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder":"v1","saveDataErrorExecution":"all","saveDataSuccessExecution":"none","saveManualExecutions":false},
+  "active": false,
+  "versionId": "c1400000-0000-4444-8444-000000000004",
+  "meta": {"templateCredsSetupCompleted":false},
+  "tags": []
+}

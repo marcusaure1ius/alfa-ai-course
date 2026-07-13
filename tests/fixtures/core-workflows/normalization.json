@@ -1,0 +1,22 @@
+[
+  {
+    "name": "normalizes a minimal message",
+    "input": {"channel":"telegram","messageId":"msg-1","senderRef":"sender:42","text":"  hello  ","receivedAt":"2026-07-14T10:00:00.000Z","metadata":{"language":"en"}},
+    "expected": {"ok":true,"testMode":true,"message":{"messageKey":"telegram:msg-1","text":"hello","senderRef":"sender:42"}}
+  },
+  {
+    "name": "rejects raw provider payload",
+    "input": {"channel":"telegram","messageId":"msg-2","senderRef":"sender:42","text":"hello","raw":{"phone":"+70000000000"}},
+    "expected": {"ok":false,"error":{"code":"INVALID_REQUEST"}}
+  },
+  {
+    "name": "rejects PII-like sender reference",
+    "input": {"channel":"email","messageId":"msg-3","senderRef":"person@example.test","text":"hello"},
+    "expected": {"ok":false,"error":{"code":"INVALID_SENDER_REF"}}
+  },
+  {
+    "name": "rejects disallowed metadata",
+    "input": {"channel":"telegram","messageId":"msg-4","senderRef":"sender:42","text":"hello","metadata":{"phone":"+70000000000"}},
+    "expected": {"ok":false,"error":{"code":"INVALID_METADATA"}}
+  }
+]

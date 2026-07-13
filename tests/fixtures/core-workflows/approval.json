@@ -1,0 +1,22 @@
+[
+  {
+    "name": "request defaults to pending and no action",
+    "input": {"phase":"request","idempotencyKey":"approval-0001","correlationId":"corr-1","now":"2026-07-14T10:00:00.000Z","action":{"type":"email.send","summary":"Send approved draft","risk":"high"}},
+    "expected": {"ok":true,"testMode":true,"status":"pending","allowAction":false,"reason":"AWAITING_EXPLICIT_DECISION"}
+  },
+  {
+    "name": "explicit approval allows action",
+    "input": {"phase":"resolve","idempotencyKey":"approval-0002","correlationId":"corr-2","now":"2026-07-14T10:00:00.000Z","expiresAt":"2026-07-14T11:00:00.000Z","decision":{"state":"approved","approverRef":"user:42"}},
+    "expected": {"ok":true,"status":"approved","allowAction":true,"reason":"EXPLICIT_APPROVAL"}
+  },
+  {
+    "name": "expired approval denies action",
+    "input": {"phase":"resolve","idempotencyKey":"approval-0003","correlationId":"corr-3","now":"2026-07-14T12:00:00.000Z","expiresAt":"2026-07-14T11:00:00.000Z","decision":{"state":"approved","approverRef":"user:42"}},
+    "expected": {"ok":true,"status":"expired","allowAction":false,"reason":"APPROVAL_TIMEOUT"}
+  },
+  {
+    "name": "ambiguous decision denies action",
+    "input": {"phase":"resolve","idempotencyKey":"approval-0004","correlationId":"corr-4","now":"2026-07-14T10:00:00.000Z","expiresAt":"2026-07-14T11:00:00.000Z","decision":{"state":"maybe"}},
+    "expected": {"ok":true,"status":"denied","allowAction":false,"reason":"AMBIGUOUS_DECISION"}
+  }
+]

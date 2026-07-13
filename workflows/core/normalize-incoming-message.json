@@ -1,0 +1,41 @@
+{
+  "id": "coreNormalizeMessageV1",
+  "name": "Core - Normalize Incoming Message",
+  "nodes": [
+    {
+      "parameters": {"inputSource": "passthrough"},
+      "id": "b1100000-0000-4111-8111-000000000001",
+      "name": "Called by Business Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-420, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst contractVersion = '1.0';\nconst testMode = input.testMode !== false;\nconst correlationId = typeof input.correlationId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId) ? input.correlationId : crypto.randomUUID();\nconst fail = (code,message) => [{json:{ok:false,contractVersion,testMode,correlationId,error:{code,message}}}];\nconst allowed = new Set(['contractVersion','testMode','correlationId','channel','messageId','senderRef','text','receivedAt','attachments','metadata']);\nif (Object.keys(input).some((key) => !allowed.has(key))) return fail('INVALID_REQUEST','Raw or unknown fields are not accepted');\nif (input.contractVersion !== undefined && input.contractVersion !== contractVersion) return fail('UNSUPPORTED_CONTRACT','contractVersion must be 1.0');\nif (typeof input.channel !== 'string' || !/^[a-z][a-z0-9._-]{1,31}$/.test(input.channel)) return fail('INVALID_CHANNEL','channel must be a safe adapter identifier');\nif (typeof input.messageId !== 'string' || !/^[A-Za-z0-9._:-]{1,128}$/.test(input.messageId)) return fail('INVALID_MESSAGE_ID','messageId must be opaque and stable');\nif (typeof input.senderRef !== 'string' || !/^[A-Za-z0-9._:-]{3,128}$/.test(input.senderRef)) return fail('INVALID_SENDER_REF','senderRef must be an opaque non-PII reference');\nif (typeof input.text !== 'string' || input.text.trim().length < 1 || input.text.length > 12000) return fail('INVALID_TEXT','text must contain 1..12000 characters');\nconst receivedAt = new Date(input.receivedAt ?? Date.now());\nif (Number.isNaN(receivedAt.getTime())) return fail('INVALID_TIME','receivedAt must be an ISO timestamp');\nconst attachments = input.attachments ?? [];\nif (!Array.isArray(attachments) || attachments.length > 10 || attachments.some((item) => !item || typeof item.fileRef !== 'string' || !/^[A-Za-z0-9._:-]{3,128}$/.test(item.fileRef) || typeof item.mimeType !== 'string' || item.mimeType.length > 100)) return fail('INVALID_ATTACHMENTS','attachments may contain only fileRef and mimeType');\nconst metadata = input.metadata ?? {};\nconst metadataAllowed = new Set(['language','threadRef','replyToMessageId','sourceType']);\nif (!metadata || Array.isArray(metadata) || typeof metadata !== 'object' || Object.keys(metadata).some((key) => !metadataAllowed.has(key)) || Object.values(metadata).some((value) => typeof value !== 'string' || value.length > 128)) return fail('INVALID_METADATA','metadata contains a disallowed or oversized field');\nreturn [{json:{ok:true,contractVersion,testMode,correlationId,message:{messageKey:`${input.channel}:${input.messageId}`,channel:input.channel,messageId:input.messageId,senderRef:input.senderRef,text:input.text.trim(),receivedAt:receivedAt.toISOString(),attachments:attachments.map(({fileRef,mimeType}) => ({fileRef,mimeType})),metadata}}}];"
+      },
+      "id": "b1200000-0000-4222-8222-000000000002",
+      "name": "Normalize Safe Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-140, 80]
+    },
+    {
+      "parameters": {"content":"## Incoming message contract v1.0\nAdapters must map provider payloads before calling this workflow. Raw updates, usernames, phone numbers and email addresses are not accepted as identifiers. Use opaque `senderRef` and `fileRef` values. Only a small metadata allowlist survives normalization.","height":250,"width":430,"color":5},
+      "id": "b1300000-0000-4333-8333-000000000003",
+      "name": "Data Minimization Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-480, -250]
+    }
+  ],
+  "connections": {
+    "Called by Business Workflow":{"main":[[{"node":"Normalize Safe Message","type":"main","index":0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder":"v1","saveDataErrorExecution":"all","saveDataSuccessExecution":"none","saveManualExecutions":false},
+  "active": false,
+  "versionId": "b1400000-0000-4444-8444-000000000004",
+  "meta": {"templateCredsSetupCompleted":false},
+  "tags": []
+}

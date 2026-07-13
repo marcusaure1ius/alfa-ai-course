@@ -1,0 +1,22 @@
+[
+  {
+    "name": "previews minimal event by default",
+    "input": {"eventType":"lead.created","outcome":"success","correlationId":"corr-log-1","subjectRef":"lead:42","occurredAt":"2026-07-14T10:00:00.000Z","metadata":{"workflowKey":"lead-handler"}},
+    "expected": {"ok":true,"testMode":true,"logged":false,"disposition":"preview","record":{"eventType":"lead.created","subjectRef":"lead:42"}}
+  },
+  {
+    "name": "emits event only with explicit production mode",
+    "input": {"testMode":false,"eventType":"email.sent","outcome":"success","correlationId":"corr-log-2","metadata":{"channel":"email"}},
+    "expected": {"ok":true,"testMode":false,"logged":true,"disposition":"emit"}
+  },
+  {
+    "name": "rejects PII metadata key",
+    "input": {"eventType":"lead.created","outcome":"success","metadata":{"email":"person@example.test"}},
+    "expected": {"ok":false,"logged":false,"error":{"code":"PII_NOT_ALLOWED"}}
+  },
+  {
+    "name": "rejects PII-like subject reference",
+    "input": {"eventType":"lead.created","outcome":"success","subjectRef":"person@example.test"},
+    "expected": {"ok":false,"logged":false,"error":{"code":"PII_NOT_ALLOWED"}}
+  }
+]

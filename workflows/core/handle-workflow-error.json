@@ -1,0 +1,41 @@
+{
+  "id": "coreWorkflowErrorV1",
+  "name": "Core - Handle Workflow Error",
+  "nodes": [
+    {
+      "parameters": {"inputSource": "passthrough"},
+      "id": "d1100000-0000-4111-8111-000000000001",
+      "name": "Called by Business Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-420, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst contractVersion = '1.0';\nconst testMode = input.testMode !== false;\nconst correlationId = typeof input.correlationId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId) ? input.correlationId : crypto.randomUUID();\nconst base = {contractVersion,testMode,correlationId};\nconst fail = (code,message) => [{json:{...base,ok:false,handled:false,recursionPrevented:false,error:{code,message}}}];\nconst allowed = new Set(['contractVersion','testMode','correlationId','workflowKey','error','recursionDepth','handledBy']);\nif (Object.keys(input).some((key) => !allowed.has(key))) return fail('INVALID_REQUEST','Input contains unknown fields');\nif (input.contractVersion !== undefined && input.contractVersion !== contractVersion) return fail('UNSUPPORTED_CONTRACT','contractVersion must be 1.0');\nif (typeof input.workflowKey !== 'string' || !/^[A-Za-z0-9._:-]{2,128}$/.test(input.workflowKey)) return fail('INVALID_WORKFLOW','workflowKey is required');\nconst depth = input.recursionDepth ?? 0;\nconst handledBy = Array.isArray(input.handledBy) ? input.handledBy.filter((value) => typeof value === 'string').slice(0,5) : [];\nif (!Number.isInteger(depth) || depth < 0) return fail('INVALID_RECURSION_DEPTH','recursionDepth must be a non-negative integer');\nif (depth >= 1 || handledBy.includes('core-error-handler-v1')) return [{json:{...base,ok:true,handled:false,recursionPrevented:true,shouldEscalate:true,workflowKey:input.workflowKey,error:{code:'RECURSION_PREVENTED',message:'Shared error handler refused a recursive invocation',retryable:false}}}];\nif (!input.error || typeof input.error !== 'object' || Array.isArray(input.error)) return fail('INVALID_ERROR','error object is required');\nconst code = typeof input.error.code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(input.error.code) ? input.error.code : 'WORKFLOW_FAILED';\nlet message = typeof input.error.message === 'string' ? input.error.message : 'Workflow execution failed';\nmessage = message.replace(/Bearer\\s+[A-Za-z0-9._~+\\/-]+/gi,'Bearer [REDACTED]').replace(/(api[_ -]?key|token|password|secret)\\s*[:=]\\s*[^\\s,;]+/gi,'$1=[REDACTED]').slice(0,500);\nconst retryable = input.error.retryable === true;\nconst httpStatus = Number.isInteger(input.error.httpStatus) && input.error.httpStatus >= 100 && input.error.httpStatus <= 599 ? input.error.httpStatus : null;\nconst normalized = {code,message,retryable,httpStatus};\nreturn [{json:{...base,ok:true,handled:true,recursionPrevented:false,shouldEscalate:!retryable,workflowKey:input.workflowKey,recursionDepth:1,handledBy:[...handledBy,'core-error-handler-v1'],error:normalized}}];"
+      },
+      "id": "d1200000-0000-4222-8222-000000000002",
+      "name": "Normalize Error Safely",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-140, 80]
+    },
+    {
+      "parameters": {"content":"## Error handler contract v1.0\nCall this workflow from an explicit error route with the existing correlation ID. It never calls itself or a provider. A second invocation (`recursionDepth >= 1` or matching `handledBy`) returns `RECURSION_PREVENTED`. Stack traces and raw execution payloads are intentionally excluded.","height":270,"width":430,"color":5},
+      "id": "d1300000-0000-4333-8333-000000000003",
+      "name": "Recursion and Redaction Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-480, -270]
+    }
+  ],
+  "connections": {
+    "Called by Business Workflow":{"main":[[{"node":"Normalize Error Safely","type":"main","index":0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder":"v1","saveDataErrorExecution":"all","saveDataSuccessExecution":"none","saveManualExecutions":false},
+  "active": false,
+  "versionId": "d1400000-0000-4444-8444-000000000004",
+  "meta": {"templateCredsSetupCompleted":false},
+  "tags": []
+}

@@ -1,0 +1,41 @@
+{
+  "id": "coreHumanApprovalV1",
+  "name": "Core - Request Human Approval",
+  "nodes": [
+    {
+      "parameters": {"inputSource": "passthrough"},
+      "id": "a1100000-0000-4111-8111-000000000001",
+      "name": "Called by Business Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-420, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst contractVersion = '1.0';\nconst testMode = input.testMode !== false;\nconst correlationId = typeof input.correlationId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId) ? input.correlationId : crypto.randomUUID();\nconst base = {contractVersion,testMode,correlationId,allowAction:false};\nconst fail = (code,message) => [{json:{...base,ok:false,status:'denied',reason:code,error:{code,message}}}];\nconst allowed = new Set(['contractVersion','testMode','phase','correlationId','idempotencyKey','action','decision','requestedAt','expiresAt','timeoutSeconds','now']);\nif (Object.keys(input).some((key) => !allowed.has(key))) return fail('INVALID_REQUEST','Input contains unknown fields');\nif (input.contractVersion !== undefined && input.contractVersion !== contractVersion) return fail('UNSUPPORTED_CONTRACT','contractVersion must be 1.0');\nconst phase = input.phase ?? 'request';\nif (!['request','resolve'].includes(phase)) return fail('INVALID_PHASE','phase must be request or resolve');\nif (typeof input.idempotencyKey !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(input.idempotencyKey)) return fail('INVALID_IDEMPOTENCY_KEY','A safe idempotencyKey is required');\nconst now = new Date(input.now ?? Date.now());\nif (Number.isNaN(now.getTime())) return fail('INVALID_TIME','now must be an ISO timestamp');\nif (phase === 'request') {\n  const action = input.action;\n  if (!action || typeof action.type !== 'string' || !/^[a-z][a-z0-9._-]{1,63}$/.test(action.type) || typeof action.summary !== 'string' || action.summary.trim().length < 1 || action.summary.length > 500) return fail('INVALID_ACTION','action.type and a 1..500 character summary are required');\n  const timeoutSeconds = input.timeoutSeconds ?? 3600;\n  if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 60 || timeoutSeconds > 86400) return fail('INVALID_TIMEOUT','timeoutSeconds must be 60..86400');\n  const requestedAt = new Date(input.requestedAt ?? now);\n  const expiresAt = new Date(input.expiresAt ?? requestedAt.getTime() + timeoutSeconds * 1000);\n  if (Number.isNaN(requestedAt.getTime()) || Number.isNaN(expiresAt.getTime()) || expiresAt <= requestedAt) return fail('INVALID_TIME','Approval expiry must be after request time');\n  return [{json:{...base,ok:true,status:'pending',reason:'AWAITING_EXPLICIT_DECISION',idempotencyKey:input.idempotencyKey,request:{action:{type:action.type,summary:action.summary.trim(),risk:['low','medium','high'].includes(action.risk)?action.risk:'high'},requestedAt:requestedAt.toISOString(),expiresAt:expiresAt.toISOString()}}}];\n}\nconst expiresAt = new Date(input.expiresAt);\nif (Number.isNaN(expiresAt.getTime())) return fail('INVALID_TIME','expiresAt is required for resolve');\nif (now >= expiresAt) return [{json:{...base,ok:true,status:'expired',reason:'APPROVAL_TIMEOUT',idempotencyKey:input.idempotencyKey,expiresAt:expiresAt.toISOString()}}];\nconst state = typeof input.decision?.state === 'string' ? input.decision.state.toLowerCase() : '';\nif (state !== 'approved') return [{json:{...base,ok:true,status:'denied',reason:state === 'denied' ? 'EXPLICIT_DENIAL' : 'AMBIGUOUS_DECISION',idempotencyKey:input.idempotencyKey,expiresAt:expiresAt.toISOString()}}];\nif (typeof input.decision.approverRef !== 'string' || !/^[A-Za-z0-9._:-]{3,128}$/.test(input.decision.approverRef)) return fail('INVALID_APPROVER','Approved decision requires an opaque approverRef');\nreturn [{json:{...base,ok:true,status:'approved',reason:'EXPLICIT_APPROVAL',allowAction:true,idempotencyKey:input.idempotencyKey,expiresAt:expiresAt.toISOString(),decision:{state:'approved',approverRef:input.decision.approverRef}}}];"
+      },
+      "id": "a1200000-0000-4222-8222-000000000002",
+      "name": "Evaluate Approval Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-140, 80]
+    },
+    {
+      "parameters": {"content":"## Human approval contract v1.0\nDefault is `testMode=true` and `allowAction=false`.\n\n- `request` creates a transport-neutral pending request.\n- A caller sends it through Telegram/email/CRM and later calls `resolve`.\n- Only an explicit, unexpired `approved` decision allows the action.\n- Timeout, denial, unknown state, malformed input and replay ambiguity remain fail-closed.","height":280,"width":430,"color":5},
+      "id": "a1300000-0000-4333-8333-000000000003",
+      "name": "Fail-Closed Approval Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-480, -280]
+    }
+  ],
+  "connections": {
+    "Called by Business Workflow":{"main":[[{"node":"Evaluate Approval Contract","type":"main","index":0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder":"v1","saveDataErrorExecution":"all","saveDataSuccessExecution":"none","saveManualExecutions":false},
+  "active": false,
+  "versionId": "a1400000-0000-4444-8444-000000000004",
+  "meta": {"templateCredsSetupCompleted":false},
+  "tags": []
+}
