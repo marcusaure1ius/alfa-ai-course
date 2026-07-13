@@ -1,0 +1,106 @@
+{
+  "id": "coreSendTelegramMessageV1",
+  "name": "Core - Send Telegram Message",
+  "nodes": [
+    {
+      "parameters": {"inputSource": "passthrough"},
+      "id": "a7100000-0000-4111-8111-000000000001",
+      "name": "Called by Business Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-760, 120]
+    },
+    {
+      "parameters": {
+        "assignments": {"assignments": [
+          {"id": "telegram-allowlist", "name": "profileAllowedChatIds", "value": "REPLACE_WITH_ALLOWED_CHAT_IDS", "type": "string"},
+          {"id": "telegram-test", "name": "profileTestMode", "value": true, "type": "boolean"},
+          {"id": "telegram-draft", "name": "profileDraftOnly", "value": true, "type": "boolean"}
+        ]},
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a7200000-0000-4222-8222-000000000002",
+      "name": "Telegram Safety Profile - Edit Me",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-540, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst VERSION = '1.0';\nconst MAX_TEXT = 4096;\nconst correlationId = typeof input.correlationId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId) ? input.correlationId : crypto.randomUUID();\nconst testMode = input.testMode !== false || input.profileTestMode !== false;\nconst draftOnly = input.draftOnly !== false || input.profileDraftOnly !== false;\nconst base = {contractVersion:VERSION,correlationId,testMode,draftOnly,sendAuthorized:false};\nconst result = (ok,status,extra={}) => [{json:{...base,ok,status,...extra}}];\nconst fail = (code,message) => result(false,'rejected',{error:{code,message,retryable:false}});\nconst allowedFields = new Set(['contractVersion','correlationId','testMode','draftOnly','idempotencyKey','chatId','text','format','disableNotification','profileAllowedChatIds','profileTestMode','profileDraftOnly']);\nif (!input || Array.isArray(input) || typeof input !== 'object' || Object.keys(input).some((key) => !allowedFields.has(key))) return fail('INVALID_REQUEST','Input contains unknown fields');\nif (input.contractVersion !== undefined && input.contractVersion !== VERSION) return fail('UNSUPPORTED_CONTRACT','contractVersion must be 1.0');\nif (typeof input.idempotencyKey !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(input.idempotencyKey)) return fail('INVALID_IDEMPOTENCY_KEY','A stable idempotencyKey is required');\nif (typeof input.chatId !== 'string' || !/^-?[1-9][0-9]{4,19}$/.test(input.chatId)) return fail('INVALID_CHAT_ID','chatId must be a numeric Telegram chat ID');\nconst format = input.format ?? 'plain';\nif (format !== 'plain') return fail('UNSUPPORTED_FORMAT','Only plain text is supported; HTML and Markdown are rejected');\nif (typeof input.text !== 'string' || input.text.length < 1 || input.text.length > MAX_TEXT || /[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]/.test(input.text)) return fail('INVALID_MESSAGE_TEXT','text must contain 1..4096 characters without control bytes');\nif (input.disableNotification !== undefined && typeof input.disableNotification !== 'boolean') return fail('INVALID_NOTIFICATION_MODE','disableNotification must be boolean');\nconst configured = typeof input.profileAllowedChatIds === 'string' ? input.profileAllowedChatIds.split(/[\\s,;]+/).filter(Boolean) : [];\nif (!configured.length || configured.includes('REPLACE_WITH_ALLOWED_CHAT_IDS') || configured.some((chatId) => !/^-?[1-9][0-9]{4,19}$/.test(chatId))) return fail('ALLOWLIST_NOT_CONFIGURED','Configure numeric chat IDs in Telegram Safety Profile');\nconst allowlist = new Set(configured);\nif (!allowlist.has(input.chatId)) return fail('CHAT_NOT_ALLOWED','Target chat is not present in the workflow allowlist');\nconst chatRef = `...${input.chatId.slice(-4)}`;\nif (testMode) return result(true,'preview',{reason:'TEST_MODE',idempotencyKey:input.idempotencyKey,chatRef,messageLength:input.text.length});\nif (draftOnly) return result(true,'draft',{reason:'DRAFT_ONLY',idempotencyKey:input.idempotencyKey,chatRef,messageLength:input.text.length});\nconst state = $getWorkflowStaticData('global');\nstate.telegramSendReservations = state.telegramSendReservations && typeof state.telegramSendReservations === 'object' ? state.telegramSendReservations : {};\nconst now = Date.now();\nconst maxAge = 7 * 24 * 60 * 60 * 1000;\nfor (const [key,value] of Object.entries(state.telegramSendReservations)) if (!value || !Number.isFinite(Date.parse(value.reservedAt)) || now - Date.parse(value.reservedAt) > maxAge) delete state.telegramSendReservations[key];\nconst storageKey = `key:${input.idempotencyKey}`;\nif (Object.prototype.hasOwnProperty.call(state.telegramSendReservations,storageKey)) return result(true,'duplicate',{reason:'IDEMPOTENCY_KEY_ALREADY_RESERVED',idempotencyKey:input.idempotencyKey,chatRef});\nconst keys = Object.keys(state.telegramSendReservations);\nif (keys.length >= 500) { keys.sort((a,b) => Date.parse(state.telegramSendReservations[a].reservedAt) - Date.parse(state.telegramSendReservations[b].reservedAt)); for (const key of keys.slice(0, keys.length - 499)) delete state.telegramSendReservations[key]; }\nstate.telegramSendReservations[storageKey] = {reservedAt:new Date(now).toISOString(),status:'reserved',chatRef};\nreturn [{json:{...base,ok:true,status:'authorized',sendAuthorized:true,idempotencyKey:input.idempotencyKey,chatRef,messageLength:input.text.length,telegram:{chatId:input.chatId,text:input.text,disableNotification:input.disableNotification === true}}}];"
+      },
+      "id": "a7300000-0000-4333-8333-000000000003",
+      "name": "Validate Telegram Send Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"telegram-send-authorized","leftValue":"={{ $json.sendAuthorized }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},
+        "options": {}
+      },
+      "id": "a7400000-0000-4444-8444-000000000004",
+      "name": "External Send Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-40, 120]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.telegram.chatId }}",
+        "text": "={{ $json.telegram.text }}",
+        "additionalFields": {"appendAttribution": false, "disable_notification": "={{ $json.telegram.disableNotification }}", "disable_web_page_preview": true}
+      },
+      "id": "a7500000-0000-4555-8555-000000000005",
+      "name": "Send Allowlisted Plain Text",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [220, 20],
+      "credentials": {"telegramApi":{"id":"REPLACE_WITH_TELEGRAM_CREDENTIAL_ID","name":"REPLACE_WITH_TELEGRAM_CREDENTIAL"}},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json ?? {};\nconst context = $('Validate Telegram Send Contract').first().json;\nconst statusCode = Number(response.error_code ?? response.statusCode ?? response.error?.httpCode ?? response.error?.statusCode ?? 0);\nconst description = [response.description,response.error_description,response.message,response.error?.message].find((value) => typeof value === 'string') ?? '';\nconst success = response.ok === true && Number.isInteger(response.result?.message_id);\nlet code = null;\nif (!success) {\n  if (statusCode === 401) code = 'AUTH_FAILED';\n  else if (statusCode === 403 || (statusCode === 400 && /chat not found/i.test(description))) code = 'CHAT_FORBIDDEN';\n  else if (statusCode === 429) code = 'RATE_LIMITED';\n  else if (statusCode === 400 && /(parse|entit|format|markdown|html)/i.test(description)) code = 'FORMATTING_REJECTED';\n  else if (statusCode === 400) code = 'REQUEST_REJECTED';\n  else if (statusCode === 0 || statusCode >= 500) code = 'PROVIDER_UNAVAILABLE';\n  else code = 'INVALID_PROVIDER_RESPONSE';\n}\nconst retryAfterRaw = response.parameters?.retry_after ?? response.error?.context?.data?.parameters?.retry_after;\nconst retryAfter = Number.isInteger(Number(retryAfterRaw)) && Number(retryAfterRaw) >= 0 ? Number(retryAfterRaw) : null;\nconst state = $getWorkflowStaticData('global');\nconst storageKey = `key:${context.idempotencyKey}`;\nif (state.telegramSendReservations && Object.prototype.hasOwnProperty.call(state.telegramSendReservations,storageKey)) state.telegramSendReservations[storageKey].status = success ? 'sent' : 'reconcile-required';\nreturn [{json:{contractVersion:'1.0',correlationId:context.correlationId,ok:success,status:success?'sent':'failed',sendAuthorized:false,idempotencyKey:context.idempotencyKey,chatRef:context.chatRef,messageId:success?response.result.message_id:null,error:success?null:{code,httpStatus:statusCode||null,retryable:['RATE_LIMITED','PROVIDER_UNAVAILABLE'].includes(code),retryAfter,automaticRetry:false,reconcileRequired:['RATE_LIMITED','PROVIDER_UNAVAILABLE','INVALID_PROVIDER_RESPONSE'].includes(code)}}}];"
+      },
+      "id": "a7600000-0000-4666-8666-000000000006",
+      "name": "Normalize Telegram Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 20]
+    },
+    {
+      "parameters": {},
+      "id": "a7700000-0000-4777-8777-000000000007",
+      "name": "Safe Preview Draft Rejection or Duplicate",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [220, 220]
+    },
+    {
+      "parameters": {"content":"## Telegram sender contract v1.0\nConfigure an n8n Telegram credential and numeric chat allowlist in the profile node. Test mode and draft-only are both enabled by default. Only plain text is accepted. The idempotency key is reserved before the single external attempt; automatic retries are disabled.","height":280,"width":460,"color":5},
+      "id": "a7800000-0000-4888-8888-000000000008",
+      "name": "Telegram Safety Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-760, -260]
+    }
+  ],
+  "connections": {
+    "Called by Business Workflow":{"main":[[{"node":"Telegram Safety Profile - Edit Me","type":"main","index":0}]]},
+    "Telegram Safety Profile - Edit Me":{"main":[[{"node":"Validate Telegram Send Contract","type":"main","index":0}]]},
+    "Validate Telegram Send Contract":{"main":[[{"node":"External Send Authorized?","type":"main","index":0}]]},
+    "External Send Authorized?":{"main":[[{"node":"Send Allowlisted Plain Text","type":"main","index":0}],[{"node":"Safe Preview Draft Rejection or Duplicate","type":"main","index":0}]]},
+    "Send Allowlisted Plain Text":{"main":[[{"node":"Normalize Telegram Result","type":"main","index":0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder":"v1","saveDataErrorExecution":"none","saveDataSuccessExecution":"none","saveManualExecutions":false},
+  "active": false,
+  "versionId": "a7900000-0000-4999-8999-000000000009",
+  "meta": {"templateCredsSetupCompleted":false},
+  "tags": []
+}
