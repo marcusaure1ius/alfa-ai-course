@@ -48,6 +48,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [IMAP/SMTP setup](docs/credentials/mail.md) — credential-safe подключение и production checklist;
 - [Telegram sender contract](docs/contracts/telegram.md) — allowlist, safe modes, idempotency и normalized errors;
 - [Telegram credential setup](docs/credentials/telegram.md) — token-safe настройка, allowlist и controlled smoke;
+- [Telegram Assistant](docs/workflows/telegram-assistant.md) — draft-only demo, owner approval commands, dedupe и loop guards;
 - [Email Assistant](docs/workflows/email-assistant.md) — IMAP setup, guarded LLM extraction, draft-only output и privacy notes;
 - [License notes](LICENSE-NOTES.md) — границы допустимого использования и release checklist.
 

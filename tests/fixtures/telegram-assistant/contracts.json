@@ -1,0 +1,26 @@
+{
+  "inbound": [
+    {"name":"allowlisted user message enters draft route","input":{"update_id":1001,"message":{"message_id":501,"date":1783990800,"chat":{"id":123450001},"from":{"id":223450001,"is_bot":false},"text":"Подскажите статус заявки"}},"expected":{"accepted":true,"route":"message","testMode":true,"draftOnly":true,"updateId":1001,"normalize":{"channel":"telegram","messageId":"501","text":"Подскажите статус заявки"}}},
+    {"name":"bot-authored message is a loop","input":{"update_id":1002,"message":{"message_id":502,"chat":{"id":123450001},"from":{"id":223450001,"is_bot":true},"text":"loop"}},"expected":{"accepted":false,"error":{"code":"BOT_LOOP_DETECTED"}}},
+    {"name":"missing update id is rejected","input":{"message":{"message_id":503,"chat":{"id":123450001},"from":{"id":223450001},"text":"hello"}},"expected":{"accepted":false,"error":{"code":"INVALID_UPDATE"}}},
+    {"name":"callback-shaped update is rejected","input":{"update_id":1004,"callback_query":{"id":"x"}},"expected":{"accepted":false,"error":{"code":"UNSUPPORTED_UPDATE"}}},
+    {"name":"unconfigured allowlist fails closed","profile":{"profileAllowedChatIds":"REPLACE_WITH_ALLOWED_CHAT_IDS"},"input":{"update_id":1005,"message":{"message_id":505,"chat":{"id":123450001},"from":{"id":223450001},"text":"hello"}},"expected":{"accepted":false,"error":{"code":"ALLOWLIST_NOT_CONFIGURED"}}},
+    {"name":"unconfigured model fails before dedupe reservation","profile":{"profileModel":"REPLACE_WITH_MODEL_ID"},"input":{"update_id":1013,"message":{"message_id":513,"chat":{"id":123450001},"from":{"id":223450001},"text":"hello"}},"expected":{"accepted":false,"error":{"code":"MODEL_NOT_CONFIGURED"}}},
+    {"name":"chat outside allowlist is rejected","input":{"update_id":1006,"message":{"message_id":506,"chat":{"id":123459999},"from":{"id":223450001},"text":"hello"}},"expected":{"accepted":false,"error":{"code":"CHAT_NOT_ALLOWED"}}},
+    {"name":"non-text message is rejected","input":{"update_id":1007,"message":{"message_id":507,"chat":{"id":123450001},"from":{"id":223450001},"photo":[{"file_id":"fixture"}]}},"expected":{"accepted":false,"error":{"code":"INVALID_TEXT"}}},
+    {"name":"oversized text is rejected","input":{"update_id":1008,"message":{"message_id":508,"chat":{"id":123450001},"from":{"id":223450001},"textRepeat":{"value":"x","count":4097}}},"expected":{"accepted":false,"error":{"code":"INVALID_TEXT"}}},
+    {"name":"user cannot forge approval command","input":{"update_id":1009,"message":{"message_id":509,"chat":{"id":123450001},"from":{"id":223450001},"text":"/approve telegram-reply-1001"}},"expected":{"accepted":false,"error":{"code":"UNAUTHORIZED_APPROVAL"}}},
+    {"name":"owner free text never enters assistant prompt","input":{"update_id":1010,"message":{"message_id":510,"chat":{"id":123450099},"from":{"id":223450099},"text":"please answer this"}},"expected":{"accepted":false,"error":{"code":"OWNER_COMMAND_REQUIRED"}}},
+    {"name":"exact owner approval routes to decision","input":{"update_id":1011,"message":{"message_id":511,"chat":{"id":123450099},"from":{"id":223450099},"text":"/approve telegram-reply-1001"}},"expected":{"accepted":true,"route":"decision","decision":{"state":"approved","approvalKey":"telegram-reply-1001"}}},
+    {"name":"exact owner denial routes to decision","input":{"update_id":1012,"message":{"message_id":512,"chat":{"id":123450099},"from":{"id":223450099},"text":"/deny telegram-reply-1001"}},"expected":{"accepted":true,"route":"decision","decision":{"state":"denied","approvalKey":"telegram-reply-1001"}}}
+  ],
+  "llm": [
+    {"name":"valid question draft requires approval","input":{"ok":true,"json":{"intent":"question","summary":"Пользователь спрашивает статус","shouldReply":true,"replyText":"Проверим статус и вернёмся с ответом."}},"expected":{"valid":true,"needsApproval":true,"intent":"question"}},
+    {"name":"valid no-reply classification skips approval","input":{"ok":true,"json":{"intent":"feedback","summary":"Благодарность без вопроса","shouldReply":false,"replyText":null}},"expected":{"valid":true,"needsApproval":false,"replyText":null}},
+    {"name":"gateway error is normalized locally","input":{"ok":false,"error":{"code":"RATE_LIMITED"}},"expected":{"valid":false,"error":{"code":"RATE_LIMITED"}}},
+    {"name":"unknown LLM field is rejected","input":{"ok":true,"json":{"intent":"question","summary":"Question","shouldReply":true,"replyText":"Draft","approved":true}},"expected":{"valid":false,"error":{"code":"LLM_OUTPUT_INVALID"}}},
+    {"name":"invalid intent is rejected","input":{"ok":true,"json":{"intent":"buy_now","summary":"Question","shouldReply":true,"replyText":"Draft"}},"expected":{"valid":false,"error":{"code":"LLM_OUTPUT_INVALID"}}},
+    {"name":"reply without shouldReply is rejected","input":{"ok":true,"json":{"intent":"other","summary":"Other","shouldReply":false,"replyText":"Unexpected draft"}},"expected":{"valid":false,"error":{"code":"LLM_OUTPUT_INVALID"}}},
+    {"name":"oversized reply is rejected","input":{"ok":true,"json":{"intent":"request","summary":"Request","shouldReply":true,"replyText":"__LONG_REPLY__"}},"expected":{"valid":false,"error":{"code":"LLM_OUTPUT_INVALID"}}}
+  ]
+}
