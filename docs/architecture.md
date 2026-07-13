@@ -2,7 +2,7 @@
 
 ## Назначение
 
-Документ фиксирует целевую архитектуру и границы. Конкретные версии контейнеров, точные n8n node capabilities, provider API и license status выбираются только после research-задач и фиксируются ADR с датой проверки.
+Документ фиксирует целевую архитектуру и границы MVP после research-gate `T-0002` и `T-0003`. Baseline проверен 2026-07-13; перед release и update изменчивые факты перепроверяются по [version research](research/2026-07-13-platform-versions-and-license.md) и [provider capability matrix](research/provider-capabilities.md).
 
 ## Контекст системы
 
@@ -27,6 +27,37 @@ flowchart LR
 - Данные n8n, PostgreSQL и Caddy хранятся в отдельных persistent volumes.
 - Сервисы имеют health checks и restart policy для восстановления после reboot.
 - Все images закреплены на явно проверенных версиях; `latest` запрещён.
+
+Exact baseline:
+
+| Компонент | Pin |
+|---|---|
+| n8n | `docker.n8n.io/n8nio/n8n:2.29.10` |
+| PostgreSQL | `postgres:17.10-bookworm` |
+| Caddy | `caddy:2.11.4-alpine` |
+| Docker Engine для Ubuntu 24.04 amd64 | `5:29.6.1-1~ubuntu.24.04~noble` |
+| Docker Compose plugin для Ubuntu 24.04 amd64 | `5.3.1-1~ubuntu.24.04~noble` |
+
+Container digests записываются в release evidence после pull, но Compose использует exact application tags. Политика и источники зафиксированы в [ADR-0003](../adr/0003-version-pinning-policy.md).
+
+## Runtime configuration contract
+
+Implementation в `T-0005` переносит следующие решения в `.env.example` и Compose без изменения смысла:
+
+| Область | Обязательная конфигурация |
+|---|---|
+| Database | `DB_TYPE=postgresdb`, host `postgres`, port `5432`, отдельные database/user и сгенерированный password |
+| Public URL | `N8N_HOST=<fqdn>`, `N8N_PROTOCOL=https`, `N8N_EDITOR_BASE_URL=https://<fqdn>/`, `WEBHOOK_URL=https://<fqdn>/` |
+| Reverse proxy | n8n слушает internal `5678`; `N8N_PROXY_HOPS=1`; наружу публикуются только Caddy `80/443` |
+| Time | `TZ` и `GENERIC_TIMEZONE` равны пользовательской IANA timezone |
+| Persistent identity | явно сгенерированный `N8N_ENCRYPTION_KEY`; persistent `/home/node/.n8n` и PostgreSQL data |
+| n8n baseline | `N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true`, `N8N_RUNNERS_ENABLED=true` |
+| Health | PostgreSQL `pg_isready`; n8n `/healthz`; external HTTPS/certificate/editor/webhook checks |
+| Retention | `EXECUTIONS_DATA_PRUNE=true`, `EXECUTIONS_DATA_MAX_AGE=168`, `EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000` |
+| Execution evidence | success/error executions сохраняются в пределах retention; manual execution data доступна для учебной диагностики |
+| Privacy | diagnostics и personalization disabled; workflow-node access к host environment остаётся blocked |
+
+Все placeholders валидируются до старта. `.env.example` содержит только имена и безопасные defaults; реальный `.env` имеет `0600`, исключён из Git и backup-ится как secret material.
 
 ## Почему Caddy
 
@@ -55,18 +86,21 @@ Caddy выбран для базового профиля из-за неболь
 - `uninstall.sh`: останавливает и удаляет containers, но не удаляет данные автоматически.
 - `import-workflows.sh` / `export-workflows.sh`: управляют workflow без credentials в JSON.
 
+Первая destructive lifecycle pair — `n8n 2.29.9 → 2.29.10`. Rollback всегда восстанавливает согласованный pre-update backup вместе с возвратом pin; image-only downgrade запрещён. PostgreSQL major upgrade не входит в обычный update path и требует отдельного migration ADR и restore rehearsal.
+
 ## LLM abstraction
 
 Бизнес-workflow не вызывают provider-specific API напрямую. Они обращаются к reusable `LLM Gateway` sub-workflow с нормализованным входом и структурированным выходом.
 
-Приоритет:
+Утверждённые provider paths:
 
-1. generic OpenAI-compatible endpoint с Base URL, API key, model ID, optional `/models` и ручным fallback;
-2. Yandex AI Studio после проверки официальной OpenAI-совместимости и identifiers;
-3. GigaChat через безопасный OAuth lifecycle без ручного обновления временного token;
-4. другие endpoints только по подтверждённой capability matrix.
+1. generic OpenAI-compatible endpoint использует native OpenAI Chat Model только после Connection Test; Responses API выключен, tool/JSON capabilities opt-in;
+2. при несовместимом или отсутствующем `/models` используется manual model ID, а при блокирующем credential test — HTTP Request adapter;
+3. Yandex AI Studio — native candidate с Base URL `https://ai.api.cloud.yandex.net/v1` и полным `gpt://.../latest` model URI; реальная совместимость остаётся implementation gate;
+4. GigaChat — provider-specific HTTP Request adapter с одним OAuth exchange на execution и максимум одним refresh/retry после `401`;
+5. другие endpoints добавляются только после capability matrix и contract tests.
 
-Credentials создаются в n8n и никогда не встраиваются в workflow JSON. LiteLLM рассматривается только как отдельный optional profile, если нативный n8n + gateway workflow не закрывает подтверждённые требования.
+Нормализованные inputs, outputs, errors, provider flags и secret rules заданы в [LLM Gateway contract](contracts/llm-gateway.md). Credentials создаются в n8n и никогда не встраиваются в workflow JSON. LiteLLM рассматривается только как отдельный optional profile, если нативный n8n + gateway workflow не закрывает подтверждённые требования.
 
 ## Workflow layers
 
@@ -95,7 +129,12 @@ Business workflows: Telegram assistant, email assistant, lead handler и daily e
 - Git → runtime: `.env`, credentials, backup archives и реальные fixtures исключаются.
 - Docker socket не монтируется в n8n; privileged mode и лишние capabilities запрещены.
 - Постоянный `N8N_ENCRYPTION_KEY` и права `.env` `0600` обязательны.
-- Execution data может содержать ПДн; retention/pruning включены и объяснены пользователю.
+- Provider API keys, OAuth client secrets, refresh/access tokens и Bitrix24 webhook URL никогда не хранятся в workflow JSON, fixtures или business logs.
+- Canonical Bitrix24 adapter использует OAuth 2.0 credential с Bearer header. Incoming webhook допускается только как локальный ручной smoke test и не входит в экспортируемый workflow, пока нет проверенного encrypted credential path для URL secret.
+- GigaChat authorization key хранится в credential; временный access token живёт только внутри execution и редактируется из ошибок/logs.
+- Execution data может содержать ПДн. Default: pruning включён, max age `168` часов, max count `10000`; успешные и ошибочные executions сохраняются в пределах этих лимитов для учебной диагностики. Guide обязан объяснить уменьшение retention.
+- Diagnostics/personalization выключены в default profile; доступ к environment из workflow nodes не открывается ради обхода credential store.
+- TLS certificate verification не отключается. Необходимые доверенные root certificates устанавливаются и проверяются явно.
 
 ## Quality strategy
 
@@ -113,6 +152,21 @@ Business workflows: Telegram assistant, email assistant, lead handler и daily e
 
 ## Архитектурные ограничения
 
-- Версии и provider claims не фиксируются в этом документе без dated evidence.
 - Базовый профиль остаётся односерверным и понятным новичку.
 - Расширение платформы, queue mode или proxy layer требует отдельного ADR и измерения влияния на RAM, установку и сопровождение.
+
+## Явно неподдерживаемые сценарии MVP
+
+- другие host OS/architecture, кроме Ubuntu 24.04 LTS x86_64;
+- path-prefix deployment, несколько n8n instances, queue mode, HA, Kubernetes и horizontal scaling;
+- Redis, vector database, local LLM и обязательный LiteLLM proxy;
+- публичные host ports n8n/PostgreSQL, Docker socket mount, privileged containers и отключённая TLS verification;
+- unattended major/minor updates, плавающие tags и image-only database rollback;
+- гарантии tool calling, Responses API или provider-native JSON Schema без отдельного contract test;
+- экспорт workflow с credentials, tokens, webhook secrets или реальными персональными fixtures;
+- managed/multi-tenant/white-label n8n hosting без нового license review и, при необходимости, коммерческого соглашения;
+- автоматическое изменение firewall без отдельного подтверждения и защиты активного SSH-доступа.
+
+## Implementation-ready decisions
+
+Для runtime task `T-0005` закрыты критические выборы: service topology, exact tags, public/private ports, volumes, URL/proxy variables, health endpoints, retention defaults, update/rollback rule, provider paths и secret boundaries. Реальные pull, Compose validation, TLS, provider credentials и destructive lifecycle остаются проверками реализации, а не открытыми архитектурными решениями.

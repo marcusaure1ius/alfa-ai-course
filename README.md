@@ -4,9 +4,9 @@ Production-minded starter kit для самостоятельного развё
 
 ## Статус проекта
 
-Foundation/onboarding завершён. Владелец одобрил MVP backlog 2026-07-13; работа идёт по dependency-ready research-задачам Projects Control.
+Foundation/onboarding и official research завершены. Владелец одобрил MVP backlog 2026-07-13; работа идёт по dependency-ready задачам Projects Control.
 
-> Реализация runtime начнётся только после завершения official research и финального evidence-backed ADR (`T-0004`).
+> Реализация runtime допускается только после approval финального architecture gate `T-0004` в Projects Control.
 
 ## Цель MVP
 
@@ -23,7 +23,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - внешний доступ: HTTPS, PostgreSQL наружу не публикуется;
 - LLM: внешние API через заменяемый LLM Gateway;
 - основной интерфейс установки: локальный Bash-скрипт, а не `curl | bash`;
-- версии контейнеров фиксируются явно после проверки официальных источников;
+- версии контейнеров явно закреплены в ADR-0003 по dated official-source research;
 - Redis, queue workers, Kubernetes, Ollama, Qdrant и LiteLLM не входят в базовый профиль.
 
 ## Канонические документы
@@ -36,8 +36,10 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [ADR-0002](adr/0002-llm-integration-strategy.md) — стратегия интеграции LLM;
 - [ADR-0003](adr/0003-version-pinning-policy.md) — политика выбора и фиксации версий.
 - [Platform/version/license research](docs/research/2026-07-13-platform-versions-and-license.md) — dated official-source baseline;
+- [Provider capability matrix](docs/research/provider-capabilities.md) — verified/unverified paths для n8n, Yandex, GigaChat и Bitrix24;
+- [LLM Gateway contract](docs/contracts/llm-gateway.md) — normalized inputs, outputs, errors и secret rules;
 - [License notes](LICENSE-NOTES.md) — границы допустимого использования и release checklist.
 
 ## Следующий шаг
 
-Завершить official research (`T-0002`, `T-0003`), затем утвердить финальный evidence-backed ADR и contracts (`T-0004`). Задачи выполняются только в порядке зависимостей и через обязательный lifecycle Projects Control.
+После approval `T-0004` следующая dependency-ready задача — pinned Docker Compose runtime `T-0005`. Задачи выполняются только в порядке зависимостей и через обязательный lifecycle Projects Control.
