@@ -1,0 +1,85 @@
+{
+  "aggregation": [
+    {
+      "name": "complete source counts documented event fields",
+      "input": {
+        "runAt": "2026-07-14T06:00:00.000Z",
+        "source": {"configured": true, "complete": true, "name": "fixture-store", "coverageStart": "2026-07-13T06:00:00.000Z", "coverageEnd": "2026-07-14T06:00:00.000Z"},
+        "events": [
+          {"eventType":"lead.handler.processed","outcome":"success","correlationId":"lead-001","occurredAt":"2026-07-13T07:00:00.000Z","subjectRef":"person-redacted","metadata":{"workflowKey":"business.lead-handler"}},
+          {"eventType":"lead.handler.processed","outcome":"failure","correlationId":"lead-002","occurredAt":"2026-07-13T08:00:00.000Z","metadata":{"workflowKey":"business.lead-handler","errorCode":"CRM_TIMEOUT"}},
+          {"eventType":"email.assistant.processed","outcome":"skipped","correlationId":"mail-001","occurredAt":"2026-07-13T09:00:00.000Z","metadata":{"workflowKey":"business.email-assistant","actionType":"manual_review"}},
+          {"eventType":"approval.requested","outcome":"success","correlationId":"approval-001","occurredAt":"2026-07-13T10:00:00.000Z","metadata":{"workflowKey":"core.approval","actionType":"pending"}},
+          {"eventType":"telegram.assistant.processed","outcome":"success","correlationId":"telegram-001","occurredAt":"2026-07-13T11:00:00.000Z","metadata":{"workflowKey":"business.telegram-assistant"}}
+        ]
+      },
+      "expected": {"ok":true,"summarizable":true,"source":{"status":"complete","coverageValid":true},"window":{"start":"2026-07-13T06:00:00.000Z","end":"2026-07-14T06:00:00.000Z"},"metrics":{"eventsObserved":5,"leadsProcessed":2,"errors":1,"unhandledEmails":1,"pendingApprovals":1,"otherEvents":2,"invalidEvents":0,"duplicatesIgnored":0,"outsideWindow":0}}
+    },
+    {
+      "name": "window start is inclusive",
+      "input": {"runAt":"2026-07-14T07:30:00.000Z","source":{"configured":true,"complete":true,"coverageStart":"2026-07-13T06:00:00.000Z","coverageEnd":"2026-07-14T06:00:00.000Z"},"events":[{"eventType":"lead.handler.processed","outcome":"success","correlationId":"start-001","occurredAt":"2026-07-13T06:00:00.000Z","metadata":{}}]},
+      "expected": {"source":{"status":"complete"},"metrics":{"eventsObserved":1,"leadsProcessed":1,"outsideWindow":0}}
+    },
+    {
+      "name": "window end is exclusive",
+      "input": {"runAt":"2026-07-14T07:30:00.000Z","source":{"configured":true,"complete":true,"coverageStart":"2026-07-13T06:00:00.000Z","coverageEnd":"2026-07-14T06:00:00.000Z"},"events":[{"eventType":"lead.handler.processed","outcome":"success","correlationId":"end-001","occurredAt":"2026-07-14T06:00:00.000Z","metadata":{}}]},
+      "expected": {"source":{"status":"complete"},"metrics":{"eventsObserved":0,"leadsProcessed":0,"outsideWindow":1}}
+    },
+    {
+      "name": "run before 09 Moscow uses prior anchor",
+      "input": {"runAt":"2026-07-14T05:59:59.000Z","source":{"configured":true,"complete":true,"coverageStart":"2026-07-12T06:00:00.000Z","coverageEnd":"2026-07-13T06:00:00.000Z"},"events":[]},
+      "expected": {"source":{"status":"complete"},"window":{"start":"2026-07-12T06:00:00.000Z","end":"2026-07-13T06:00:00.000Z"},"metrics":{"eventsObserved":0}}
+    },
+    {
+      "name": "missing source returns unknown metrics",
+      "input": {"runAt":"2026-07-14T06:00:00.000Z","source":{"configured":false,"complete":false},"events":[{"eventType":"lead.handler.processed","outcome":"success","correlationId":"ignored-001","occurredAt":"2026-07-13T07:00:00.000Z","metadata":{}}]},
+      "expected": {"summarizable":false,"source":{"status":"missing"},"metrics":{"eventsObserved":null,"leadsProcessed":null,"errors":null,"unhandledEmails":null,"pendingApprovals":null,"otherEvents":null}}
+    },
+    {
+      "name": "declared partial source exposes observed counts",
+      "input": {"runAt":"2026-07-14T06:00:00.000Z","source":{"configured":true,"complete":false,"coverageStart":"2026-07-13T06:00:00.000Z","coverageEnd":"2026-07-14T06:00:00.000Z"},"events":[{"eventType":"lead.handler.processed","outcome":"success","correlationId":"partial-001","occurredAt":"2026-07-13T07:00:00.000Z","metadata":{}}]},
+      "expected": {"summarizable":false,"source":{"status":"partial","coverageValid":true},"metrics":{"eventsObserved":1,"leadsProcessed":1}}
+    },
+    {
+      "name": "incomplete coverage is partial",
+      "input": {"runAt":"2026-07-14T06:00:00.000Z","source":{"configured":true,"complete":true,"coverageStart":"2026-07-13T07:00:00.000Z","coverageEnd":"2026-07-14T06:00:00.000Z"},"events":[]},
+      "expected": {"summarizable":false,"source":{"status":"partial","coverageValid":false},"metrics":{"eventsObserved":0}}
+    },
+    {
+      "name": "invalid event makes source partial",
+      "input": {"runAt":"2026-07-14T06:00:00.000Z","source":{"configured":true,"complete":true,"coverageStart":"2026-07-13T06:00:00.000Z","coverageEnd":"2026-07-14T06:00:00.000Z"},"events":[{"eventType":"lead.handler.processed","outcome":"success","correlationId":"invalid-001","occurredAt":"2026-07-13T07:00:00.000Z","metadata":{},"unexpected":"blocked"}]},
+      "expected": {"summarizable":false,"source":{"status":"partial"},"metrics":{"eventsObserved":0,"invalidEvents":1}}
+    },
+    {
+      "name": "duplicates are counted once",
+      "input": {"runAt":"2026-07-14T06:00:00.000Z","source":{"configured":true,"complete":true,"coverageStart":"2026-07-13T06:00:00.000Z","coverageEnd":"2026-07-14T06:00:00.000Z"},"events":[{"eventType":"lead.handler.processed","outcome":"success","correlationId":"dupe-001","occurredAt":"2026-07-13T07:00:00.000Z","metadata":{}},{"eventType":"lead.handler.processed","outcome":"success","correlationId":"dupe-001","occurredAt":"2026-07-13T07:00:00.000Z","metadata":{}}]},
+      "expected": {"source":{"status":"complete"},"metrics":{"eventsObserved":1,"leadsProcessed":1,"duplicatesIgnored":1}}
+    },
+    {
+      "name": "logger record envelope is accepted",
+      "input": {"runAt":"2026-07-14T06:00:00.000Z","source":{"configured":true,"complete":true,"coverageStart":"2026-07-13T06:00:00.000Z","coverageEnd":"2026-07-14T06:00:00.000Z"},"events":[{"record":{"eventType":"executive.digest.processed","outcome":"success","correlationId":"envelope-001","occurredAt":"2026-07-13T12:00:00.000Z","subjectRef":"digest","metadata":{"workflowKey":"business.daily-executive-digest","channel":"telegram"}}}]},
+      "expected": {"source":{"status":"complete"},"metrics":{"eventsObserved":1,"otherEvents":1}}
+    },
+    {
+      "name": "wrong timezone fails closed",
+      "profile": {"profileTimezone":"UTC"},
+      "input": {"runAt":"2026-07-14T06:00:00.000Z","source":{"configured":false},"events":[]},
+      "expected": {"ok":false,"error":{"code":"INVALID_SCHEDULE_PROFILE"}}
+    },
+    {
+      "name": "invalid run time fails closed",
+      "input": {"runAt":"not-a-date","source":{"configured":false},"events":[]},
+      "expected": {"ok":false,"error":{"code":"INVALID_RUN_TIME"}}
+    },
+    {
+      "name": "non-array event source fails closed",
+      "input": {"runAt":"2026-07-14T06:00:00.000Z","source":{"configured":true},"events":{}},
+      "expected": {"ok":false,"error":{"code":"INVALID_EVENT_SOURCE"}}
+    },
+    {
+      "name": "malformed profile JSON is visible as partial",
+      "input": {"runAt":"2026-07-14T06:00:00.000Z","profileSourceConfigured":true,"profileSourceComplete":true,"profileEventsJson":"{broken"},
+      "expected": {"ok":true,"summarizable":false,"source":{"status":"partial","parseError":true},"metrics":{"invalidEvents":1}}
+    }
+  ]
+}
