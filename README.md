@@ -39,8 +39,9 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Provider capability matrix](docs/research/provider-capabilities.md) — verified/unverified paths для n8n, Yandex, GigaChat и Bitrix24;
 - [LLM Gateway contract](docs/contracts/llm-gateway.md) — normalized inputs, outputs, errors и secret rules;
 - [Runtime configuration](docs/runtime-configuration.md) — Compose files, variables, topology and health semantics;
+- [Установка](docs/installation.md) — preflight, interactive/non-interactive modes, rerun safety и exit codes;
 - [License notes](LICENSE-NOTES.md) — границы допустимого использования и release checklist.
 
 ## Следующий шаг
 
-После approval `T-0005` следующая задача критического пути — безопасный installer `T-0006`. Задачи выполняются только в порядке зависимостей и через обязательный lifecycle Projects Control.
+Pinned runtime и безопасный installer реализованы в `T-0005`/`T-0006`; после approval следующая задача критического пути — diagnostics `T-0007`. Задачи выполняются только в порядке зависимостей и через обязательный lifecycle Projects Control.

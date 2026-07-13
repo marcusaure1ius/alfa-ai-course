@@ -79,6 +79,8 @@ Caddy выбран для базового профиля из-за неболь
 
 Повторный запуск должен быть разумно идемпотентным. `--dry-run` не меняет систему. Изменение firewall выполняется только после отдельного подтверждения и не должно обрывать текущий SSH-доступ.
 
+Реализация и таблица deterministic preflight/exit codes: [`scripts/install.sh`](../scripts/install.sh) и [installation reference](installation.md). Если persistent volumes существуют, но `.env` потерян, installer останавливается и требует восстановить исходные secrets вместо генерации новых поверх данных.
+
 ## Операционный контур
 
 - `doctor.sh`: host, DNS, ports, containers, PostgreSQL, internal n8n, external HTTPS/certificate/webhook base URL.
