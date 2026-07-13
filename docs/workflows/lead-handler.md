@@ -111,6 +111,8 @@ Intake создаёт pending approval на 3600 секунд и сообщае�
 
 Для отказа используйте `state: denied`. Workflow проверяет одновременно approval key, owner ref, сохранённую заявку и срок действия. При отказе или expiry возвращается `mutated: false`; CRM и внешнее сообщение о завершении не вызываются.
 
+Поле `now` допускается только для локального test-mode contract test. В production caller не управляет временем: workflow игнорирует переданное значение и проверяет expiry по времени исполнения n8n.
+
 ## CRM mapping
 
 Lead Handler передаёт данные в provider-neutral CRM contracts. Фактический provider mapping задаётся CRM adapter.
