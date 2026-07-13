@@ -4,7 +4,7 @@ Production-minded starter kit для самостоятельного развё
 
 ## Статус проекта
 
-Foundation/onboarding и official research завершены. Владелец одобрил MVP backlog 2026-07-13; работа идёт по dependency-ready задачам Projects Control.
+Foundation/onboarding и official research завершены. Pinned Compose runtime подготовлен в `T-0005`; владелец одобрил MVP backlog 2026-07-13, а lifecycle/status задач остаётся в Projects Control.
 
 > Реализация runtime допускается только после approval финального architecture gate `T-0004` в Projects Control.
 
@@ -38,8 +38,9 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Platform/version/license research](docs/research/2026-07-13-platform-versions-and-license.md) — dated official-source baseline;
 - [Provider capability matrix](docs/research/provider-capabilities.md) — verified/unverified paths для n8n, Yandex, GigaChat и Bitrix24;
 - [LLM Gateway contract](docs/contracts/llm-gateway.md) — normalized inputs, outputs, errors и secret rules;
+- [Runtime configuration](docs/runtime-configuration.md) — Compose files, variables, topology and health semantics;
 - [License notes](LICENSE-NOTES.md) — границы допустимого использования и release checklist.
 
 ## Следующий шаг
 
-После approval `T-0004` следующая dependency-ready задача — pinned Docker Compose runtime `T-0005`. Задачи выполняются только в порядке зависимостей и через обязательный lifecycle Projects Control.
+После approval `T-0005` следующая задача критического пути — безопасный installer `T-0006`. Задачи выполняются только в порядке зависимостей и через обязательный lifecycle Projects Control.

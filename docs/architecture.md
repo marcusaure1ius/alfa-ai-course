@@ -51,13 +51,15 @@ Implementation в `T-0005` переносит следующие решения 
 | Reverse proxy | n8n слушает internal `5678`; `N8N_PROXY_HOPS=1`; наружу публикуются только Caddy `80/443` |
 | Time | `TZ` и `GENERIC_TIMEZONE` равны пользовательской IANA timezone |
 | Persistent identity | явно сгенерированный `N8N_ENCRYPTION_KEY`; persistent `/home/node/.n8n` и PostgreSQL data |
-| n8n baseline | `N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true`, `N8N_RUNNERS_ENABLED=true` |
+| n8n baseline | `N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true`; internal task runners use n8n 2.x defaults (`N8N_RUNNERS_ENABLED` is deprecated) |
 | Health | PostgreSQL `pg_isready`; n8n `/healthz`; external HTTPS/certificate/editor/webhook checks |
 | Retention | `EXECUTIONS_DATA_PRUNE=true`, `EXECUTIONS_DATA_MAX_AGE=168`, `EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000` |
 | Execution evidence | success/error executions сохраняются в пределах retention; manual execution data доступна для учебной диагностики |
 | Privacy | diagnostics и personalization disabled; workflow-node access к host environment остаётся blocked |
 
 Все placeholders валидируются до старта. `.env.example` содержит только имена и безопасные defaults; реальный `.env` имеет `0600`, исключён из Git и backup-ится как secret material.
+
+Реализация этого контракта: [`docker-compose.yml`](../docker-compose.yml), [`.env.example`](../.env.example), [`config/Caddyfile`](../config/Caddyfile) и [runtime configuration reference](runtime-configuration.md).
 
 ## Почему Caddy
 
@@ -131,7 +133,7 @@ Business workflows: Telegram assistant, email assistant, lead handler и daily e
 - Постоянный `N8N_ENCRYPTION_KEY` и права `.env` `0600` обязательны.
 - Provider API keys, OAuth client secrets, refresh/access tokens и Bitrix24 webhook URL никогда не хранятся в workflow JSON, fixtures или business logs.
 - Canonical Bitrix24 adapter использует OAuth 2.0 credential с Bearer header. Incoming webhook допускается только как локальный ручной smoke test и не входит в экспортируемый workflow, пока нет проверенного encrypted credential path для URL secret.
-- GigaChat authorization key хранится в credential; временный access token живёт только внутри execution и редактируется из ошибок/logs.
+- GigaChat authorization key хранится в credential; временный access token живёт только внутри execution и маскируется в errors/logs.
 - Execution data может содержать ПДн. Default: pruning включён, max age `168` часов, max count `10000`; успешные и ошибочные executions сохраняются в пределах этих лимитов для учебной диагностики. Guide обязан объяснить уменьшение retention.
 - Diagnostics/personalization выключены в default profile; доступ к environment из workflow nodes не открывается ради обхода credential store.
 - TLS certificate verification не отключается. Необходимые доверенные root certificates устанавливаются и проверяются явно.

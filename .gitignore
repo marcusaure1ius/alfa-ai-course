@@ -1,0 +1,17 @@
+# Runtime secrets
+.env
+.env.*
+!.env.example
+
+# Runtime and operation artifacts
+backups/
+exports/
+*.dump
+*.tar
+*.tar.gz
+*.sha256
+
+# Local tooling
+.DS_Store
+.idea/
+.vscode/
