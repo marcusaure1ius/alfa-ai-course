@@ -41,3 +41,5 @@ Doctor читает из env только `N8N_HOST`, `POSTGRES_DB` и `POSTGRES
 | `external.certificate` | проверить ACME email, DNS и Caddy certificate storage |
 
 `--local-only` намеренно возвращает WARN: после появления DNS нужно обязательно выполнить полный запуск. Реальная проверка VPS/ACME требует доступного домена и не заменяется локальной симуляцией.
+
+Пошаговые сценарии `симптом → проверка → решение` для runtime, backup/restore, update/rollback, firewall и доступа собраны в [Troubleshooting](troubleshooting.md).

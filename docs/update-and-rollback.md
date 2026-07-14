@@ -4,6 +4,8 @@ MVP разрешает только проверенную в dated research п�
 
 ## Update
 
+> **Осторожно:** update изменяет runtime и database state. Не запускайте его без места для backup и окна восстановления. `--yes` убирает только prompt, но не делает неподдерживаемую пару безопасной.
+
 Исходный `.env` должен явно содержать `N8N_VERSION=2.29.9`, а PostgreSQL и n8n должны работать:
 
 ```bash
@@ -14,13 +16,19 @@ MVP разрешает только проверенную в dated research п�
 
 Если backup или image pull не завершились, runtime не изменяется. Ошибка после mutation возвращает non-zero и печатает точную команду `rollback.sh` и путь pre-update archive. Metadata остаётся в `update_pending`, чтобы recovery был доступен.
 
+Успешный update печатает `UPDATED_VERSION=2.29.10`, `PREVIOUS_VERSION=2.29.9`, `BACKUP_ARCHIVE=<путь>` и `STATE_FILE=<путь>`. Не удаляйте эти файлы до завершения проверки.
+
 ## Restore-based rollback
+
+> **Осторожно:** rollback — это полный restore pre-update state, а не смена image tag. Изменения, записанные после update, будут заменены; `restore.sh` сначала создаёт forward safety backup.
 
 ```bash
 ./scripts/rollback.sh
 ```
 
 Rollback разрешён только для metadata `2.29.10 → 2.29.9`, требует локальное наличие exact old image и восстанавливает **полный pre-update backup** через `restore.sh`: env pin, PostgreSQL и n8n/Caddy volumes. Image-only downgrade запрещён, потому что database migration может быть необратима. Перед overwrite `restore.sh` создаёт дополнительный safety backup текущего state; его путь сохраняется как `FORWARD_BACKUP_ARCHIVE`.
+
+Успех печатает `ROLLED_BACK_VERSION=2.29.9`, `RESTORED_ARCHIVE=<путь>` и, при наличии текущего state, `FORWARD_BACKUP_ARCHIVE=<путь>`.
 
 ## Metadata и changelog procedure
 

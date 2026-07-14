@@ -44,6 +44,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Установка](docs/installation.md) — preflight, interactive/non-interactive modes, rerun safety и exit codes;
 - [Security baseline](docs/security.md) — least-privilege defaults, retention и SSH-safe opt-in UFW;
 - [Диагностика](docs/diagnostics.md) — redacted OK/WARN/FAIL report и symptom mapping;
+- [Troubleshooting](docs/troubleshooting.md) — безопасные сценарии симптом → проверка → решение;
 - [Backup и restore](docs/backup-and-restore.md) — recovery archive, checksums, safety backup и rehearsal;
 - [Update и rollback](docs/update-and-rollback.md) — approved version pair, backup gate и restore-based recovery;
 - [Uninstall и перенос workflow](docs/uninstall-and-workflow-portability.md) — data-preserving uninstall, credential-free deterministic export и repeatable batch import;

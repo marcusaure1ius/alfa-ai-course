@@ -8,6 +8,8 @@ Backup содержит secrets, PostgreSQL data, n8n binary/config state и TLS
 ./scripts/backup.sh
 ```
 
+Успех завершается строкой `BACKUP_ARCHIVE=<абсолютный-путь>`. Убедитесь, что рядом есть файл с тем же именем и suffix `.sha256`; не выводите содержимое archive или `runtime.env`.
+
 Во время snapshot n8n и Caddy кратковременно останавливаются, чтобы logical PostgreSQL dump и volume data относились к одному quiesced state. После архивации ранее работающие сервисы запускаются снова.
 
 Состав `n8n-backup-v1-*.tar.gz`:
@@ -30,6 +32,8 @@ Default `--keep 0` ничего не удаляет.
 
 ## Restore
 
+> **Осторожно:** restore заменяет database, n8n/Caddy volumes и `.env`. Сначала сохраните archive и checksum вне VPS. Не используйте `--yes`, пока не проверили правильный файл и не готовы к overwrite.
+
 ```bash
 ./scripts/restore.sh /secure/backups/n8n-backup-v1-....tar.gz
 ```
@@ -39,6 +43,8 @@ Default `--keep 0` ничего не удаляет.
 Если `.env` или named volumes уже существуют, overwrite требует подтверждение (`--yes` для automation) и успешный pre-restore safety backup. При ошибке после начала mutation скрипт автоматически пытается вернуть safety backup. Путь safety archive печатается без его содержимого.
 
 Restore восстанавливает env с mode `0600`, полностью заменяет n8n/Caddy volume content, пересоздаёт целевую PostgreSQL database из logical dump, запускает stack и выполняет local doctor. Cross-major и смена PostgreSQL database/user не поддерживаются.
+
+Успех печатает `RESTORED_ARCHIVE=<путь>`. При overwrite существующей установки также появляется `SAFETY_ARCHIVE=<путь>` — сохраните его до функциональной проверки. Любой `[FAIL]` или отсутствие этих строк означает, что recovery нельзя считать завершённым.
 
 ## Проверка recovery
 
