@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "n8nImage": "docker.n8n.io/n8nio/n8n:2.29.10",
+  "importOrder": [
+    {
+      "name": "core",
+      "workflows": [
+        {"path": "workflows/core/crm-generic-lead-upsert.json", "id": "coreGenericCrmLeadUpsertV1"},
+        {"path": "workflows/core/crm-generic-task-create.json", "id": "coreGenericCrmTaskCreateV1"},
+        {"path": "workflows/core/handle-workflow-error.json", "id": "coreWorkflowErrorV1"},
+        {"path": "workflows/core/llm-gateway.json", "id": "coreGenericLlmGatewayV1"},
+        {"path": "workflows/core/log-business-event.json", "id": "coreBusinessEventLogV1"},
+        {"path": "workflows/core/mail-gateway.json", "id": "coreMailGatewayV1"},
+        {"path": "workflows/core/normalize-incoming-message.json", "id": "coreNormalizeMessageV1"},
+        {"path": "workflows/core/request-human-approval.json", "id": "coreHumanApprovalV1"},
+        {"path": "workflows/core/send-telegram-message.json", "id": "coreSendTelegramMessageV1"}
+      ]
+    },
+    {
+      "name": "adapters",
+      "workflows": [
+        {"path": "workflows/adapters/crm-bitrix24.json", "id": "adapterBitrix24CrmV1"},
+        {"path": "workflows/adapters/llm-gigachat.json", "id": "adapterGigaChatLlmV1"},
+        {"path": "workflows/adapters/llm-yandex.json", "id": "adapterYandexAiStudioLlmV1"}
+      ]
+    },
+    {
+      "name": "diagnostics",
+      "workflows": [
+        {"path": "workflows/diagnostics/generic-llm-connection-test.json", "id": "diagnosticGenericLlmConnectionV1"},
+        {"path": "workflows/diagnostics/yandex-llm-connection-test.json", "id": "diagnosticYandexAiStudioConnectionV1"}
+      ]
+    },
+    {
+      "name": "business",
+      "workflows": [
+        {"path": "workflows/business/daily-executive-digest.json", "id": "businessDailyExecutiveDigestV1"},
+        {"path": "workflows/business/email-assistant.json", "id": "businessEmailAssistantV1"},
+        {"path": "workflows/business/lead-handler.json", "id": "businessGuardedLeadHandlerV1"},
+        {"path": "workflows/business/telegram-assistant.json", "id": "businessTelegramAssistantV1"}
+      ]
+    }
+  ],
+  "dynamicReferences": [
+    {
+      "workflowId": "businessDailyExecutiveDigestV1",
+      "node": "Load Scheduled Business Events",
+      "expression": "={{ $('Digest Profile and Source Defaults').first().json.profileSourceWorkflowId }}",
+      "configurationField": "profileSourceWorkflowId"
+    }
+  ],
+  "demos": [
+    {
+      "key": "telegram-assistant",
+      "workflow": "workflows/business/telegram-assistant.json",
+      "fixture": "tests/fixtures/telegram-assistant/contracts.json",
+      "fixtureGroups": ["inbound", "llm"],
+      "expectedCount": 20,
+      "contractTest": "tests/telegram_assistant_test.sh"
+    },
+    {
+      "key": "email-assistant",
+      "workflow": "workflows/business/email-assistant.json",
+      "fixture": "tests/fixtures/email-assistant/extraction.json",
+      "fixtureGroups": [],
+      "expectedCount": 13,
+      "contractTest": "tests/email_assistant_test.sh"
+    },
+    {
+      "key": "lead-handler",
+      "workflow": "workflows/business/lead-handler.json",
+      "fixture": "tests/fixtures/lead-handler/contracts.json",
+      "fixtureGroups": ["intake", "llm"],
+      "expectedCount": 21,
+      "contractTest": "tests/lead_handler_test.sh"
+    },
+    {
+      "key": "daily-executive-digest",
+      "workflow": "workflows/business/daily-executive-digest.json",
+      "fixture": "tests/fixtures/executive-digest/contracts.json",
+      "fixtureGroups": ["aggregation"],
+      "expectedCount": 14,
+      "contractTest": "tests/executive_digest_test.sh"
+    }
+  ],
+  "supportingContractTests": [
+    "tests/core_workflows_test.sh",
+    "tests/mail_gateway_test.sh",
+    "tests/telegram_sender_test.sh",
+    "tests/crm_workflows_test.sh"
+  ],
+  "piiPolicy": {
+    "allowedSyntheticEmailDomains": ["example.com", "example.org", "example.test", "example.invalid", "invented.example"],
+    "allowedSyntheticPhones": ["+7 999 123-45-67", "+1 555 0100", "8 (999) 123-45-67", "+79991234567", "+44 20 7946 0958", "+442079460958", "123"]
+  }
+}
