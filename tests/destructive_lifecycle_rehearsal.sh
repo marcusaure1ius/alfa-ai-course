@@ -128,7 +128,7 @@ cleanup() {
 
 main() {
   local tmp_base marker secret owner_password seed_dir start_log workflow_before credential_before
-  local backup_output backup_archive backup_sha restore_output update_output rollback_output
+  local backup_output backup_archive restore_output update_output rollback_output
   local tampered failure_log expected_archive_hash artifact_manifest artifact_manifest_hash
   local resource image digest
 

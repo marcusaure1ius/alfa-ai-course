@@ -1,0 +1,40 @@
+name: Quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install static-analysis tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes jq shellcheck
+
+      - name: Pull exact integration images
+        run: |
+          docker pull docker.n8n.io/n8nio/n8n:2.29.10
+          docker pull postgres:17.10-bookworm
+
+      - name: Run quality gates
+        run: make quality-ci
+
+      - name: Upload redacted quality artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gates
+          path: test-results/quality/ci
+          if-no-files-found: error
+          retention-days: 14

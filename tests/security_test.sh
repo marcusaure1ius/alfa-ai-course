@@ -78,7 +78,7 @@ no_mode_code=$?
 set -e
 [[ "$no_mode_code" == "$EXIT_USAGE" ]] || fail "запуск без opt-in не остановлен"
 contains "$no_mode_output" "Укажите --preview"
-preview_output="$(SSH_CONNECTION= "$FIREWALL" --preview --ssh-port 22)"
+preview_output="$(SSH_CONNECTION='' "$FIREWALL" --preview --ssh-port 22)"
 contains "$preview_output" "[PLAN] ufw allow 22/tcp"
 ok "без режима нет mutation, explicit preview работает без sudo"
 
@@ -155,7 +155,7 @@ ok "secret env и runtime artifacts не отслеживаются Git"
 
 contains "$("$ROOT/scripts/install.sh" --help)" "--configure-firewall"
 grep -Fq 'configure_firewall_if_requested' "$ROOT/scripts/install.sh" || fail "installer не вызывает opt-in firewall"
-installer_preview="$(SSH_CONNECTION= bash -c '
+installer_preview="$(SSH_CONNECTION='' bash -c '
   source "$1"
   CONFIGURE_FIREWALL=1
   DRY_RUN=1
