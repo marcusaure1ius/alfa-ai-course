@@ -30,6 +30,8 @@ The encryption key must never change during update. Losing it makes stored n8n c
 
 `EXECUTIONS_DATA_MAX_AGE=168` and `EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000` are privacy-minded training defaults. Reduce them for sensitive/high-volume workflows after understanding the diagnostic tradeoff.
 
+The Compose environment always keeps `EXECUTIONS_DATA_PRUNE=true`. Overrides change the age/count bounds, not the fact that pruning is enabled. See [security baseline](security.md) for examples and the evidence boundary.
+
 ## Service topology
 
 ```text
@@ -71,6 +73,8 @@ docker compose --env-file tests/fixtures/compose.env config --images
 ```
 
 The rendered config must contain only the three exact images from ADR-0003. It must not contain `latest`, PostgreSQL host ports, `privileged`, or Docker socket mounts.
+
+Run the complete automated security assertions with `./tests/security_test.sh`.
 
 `config/Caddyfile` can be validated with the pinned image:
 

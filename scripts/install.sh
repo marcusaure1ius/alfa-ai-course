@@ -33,6 +33,8 @@ NON_INTERACTIVE=0
 DRY_RUN=0
 CHECK_ONLY=0
 ASSUME_YES=0
+CONFIGURE_FIREWALL=0
+FIREWALL_SSH_PORT=""
 WARNING_COUNT=0
 
 N8N_HOST_VALUE=""
@@ -64,6 +66,11 @@ usage() {
   --check-only       Выполнить только preflight-проверки без изменений.
   --yes              Подтвердить замену изменившегося существующего env-файла.
                      Docker volumes и данные этот флаг никогда не удаляет.
+  --configure-firewall
+                     После установки отдельно применить SSH-safe UFW rules.
+                     Без этого флага firewall не меняется.
+  --ssh-port PORT    Проверенный SSH port для firewall. В активной SSH-сессии
+                     должен совпадать с SSH_CONNECTION.
   -h, --help         Показать эту справку.
 
 Переменные конфигурации:
@@ -121,6 +128,12 @@ parse_args() {
       --dry-run) DRY_RUN=1 ;;
       --check-only) CHECK_ONLY=1 ;;
       --yes) ASSUME_YES=1 ;;
+      --configure-firewall) CONFIGURE_FIREWALL=1 ;;
+      --ssh-port)
+        (($# >= 2)) || fatal "$EXIT_USAGE" "Для --ssh-port нужен номер порта."
+        FIREWALL_SSH_PORT="$2"
+        shift
+        ;;
       --config)
         (($# >= 2)) || fatal "$EXIT_USAGE" "Для --config нужен путь."
         CONFIG_FILE="$2"
@@ -142,6 +155,13 @@ parse_args() {
 
   if (( DRY_RUN && CHECK_ONLY )); then
     fatal "$EXIT_USAGE" "Выберите только один режим: --dry-run или --check-only."
+  fi
+  [[ -z "$FIREWALL_SSH_PORT" || "$CONFIGURE_FIREWALL" == 1 ]] \
+    || fatal "$EXIT_USAGE" "--ssh-port используется только с --configure-firewall."
+  if [[ -n "$FIREWALL_SSH_PORT" ]]; then
+    [[ "$FIREWALL_SSH_PORT" =~ ^[0-9]+$ ]] \
+      && (( 10#$FIREWALL_SSH_PORT >= 1 && 10#$FIREWALL_SSH_PORT <= 65535 )) \
+      || fatal "$EXIT_USAGE" "SSH port должен быть целым числом 1..65535."
   fi
 }
 
@@ -607,6 +627,20 @@ start_stack() {
   pass "Compose stack запущен и достиг healthy."
 }
 
+configure_firewall_if_requested() {
+  local -a firewall_args
+  (( CONFIGURE_FIREWALL )) || return
+  firewall_args=("$SCRIPT_DIR/firewall.sh")
+  if (( DRY_RUN )); then
+    firewall_args+=(--preview)
+  else
+    firewall_args+=(--apply)
+  fi
+  [[ -z "$FIREWALL_SSH_PORT" ]] || firewall_args+=(--ssh-port "$FIREWALL_SSH_PORT")
+  (( ASSUME_YES && ! DRY_RUN )) && firewall_args+=(--yes)
+  "${firewall_args[@]}"
+}
+
 print_summary() {
   if (( CHECK_ONLY )); then
     info "Preflight завершён; изменений не выполнено. Предупреждений: $WARNING_COUNT."
@@ -676,6 +710,7 @@ main() {
   write_env_atomically
   validate_compose
   start_stack
+  configure_firewall_if_requested
   print_summary
 }
 

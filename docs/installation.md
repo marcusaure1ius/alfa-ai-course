@@ -34,6 +34,15 @@ ACME_EMAIL=admin@example.com \
 
 `--dry-run` не записывает файлы, не запускает `sudo`, не устанавливает packages и не меняет Docker runtime. `--check-only` выполняет только preflight. Оба режима могут сделать read-only DNS/HTTPS-запросы.
 
+Firewall по умолчанию не меняется. Для него есть отдельный opt-in флаг installer и самостоятельный preview:
+
+```bash
+./scripts/firewall.sh --preview
+./scripts/install.sh --configure-firewall
+```
+
+Активная SSH-сессия должна определяться через `SSH_CONNECTION`; иначе явно передайте проверенный `--ssh-port`. Non-interactive применение дополнительно требует `--yes`. Полный контракт и безопасная последовательность описаны в [security baseline](security.md).
+
 ## Non-interactive mode
 
 Передавайте несекретные значения через environment, а секреты — через локальный файл mode `0600`:
@@ -64,7 +73,7 @@ Installer разбирает только разрешённые строки `K
 
 - Существующий `.env` читается первым; его database password и `N8N_ENCRYPTION_KEY` сохраняются, если вы явно не передали другие значения.
 - Если итоговая конфигурация меняется, interactive mode требует подтверждение. Non-interactive mode останавливается; после ручной проверки нужен `--yes`.
-- `--yes` разрешает только замену env-файла. Installer никогда не выполняет `down --volumes`, не удаляет named volumes и не перезаписывает PostgreSQL data.
+- `--yes` разрешает замену env-файла и, только вместе с явным `--configure-firewall`, подтверждает уже показанный UFW plan. SSH guard при этом не отключается. Installer никогда не выполняет `down --volumes`, не удаляет named volumes и не перезаписывает PostgreSQL data.
 - Если volumes `n8n_data` или `n8n_postgres_data` существуют, а `.env` потерян, installer завершится с кодом `30`. Восстановите исходный `.env` из защищённой копии. Генерация нового encryption key поверх существующих данных небезопасна.
 - Существующая рабочая установка Docker не заменяется автоматически. Отличие от проверенного baseline показывается как `WARN`.
 
@@ -106,6 +115,7 @@ DNS mismatch — предупреждение из-за возможного NAT
 ```bash
 docker compose ps
 docker compose logs --tail=100 caddy n8n postgres
+./scripts/firewall.sh --check
 ```
 
 Откройте `https://<N8N_HOST>/`. Не публикуйте `.env`, не меняйте `N8N_ENCRYPTION_KEY` и не используйте `docker compose down --volumes`. Реальные DNS, certificate, webhook и reboot проверки требуют VPS evidence и не считаются пройденными локальным dry-run.

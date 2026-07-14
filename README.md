@@ -4,9 +4,7 @@ Production-minded starter kit для самостоятельного развё
 
 ## Статус проекта
 
-Foundation/onboarding и official research завершены. Pinned Compose runtime подготовлен в `T-0005`; владелец одобрил MVP backlog 2026-07-13, а lifecycle/status задач остаётся в Projects Control.
-
-> Реализация runtime допускается только после approval финального architecture gate `T-0004` в Projects Control.
+Foundation/onboarding, official research и architecture gate завершены. Pinned Compose runtime, installer, diagnostics и security baseline подготовлены; владелец одобрил MVP backlog 2026-07-13, а актуальный lifecycle/status задач остаётся в Projects Control.
 
 ## Цель MVP
 
@@ -40,6 +38,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [LLM Gateway contract](docs/contracts/llm-gateway.md) — normalized inputs, outputs, errors и secret rules;
 - [Runtime configuration](docs/runtime-configuration.md) — Compose files, variables, topology and health semantics;
 - [Установка](docs/installation.md) — preflight, interactive/non-interactive modes, rerun safety и exit codes;
+- [Security baseline](docs/security.md) — least-privilege defaults, retention и SSH-safe opt-in UFW;
 - [Диагностика](docs/diagnostics.md) — redacted OK/WARN/FAIL report и symptom mapping;
 - [Backup и restore](docs/backup-and-restore.md) — recovery archive, checksums, safety backup и rehearsal;
 - [Update и rollback](docs/update-and-rollback.md) — approved version pair, backup gate и restore-based recovery;
@@ -61,4 +60,4 @@ Starter kit не является SaaS, не перепродаёт доступ
 
 ## Следующий шаг
 
-Pinned runtime и безопасный installer реализованы в `T-0005`/`T-0006`; после approval следующая задача критического пути — diagnostics `T-0007`. Задачи выполняются только в порядке зависимостей и через обязательный lifecycle Projects Control.
+Pinned runtime, безопасный installer, diagnostics и security baseline реализованы в `T-0005`–`T-0008`. Следующая задача выбирается только из dependency-ready очереди и выполняется через обязательный lifecycle Projects Control.
