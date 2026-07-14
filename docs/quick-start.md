@@ -20,6 +20,7 @@
 Если VPS ещё нет, используйте один из проверенных guide:
 
 - [Timeweb Cloud](timeweb-cloud.md);
+- [фактическая чистая установка в Timeweb со скриншотами](timeweb-clean-install.md);
 - [Yandex Cloud](yandex-cloud.md);
 - затем [домен и DNS](domain-and-dns.md).
 

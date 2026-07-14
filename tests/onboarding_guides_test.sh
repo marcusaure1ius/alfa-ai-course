@@ -6,6 +6,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 GUIDES=(
   "$ROOT/docs/quick-start.md"
   "$ROOT/docs/timeweb-cloud.md"
+  "$ROOT/docs/timeweb-clean-install.md"
   "$ROOT/docs/yandex-cloud.md"
   "$ROOT/docs/domain-and-dns.md"
 )
@@ -18,7 +19,7 @@ for guide in "${GUIDES[@]}"; do
   [[ -s "$guide" ]] || fail "missing guide: $guide"
   grep -q '2026-07-14' "$guide" || fail "missing check date: $guide"
 done
-ok "four onboarding guides exist and state the check date"
+ok "five onboarding guides exist and state the check date"
 
 grep -q 'timeweb.cloud/docs/cloud-servers/manage-servers/create-server' "$ROOT/docs/timeweb-cloud.md"
 grep -q 'timeweb.cloud/docs/cloud-servers/manage-servers/ssh-keys' "$ROOT/docs/timeweb-cloud.md"
