@@ -19,10 +19,10 @@
 ## Основной запуск
 
 ```bash
-curl -fsSL "https://RELEASE-HOST.example/install.sh" | sh
+curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | sh
 ```
 
-Reserved hostname `RELEASE-HOST.example` обозначает ещё не опубликованный distribution endpoint. До выбора лицензии и стабильного HTTPS hosting это release blocker, а не команда для запуска.
+Stable URL перенаправляет на asset последнего GitHub Release. Каждый release сохраняет immutable versioned URL, checksum самого `install.sh` и exact Git commit; embedded archive дополнительно проверяется до любых системных изменений.
 
 Автономный installer проверяет checksum встроенного exact-commit archive и устанавливает его в `/opt/n8n-entrepreneur-starter-kit`. Внутренний installer автоматически выбирает IP-derived hostname, устанавливает Docker из официального apt repository, генерирует два независимых секрета, создаёт `.env` с правами `0600`, проверяет Compose и ждёт healthy services.
 

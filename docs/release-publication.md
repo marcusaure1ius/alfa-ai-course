@@ -4,13 +4,14 @@
 
 ## Текущий статус
 
-Автономный артефакт собирается и локально проверяет embedded SHA-256. Публичный install endpoint ещё не существует, потому что:
+Оригинальные файлы проекта лицензированы по Apache-2.0, а исходники опубликованы в публичном репозитории:
 
-1. у репозитория нет настроенного Git remote или release hosting;
-2. отдельный `LICENSE` не выбран, а `LICENSE-NOTES.md` прямо блокирует публичное распространение оригинальных файлов starter kit;
-3. новый domainless path ещё не прошёл fresh-VPS и novice trial после публикации.
+- repository: `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit`;
+- stable installer: `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh`;
+- immutable v0.1.0 installer: `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.0/install.sh`;
+- checksum: соседний asset `install.sh.sha256` в том же versioned release.
 
-Пока эти пункты не закрыты, `https://RELEASE-HOST.example/install.sh` в документации остаётся reserved placeholder.
+Public download, checksum и verify-only подтверждаются release evidence. Fresh-VPS domainless run и novice trial остаются честно не выполненными external gates.
 
 ## Сборка exact release
 
@@ -37,7 +38,7 @@ Builder создаёт один self-contained file. В нём закрепле�
 - доступ к исходному commit и changelog для review;
 - rollback предыдущего installer URL без замены пользовательских data volumes.
 
-GitHub Release подходит после создания публичного repository и выбора лицензии. Временный VPS преподавателя, IP-адрес из занятия или hostname работающего n8n не считаются стабильным distribution endpoint.
+GitHub Releases реализует stable channel через `/releases/latest/download/install.sh` и immutable channel через `/releases/download/<version>/install.sh`. Временный VPS преподавателя, IP-адрес из занятия или hostname работающего n8n не считаются distribution endpoint.
 
 ## Проверка после публикации
 
@@ -49,14 +50,14 @@ GitHub Release подходит после создания публичного
 4. подтвердить закрытый внешний TCP 5432;
 5. повторить ту же команду и доказать неизменность `.env`, secrets и persistent data;
 6. провести novice trial без устных подсказок;
-7. только после этого заменить placeholder в README и guides реальным URL.
+7. зарегистрировать VPS evidence отдельно от локальных и release checks.
 
 ## Финальная форма для участника
 
-После выполнения gates в документации остаётся одна команда:
+В пользовательской документации остаётся одна команда:
 
 ```bash
-curl -fsSL "https://REAL-STABLE-HOST/install.sh" | sh
+curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | sh
 ```
 
 Никакие checksum, Git, archive, домен или DNS участник вручную не настраивает. Технические проверки остаются внутри артефакта и release process.

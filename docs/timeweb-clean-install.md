@@ -52,13 +52,13 @@ ssh -i "$HOME/.ssh/n8n_timeweb" root@203.0.113.10
 
 ## 3. Вставьте одну команду
 
-После публикации release команда будет иметь ровно такой вид:
+Команда имеет ровно такой вид:
 
 ```bash
-curl -fsSL "https://RELEASE-HOST.example/install.sh" | sh
+curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | sh
 ```
 
-Сейчас `RELEASE-HOST.example` — намеренно неработающий placeholder: публичный репозиторий/release URL и лицензия starter kit ещё не оформлены. Не заменяйте его адресом преподавательского n8n и не раздавайте временную ссылку как production installer.
+URL принадлежит публичному GitHub-репозиторию starter kit и ведёт на asset последнего release. Не заменяйте его адресом преподавательского n8n, IP VPS или временной ссылкой.
 
 Участнику не нужно:
 
@@ -96,4 +96,4 @@ Installer сам получает публичный IPv4 и формирует 
 
 ## Граница фактической проверки
 
-На реальном Timeweb VPS подтверждены Ubuntu 24.04 x86_64, pinned stack, healthy PostgreSQL/n8n/Caddy, внешний HTTPS, закрытый TCP 5432 и форма owner setup. Новый domainless hostname и автономный публичный bootstrap требуют повторного VPS-прогона после публикации release URL; до него placeholder-команда не считается успешной установкой.
+На реальном Timeweb VPS подтверждены Ubuntu 24.04 x86_64, pinned stack, healthy PostgreSQL/n8n/Caddy, внешний HTTPS, закрытый TCP 5432 и форма owner setup. Для опубликованного автономного bootstrap отдельно подтверждаются public download, checksum и verify-only. Новый end-to-end domainless запуск этой exact команды на чистом VPS и novice trial пока не выполнялись и не заявляются успешными.

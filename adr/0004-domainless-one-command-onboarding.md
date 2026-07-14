@@ -1,6 +1,6 @@
 # ADR-0004: Domainless one-command onboarding
 
-- Статус: Accepted, publication pending
+- Статус: Accepted, distribution published in GitHub Releases
 - Дата: 2026-07-14
 - Supersedes: часть onboarding-решения ADR-0001, где домен считался предварительным условием
 
@@ -24,7 +24,7 @@
 - Создание и оплата VPS остаются отдельным provider step: bootstrap не получает billing credentials пользователя.
 - `sslip.io` становится внешней доступностной зависимостью стартового адреса. При сбое installer останавливается и предлагает custom `N8N_HOST`; он не переходит на небезопасный HTTP или self-signed TLS.
 - Изменение публичного IPv4 меняет стартовый hostname; для долгоживущих интеграций рекомендуется закреплённый IP или собственный домен.
-- `curl | sh` допустим только для опубликованного reviewable артефакта по HTTPS, собранного из exact commit и содержащего checksum. До выбора лицензии проекта и stable distribution URL публичный one-command path остаётся release blocker.
+- `curl | sh` допустим только для опубликованного reviewable артефакта по HTTPS, собранного из exact commit и содержащего checksum. Этот gate закрыт release `v0.1.0`: проект использует Apache-2.0, GitHub Releases stable channel и versioned checksum asset.
 
 ## Evidence
 

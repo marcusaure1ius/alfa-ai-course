@@ -39,13 +39,12 @@ ok "minimum test sizing is separated from working recommendation"
 
 grep -Eq 'curl -fsSL .*install\.sh.*\| sh' "$ROOT/docs/quick-start.md"
 grep -q 'sslip.io' "$ROOT/docs/quick-start.md"
-grep -q 'RELEASE-HOST.example' "$ROOT/docs/quick-start.md"
-grep -q 'лицензия starter kit ещё не выбрана' "$ROOT/docs/quick-start.md"
+grep -q 'github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh' "$ROOT/docs/quick-start.md"
 grep -q '/opt/n8n-entrepreneur-starter-kit' "$ROOT/docs/quick-start.md"
 if grep -Eq 'git archive|sha256sum -c|(^|[[:space:]])scp[[:space:]]' "$ROOT/docs/quick-start.md"; then
   fail "legacy multi-command transfer path found in Quick Start"
 fi
-ok "Quick Start defines one-command domainless path and honest publication blocker"
+ok "Quick Start defines the published one-command domainless path"
 
 grep -q 'SSH-сес' "$ROOT/docs/timeweb-cloud.md"
 grep -q 'SSH-сес' "$ROOT/docs/yandex-cloud.md"

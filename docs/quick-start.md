@@ -27,12 +27,10 @@ ssh root@203.0.113.10
 Финальный пользовательский интерфейс установки:
 
 ```bash
-curl -fsSL "https://RELEASE-HOST.example/install.sh" | sh
+curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | sh
 ```
 
-`RELEASE-HOST.example` — намеренно несуществующий reserved placeholder, а не готовый адрес. Публичный URL пока не объявлен: в репозитории нет Git remote/public release, а лицензия starter kit ещё не выбрана. До закрытия этих release gates преподаватель не должен выдавать участникам выдуманную или временную ссылку.
-
-После публикации меняется только hostname в этой команде. Никакие домен, email, `git clone`, `scp`, environment variables или ответы installer участнику не нужны.
+Это стабильный URL GitHub Releases. Он ведёт на проверенный asset текущего release; versioned copy, checksum и exact commit остаются доступны для аудита. Никакие домен, email, `git clone`, `scp`, environment variables или ответы installer участнику не нужны.
 
 Автономный installer:
 
@@ -85,4 +83,4 @@ sudo docker compose ps
 - TCP 80/443 заняты неизвестным процессом;
 - installer или [doctor](diagnostics.md) показывает `FAIL`.
 
-Локальные tests подтверждают сборку и checksum bootstrap, но рабочий публичный URL и новый novice trial требуют отдельной release-публикации. Успех нельзя заявлять по placeholder-команде.
+Публичное скачивание, checksum и безопасный verify-only проверяются при публикации release. Полный fresh-VPS и новый novice trial остаются отдельными external gates: не считайте их пройденными только по успешному скачиванию installer.

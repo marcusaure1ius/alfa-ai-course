@@ -43,8 +43,12 @@ mkdir -p "$TEMP_DIR/staged" "$TEMP_DIR/logs"
 
 while IFS=$'\t' read -r group workflow_path workflow_id; do
   mkdir -p "$TEMP_DIR/staged/$group"
+  chmod 0755 "$TEMP_DIR/staged" "$TEMP_DIR/staged/$group"
   workflow_validate_and_sanitize "$ROOT/$workflow_path" "$TEMP_DIR/staged/$group/$workflow_id.json" \
     || fatal "Workflow preflight failed: $workflow_path"
+  # Sanitized workflow JSON contains no credentials and is bind-mounted read-only
+  # into a non-root n8n container. Linux CI preserves host permissions exactly.
+  chmod 0644 "$TEMP_DIR/staged/$group/$workflow_id.json"
 done < <(jq -r '.importOrder[] | .name as $group | .workflows[] | [$group,.path,.id] | @tsv' "$CATALOG")
 ok "all catalog workflows pass credential-free portability preflight"
 

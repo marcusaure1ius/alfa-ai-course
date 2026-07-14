@@ -6,6 +6,12 @@
 make quality
 ```
 
+Прямой эквивалент для automation и acceptance checks:
+
+```bash
+./tests/run-tests.sh
+```
+
 Команда запускает все доступные static и integration gates, возвращает non-zero при любом `FAIL` и печатает путь к redacted evidence artifacts. Если optional prerequisite недоступен локально, соответствующий gate получает `SKIP` с причиной. CI использует строгий профиль:
 
 ```bash

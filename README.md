@@ -6,6 +6,16 @@ Production-minded starter kit для самостоятельного развё
 
 Foundation/onboarding, official research и architecture gate завершены. Pinned Compose runtime, installer, diagnostics и security baseline подготовлены; владелец одобрил MVP backlog 2026-07-13, а актуальный lifecycle/status задач остаётся в Projects Control.
 
+## Установка одной командой
+
+На чистой Ubuntu 24.04 LTS x86_64 выполните от `root` или пользователя с `sudo`:
+
+```bash
+curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | sh
+```
+
+Собственный домен, ручная DNS-запись, `git clone` и передача archive не нужны. Installer опубликован в GitHub Releases; immutable checksum и exact commit доступны в конкретном release.
+
 ## Цель MVP
 
 Пользователь с чистым VPS на Ubuntu 24.04 LTS, публичным IPv4 и sudo-доступом должен одной командой развернуть собственный экземпляр n8n с PostgreSQL и HTTPS за 15–30 минут. Покупка домена и ручная настройка DNS для базового пути не нужны.
@@ -45,7 +55,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Yandex Cloud](docs/yandex-cloud.md) — Compute Cloud VM, static IP и security group;
 - [Домен и DNS](docs/domain-and-dns.md) — необязательный переход со стартового адреса на собственный домен;
 - [Установка](docs/installation.md) — preflight, interactive/non-interactive modes, rerun safety и exit codes;
-- [Публикация installer](docs/release-publication.md) — exact artifact, HTTPS hosting и gates перед заменой placeholder реальным URL;
+- [Публикация installer](docs/release-publication.md) — stable URL, immutable release, checksum и проверка артефакта;
 - [Security baseline](docs/security.md) — least-privilege defaults, retention и SSH-safe opt-in UFW;
 - [Диагностика](docs/diagnostics.md) — redacted OK/WARN/FAIL report и symptom mapping;
 - [Troubleshooting](docs/troubleshooting.md) — безопасные сценарии симптом → проверка → решение;
@@ -70,8 +80,9 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Lead Handler](docs/workflows/lead-handler.md) — Header Auth webhook, нормализация контакта, approval-bound CRM mutation и recovery;
 - [Daily Executive Digest](docs/workflows/daily-executive-digest.md) — окно 09:00 MSK, event-source coverage, privacy-minimized summary и честные `partial`/`н/д` метрики;
 - [Каталог workflow и test report](docs/workflow-catalog-and-test-report.md) — 18 workflow, import order, fixture coverage, clean pinned import и границы mock/external evidence;
-- [License notes](LICENSE-NOTES.md) — границы допустимого использования и release checklist.
+- [Apache License 2.0](LICENSE) — лицензия оригинальных файлов starter kit;
+- [License notes](LICENSE-NOTES.md) — границы лицензии starter kit, n8n и сторонних компонентов.
 
-## Следующий шаг
+## Лицензия
 
-Domainless one-command path реализуется в `T-0035`. Публичный install URL нельзя объявлять готовым до выбора лицензии starter kit и публикации автономного артефакта по стабильному HTTPS-адресу.
+Оригинальные файлы этого starter kit распространяются по [Apache License 2.0](LICENSE). n8n, container images, зависимости и сторонние assets сохраняют собственные лицензии; подробная граница описана в [LICENSE-NOTES.md](LICENSE-NOTES.md).

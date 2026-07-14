@@ -27,7 +27,7 @@ done
 ok "instructor guide separates demo/VPS evidence and forbids secret retention"
 
 license="$ROOT/LICENSE-NOTES.md"
-for marker in 'не является юридической консультацией' 'Sustainable Use License 1.0' 'внутренними бизнес-задачами' 'white-label' 'платный hosting' 'коммерческого соглашения' 'не выдаёт лицензию' 'license@n8n.io'; do
+for marker in 'не является юридической консультацией' 'Sustainable Use License 1.0' 'внутренними бизнес-задачами' 'white-label' 'платный hosting' 'коммерческого соглашения' 'Apache License 2.0' 'не перелицензирует n8n' 'license@n8n.io'; do
   grep -Fiq "$marker" "$license" || fail "license marker missing: $marker"
 done
 grep -Fq 'https://github.com/n8n-io/n8n/blob/master/LICENSE.md' "$license"
