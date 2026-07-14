@@ -4,7 +4,7 @@
 
 ## Главное правило
 
-Участник остаётся единственным владельцем VPS, домена, n8n owner account, SSH keys, 2FA recovery codes, `.env`, backups и credentials внешних providers. Преподавателю не нужны и не передаются passwords, API keys, bot tokens, OAuth secrets, backup archives или `N8N_ENCRYPTION_KEY`.
+Участник остаётся единственным владельцем VPS, n8n owner account, SSH keys, 2FA recovery codes, `.env`, backups, необязательного собственного домена и credentials внешних providers. Преподавателю не нужны и не передаются passwords, API keys, bot tokens, OAuth secrets, backup archives или `N8N_ENCRYPTION_KEY`.
 
 Если во время занятия secret случайно попал в screen share, chat, terminal history или screenshot, участник немедленно ротирует его по [security guide](security.md); простого удаления сообщения недостаточно.
 

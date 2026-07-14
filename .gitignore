@@ -8,6 +8,7 @@ backups/
 .lifecycle/
 exports/
 test-results/
+dist/
 *.dump
 *.tar
 *.tar.gz

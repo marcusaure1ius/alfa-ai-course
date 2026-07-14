@@ -1,36 +1,43 @@
 # Установка
 
-`scripts/install.sh` устанавливает базовый профиль n8n Entrepreneur Starter Kit на чистую Ubuntu 24.04 LTS x86_64. Скрипт нужно скачать вместе со всем репозиторием и проверить локально; запуск через `curl | bash` не поддерживается.
+Публичный автономный `install.sh` устанавливает базовый профиль n8n Entrepreneur Starter Kit на чистую Ubuntu 24.04 LTS x86_64. Его пользовательский интерфейс — одна команда `curl -fsSL <stable HTTPS URL>/install.sh | sh`. Внутри exact release вызывается `scripts/install.sh`.
 
-Если VPS и DNS ещё не подготовлены или это первая установка, начните с [Quick Start](quick-start.md), [Timeweb Cloud](timeweb-cloud.md) либо [Yandex Cloud](yandex-cloud.md) и [DNS guide](domain-and-dns.md).
+Если VPS ещё не подготовлен, начните с [Quick Start](quick-start.md), [Timeweb Cloud](timeweb-cloud.md) либо [Yandex Cloud](yandex-cloud.md). Собственный домен — [необязательный advanced path](domain-and-dns.md).
 
 ## До запуска
 
 Подготовьте:
 
 - VPS с Ubuntu 24.04 LTS x86_64, минимум 1 vCPU, 1 GiB RAM и 10 GiB свободного места;
-- домен с A-записью на публичный IPv4 VPS;
+- закреплённый публичный IPv4 VPS;
 - SSH-пользователя с `sudo`;
 - свободные TCP-порты 80 и 443;
 - исходящий HTTPS-доступ к Docker repository, container registries и ACME.
 
 1 vCPU/1 GiB подходит только для теста. Для рабочего использования рекомендуется минимум 2 vCPU, 2 GiB RAM и 20 GiB свободного места.
 
-## Быстрый запуск
+## Основной запуск
 
 ```bash
-git clone <repository-url> n8n-starter-kit
-cd n8n-starter-kit
-./scripts/install.sh
+curl -fsSL "https://RELEASE-HOST.example/install.sh" | sh
 ```
 
-Installer запросит домен, ACME email и IANA timezone, проверит host, установит отсутствующий Docker из официального apt repository, сгенерирует два независимых секрета, создаст `.env` с правами `0600`, проверит Compose и дождётся healthy-состояния сервисов.
+Reserved hostname `RELEASE-HOST.example` обозначает ещё не опубликованный distribution endpoint. До выбора лицензии и стабильного HTTPS hosting это release blocker, а не команда для запуска.
+
+Автономный installer проверяет checksum встроенного exact-commit archive и устанавливает его в `/opt/n8n-entrepreneur-starter-kit`. Внутренний installer автоматически выбирает IP-derived hostname, устанавливает Docker из официального apt repository, генерирует два независимых секрета, создаёт `.env` с правами `0600`, проверяет Compose и ждёт healthy services.
+
+Для разработчика автономный файл собирается так:
+
+```bash
+./scripts/build-one-command-installer.sh --output dist/install.sh
+N8N_BOOTSTRAP_VERIFY_ONLY=1 sh dist/install.sh
+```
+
+Первую команду выполняют только из exact committed ref. Вторая проверяет встроенный SHA-256 без изменения системы.
 
 Сначала безопасно посмотреть план:
 
 ```bash
-N8N_HOST=n8n.example.com \
-ACME_EMAIL=admin@example.com \
 ./scripts/install.sh --non-interactive --dry-run
 ```
 
@@ -59,8 +66,8 @@ Installer разбирает только разрешённые строки `K
 
 | Переменная | Обязательность | Назначение |
 |---|---:|---|
-| `N8N_HOST` | да | FQDN без схемы, порта и пути |
-| `ACME_EMAIL` | да | адрес для ACME notices |
+| `N8N_HOST` | нет | custom FQDN; пусто — `n8n-<public-ip>.sslip.io` |
+| `ACME_EMAIL` | нет | legacy contact override; default Caddy path его не требует |
 | `TIMEZONE` | нет | IANA timezone, default `Etc/UTC` |
 | `POSTGRES_DB` | нет | database, default `n8n` |
 | `POSTGRES_USER` | нет | database user, default `n8n` |
@@ -87,7 +94,7 @@ Installer разбирает только разрешённые строки `K
 | Ресурсы | минимум 1 CPU/1 GiB/10 GiB | меньше recommended 2 CPU/2 GiB/20 GiB | ниже minimum |
 | Privileges | root или подтверждённый sudo | — | sudo недоступен |
 | Порты | 80/443 свободны | заняты Caddy этого проекта при rerun | заняты другим процессом |
-| DNS | A-запись разрешается | запись отсутствует или отличается от host public IPv4 | неверный формат домена |
+| Public hostname | auto sslip.io разрешается точно в public IPv4 | custom FQDN отличается при возможном NAT/proxy | auto hostname отсутствует/не совпадает или неверный формат |
 | Network | Docker repository и n8n registry доступны | проверка отложена, если в read-only режиме нет curl | endpoint недоступен при установке |
 | Docker | daemon и Compose доступны | existing versions отличаются от baseline | daemon/Compose недоступны или pinned packages отсутствуют |
 
@@ -120,4 +127,4 @@ docker compose logs --tail=100 caddy n8n postgres
 ./scripts/firewall.sh --check
 ```
 
-Откройте `https://<N8N_HOST>/`. Не публикуйте `.env`, не меняйте `N8N_ENCRYPTION_KEY` и не используйте `docker compose down --volumes`. Реальные DNS, certificate, webhook и reboot проверки требуют VPS evidence и не считаются пройденными локальным dry-run.
+Откройте URL, напечатанный installer. Не публикуйте `.env`, не меняйте `N8N_ENCRYPTION_KEY` и не используйте `docker compose down --volumes`. Реальные DNS, certificate, webhook и reboot проверки требуют VPS evidence и не считаются пройденными локальным dry-run.

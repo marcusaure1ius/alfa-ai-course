@@ -20,8 +20,8 @@ Do not deploy `tests/fixtures/compose.env`. It is intentionally public, contains
 
 Copy `.env.example` to `.env` and set:
 
-- `N8N_HOST`: public FQDN only, without scheme, port or path;
-- `ACME_EMAIL`: valid address for certificate notices;
+- `N8N_HOST`: optional custom public FQDN; empty on first install selects `n8n-<public-ip>.sslip.io`;
+- `ACME_EMAIL`: optional legacy contact value; default Caddy path does not require it;
 - `TIMEZONE`: IANA timezone such as `Europe/Moscow`;
 - `POSTGRES_PASSWORD`: independently generated random secret;
 - `N8N_ENCRYPTION_KEY`: independently generated persistent random secret.
@@ -86,4 +86,4 @@ docker run --rm \
   caddy:2.11.4-alpine caddy validate --config /etc/caddy/Caddyfile
 ```
 
-Starting the production stack additionally requires the domain to resolve to the VPS, inbound TCP `80/443`, optional UDP `443`, and outbound access to ACME and provider APIs.
+Starting the production stack requires the selected hostname to resolve to the VPS, inbound TCP `80/443`, optional UDP `443`, and outbound access to IP-detection, DNS, ACME and provider APIs. For the default path the installer verifies sslip.io resolution before mutation.

@@ -36,6 +36,7 @@ ASSUME_YES=0
 CONFIGURE_FIREWALL=0
 FIREWALL_SSH_PORT=""
 WARNING_COUNT=0
+HOST_AUTODETECTED=0
 
 N8N_HOST_VALUE=""
 ACME_EMAIL_VALUE=""
@@ -79,8 +80,11 @@ usage() {
   EXECUTIONS_DATA_PRUNE_MAX_COUNT.
 
 Пример non-interactive dry-run:
-  N8N_HOST=n8n.example.com ACME_EMAIL=admin@example.com \
-    ./scripts/install.sh --non-interactive --dry-run
+  ./scripts/install.sh --non-interactive --dry-run
+
+Если N8N_HOST не задан, installer определит публичный IPv4 и использует
+бесплатный адрес n8n-<IPv4-с-дефисами>.sslip.io. Собственный домен можно
+передать через N8N_HOST. ACME_EMAIL необязателен.
 EOF
 }
 
@@ -246,15 +250,63 @@ prompt_value() {
 }
 
 collect_configuration() {
+  if [[ -z "$N8N_HOST_VALUE" ]]; then
+    configure_default_hostname
+  fi
+
   if (( NON_INTERACTIVE )); then
-    [[ -n "$N8N_HOST_VALUE" ]] || fatal "$EXIT_USAGE" "В non-interactive режиме задайте N8N_HOST."
-    [[ -n "$ACME_EMAIL_VALUE" ]] || fatal "$EXIT_USAGE" "В non-interactive режиме задайте ACME_EMAIL."
     return
   fi
 
-  prompt_value "Публичный домен n8n (без https://)" "$N8N_HOST_VALUE" N8N_HOST_VALUE
-  prompt_value "Email для ACME" "$ACME_EMAIL_VALUE" ACME_EMAIL_VALUE
+  prompt_value "Публичный адрес n8n (Enter — бесплатный sslip.io)" "$N8N_HOST_VALUE" N8N_HOST_VALUE
   prompt_value "Часовой пояс IANA" "$TIMEZONE_VALUE" TIMEZONE_VALUE
+}
+
+valid_public_ipv4() {
+  local ip="$1" part first second
+  [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+  IFS=. read -r first second part part <<< "$ip"
+  while IFS= read -r part; do
+    (( 10#$part >= 0 && 10#$part <= 255 )) || return 1
+  done < <(tr '.' '\n' <<< "$ip")
+  (( 10#$first != 0 && 10#$first != 10 && 10#$first != 127 && 10#$first < 224 )) || return 1
+  ! (( 10#$first == 169 && 10#$second == 254 )) || return 1
+  ! (( 10#$first == 172 && 10#$second >= 16 && 10#$second <= 31 )) || return 1
+  ! (( 10#$first == 192 && 10#$second == 168 )) || return 1
+  ! (( 10#$first == 100 && 10#$second >= 64 && 10#$second <= 127 )) || return 1
+}
+
+detect_public_ipv4() {
+  local endpoint candidate first=""
+  for endpoint in https://api.ipify.org https://checkip.amazonaws.com; do
+    candidate="$(curl --fail --silent --show-error --max-time 8 "$endpoint" 2>/dev/null | tr -d '[:space:]' || true)"
+    valid_public_ipv4 "$candidate" || continue
+    if [[ -z "$first" ]]; then
+      first="$candidate"
+    elif [[ "$candidate" == "$first" ]]; then
+      printf '%s' "$first"
+      return 0
+    else
+      fatal "$EXIT_NETWORK" "Сервисы определения public IPv4 вернули разные адреса. Задайте N8N_HOST вручную после проверки сети."
+    fi
+  done
+  [[ -n "$first" ]] || fatal "$EXIT_NETWORK" "Не удалось безопасно определить публичный IPv4. Задайте N8N_HOST вручную."
+  warn "Публичный IPv4 подтвердил только один внешний сервис; DNS-проверка остаётся обязательной."
+  printf '%s' "$first"
+}
+
+configure_default_hostname() {
+  local public_ip dashed_ip resolved_ip
+  command -v curl >/dev/null 2>&1 || fatal "$EXIT_NETWORK" "Для автоматического адреса нужен curl."
+  command -v getent >/dev/null 2>&1 || fatal "$EXIT_NETWORK" "Для автоматического адреса нужен getent."
+  public_ip="$(detect_public_ipv4)"
+  dashed_ip="${public_ip//./-}"
+  N8N_HOST_VALUE="n8n-${dashed_ip}.sslip.io"
+  resolved_ip="$(getent ahostsv4 "$N8N_HOST_VALUE" 2>/dev/null | awk 'NR == 1 {print $1}' || true)"
+  [[ "$resolved_ip" == "$public_ip" ]] \
+    || fatal "$EXIT_NETWORK" "Бесплатный адрес $N8N_HOST_VALUE не разрешается в public IPv4 $public_ip. Задайте N8N_HOST вручную."
+  HOST_AUTODETECTED=1
+  pass "Бесплатный HTTPS hostname выбран автоматически: $N8N_HOST_VALUE"
 }
 
 valid_hostname() {
@@ -283,7 +335,8 @@ valid_secret_value() {
 
 validate_configuration() {
   valid_hostname "$N8N_HOST_VALUE" || fatal "$EXIT_USAGE" "N8N_HOST должен быть FQDN без схемы, порта и пути."
-  valid_email "$ACME_EMAIL_VALUE" || fatal "$EXIT_USAGE" "ACME_EMAIL имеет неверный формат."
+  [[ -z "$ACME_EMAIL_VALUE" ]] || valid_email "$ACME_EMAIL_VALUE" \
+    || fatal "$EXIT_USAGE" "ACME_EMAIL имеет неверный формат."
   valid_timezone "$TIMEZONE_VALUE" || fatal "$EXIT_USAGE" "TIMEZONE не найден в IANA zoneinfo: $TIMEZONE_VALUE"
   valid_identifier "$POSTGRES_DB_VALUE" || fatal "$EXIT_USAGE" "POSTGRES_DB имеет недопустимый формат."
   valid_identifier "$POSTGRES_USER_VALUE" || fatal "$EXIT_USAGE" "POSTGRES_USER имеет недопустимый формат."
@@ -385,6 +438,8 @@ check_dns() {
   fi
   dns_ip="$(getent ahostsv4 "$N8N_HOST_VALUE" 2>/dev/null | awk 'NR==1 {print $1}' || true)"
   if [[ -z "$dns_ip" ]]; then
+    (( HOST_AUTODETECTED == 0 )) \
+      || fatal "$EXIT_NETWORK" "Автоматический hostname $N8N_HOST_VALUE перестал разрешаться. Повторите позже или задайте N8N_HOST."
     warn "DNS A-запись $N8N_HOST_VALUE пока не разрешается. HTTPS не запустится до распространения DNS."
     return
   fi
@@ -393,6 +448,8 @@ check_dns() {
   if command -v curl >/dev/null 2>&1; then
     public_ip="$(curl --fail --silent --show-error --max-time 8 https://api.ipify.org 2>/dev/null || true)"
     if [[ -n "$public_ip" && "$dns_ip" != "$public_ip" ]]; then
+      (( HOST_AUTODETECTED == 0 )) \
+        || fatal "$EXIT_NETWORK" "Автоматический hostname разрешается не в public IPv4 этого VPS."
       warn "DNS указывает на $dns_ip, внешний IPv4 этого host — $public_ip. Проверьте NAT/proxy."
     fi
   fi

@@ -39,9 +39,11 @@ valid_hostname "n8n.example.com" || fail "валидный FQDN отклонён
 if valid_hostname "https://n8n.example.com/path"; then fail "URL принят как FQDN"; fi
 valid_email "admin@example.com" || fail "валидный email отклонён"
 if valid_email "admin.example.com"; then fail "email без @ принят"; fi
+valid_public_ipv4 "8.8.8.8" || fail "публичный IPv4 отклонён"
+if valid_public_ipv4 "10.0.0.1"; then fail "private IPv4 принят как public"; fi
 valid_secret_value "abcdefghijklmnopqrstuvwxyz123456" || fail "валидный secret отклонён"
 if valid_secret_value "short-secret"; then fail "короткий secret принят"; fi
-ok "валидация домена и email"
+ok "валидация hostname, email и public IPv4"
 
 temporary_root="$(mktemp -d)"
 trap 'rm -rf -- "$temporary_root"' EXIT
@@ -136,27 +138,26 @@ ok "проверка running services принимает полный списо
 
 NON_INTERACTIVE=1
 N8N_HOST_VALUE=""
-ACME_EMAIL_VALUE="admin@example.com"
-set +e
-missing_output="$(collect_configuration 2>&1)"
-missing_code=$?
-set -e
-[[ "$missing_code" == "$EXIT_USAGE" ]] || fail "non-interactive missing config вернул $missing_code"
-assert_contains "$missing_output" "задайте N8N_HOST"
-ok "non-interactive mode детерминированно отклоняет incomplete config"
+ACME_EMAIL_VALUE=""
+detect_public_ipv4() { printf '203.0.113.10'; }
+getent() { printf '203.0.113.10 STREAM n8n-203-0-113-10.sslip.io\n'; }
+collect_configuration >/dev/null
+[[ "$N8N_HOST_VALUE" == "n8n-203-0-113-10.sslip.io" ]] \
+  || fail "non-interactive mode не выбрал бесплатный hostname"
+[[ "$HOST_AUTODETECTED" == 1 ]] || fail "autodetected hostname не отмечен"
+ok "non-interactive mode автоматически выбирает IP-derived hostname"
 
 NON_INTERACTIVE=0
-N8N_HOST_VALUE=""
+N8N_HOST_VALUE="n8n.example.com"
 ACME_EMAIL_VALUE=""
 TIMEZONE_VALUE="Etc/UTC"
 collect_configuration <<'EOF' >/dev/null
-n8n.example.com
-admin@example.com
+
 
 EOF
-[[ "$N8N_HOST_VALUE" == "n8n.example.com" && "$ACME_EMAIL_VALUE" == "admin@example.com" ]] \
+[[ "$N8N_HOST_VALUE" == "n8n.example.com" && "$ACME_EMAIL_VALUE" == "" ]] \
   || fail "interactive mode не собрал конфигурацию"
-ok "interactive mode читает prompts"
+ok "interactive mode не требует ACME email"
 
 ENV_FILE="$temporary_root/missing.env"
 DRY_RUN=0

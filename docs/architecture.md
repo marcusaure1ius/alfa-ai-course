@@ -10,7 +10,7 @@
 flowchart LR
   U["Предприниматель"] -->|SSH| V["Ubuntu 24.04 VPS"]
   U -->|HTTPS| C["Caddy"]
-  DNS["Публичный DNS"] --> C
+  DNS["sslip.io по public IPv4\nили необязательный свой DNS"] --> C
   C --> N["n8n Community Edition"]
   N --> P["PostgreSQL"]
   N --> EXT["Telegram / Email / CRM / LLM API"]
@@ -47,7 +47,7 @@ Implementation в `T-0005` переносит следующие решения 
 | Область | Обязательная конфигурация |
 |---|---|
 | Database | `DB_TYPE=postgresdb`, host `postgres`, port `5432`, отдельные database/user и сгенерированный password |
-| Public URL | `N8N_HOST=<fqdn>`, `N8N_PROTOCOL=https`, `N8N_EDITOR_BASE_URL=https://<fqdn>/`, `WEBHOOK_URL=https://<fqdn>/` |
+| Public URL | default `N8N_HOST=n8n-<public-ip>.sslip.io`; optional custom FQDN; `N8N_PROTOCOL=https`, editor/webhook URL используют тот же hostname |
 | Reverse proxy | n8n слушает internal `5678`; `N8N_PROXY_HOPS=1`; наружу публикуются только Caddy `80/443` |
 | Time | `TZ` и `GENERIC_TIMEZONE` равны пользовательской IANA timezone |
 | Persistent identity | явно сгенерированный `N8N_ENCRYPTION_KEY`; persistent `/home/node/.n8n` и PostgreSQL data |
@@ -67,19 +67,21 @@ Caddy выбран для базового профиля из-за неболь
 
 ## Установка
 
-`scripts/install.sh` — единая точка входа. Он должен:
+Публичный автономный `install.sh` — пользовательская точка входа. Он содержит versioned `git archive` и точный SHA-256, проверяет payload, разворачивает его в `/opt/n8n-entrepreneur-starter-kit` и вызывает внутренний `scripts/install.sh`. Артефакт собирается только из exact Git commit через `scripts/build-one-command-installer.sh`.
 
-1. проверить ОС, архитектуру, ресурсы, sudo, порты, домен, DNS и исходящую сеть;
-2. установить или проверить системные зависимости и Docker из официально поддерживаемого источника;
-3. собрать интерактивную конфигурацию или прочитать config/env;
-4. сгенерировать secrets без вывода в logs и записать `.env` с `0600`;
+Внутренний `scripts/install.sh` должен:
+
+1. проверить ОС, архитектуру, ресурсы, sudo, порты и исходящую сеть;
+2. при отсутствии `N8N_HOST` определить публичный IPv4, построить `n8n-<IPv4>.sslip.io` и fail-closed проверить обратное разрешение;
+3. установить или проверить системные зависимости и Docker из официально поддерживаемого источника;
+4. прочитать необязательные overrides, сгенерировать secrets без вывода и записать `.env` с `0600`;
 5. подготовить Compose stack без перезаписи существующих данных;
 6. запустить сервисы и выполнить те же существенные проверки, что `doctor.sh`;
 7. показать URL, пути и команды безопасной эксплуатации.
 
 Повторный запуск должен быть разумно идемпотентным. `--dry-run` не меняет систему. Изменение firewall выполняется только после отдельного подтверждения и не должно обрывать текущий SSH-доступ.
 
-Реализация и таблица deterministic preflight/exit codes: [`scripts/install.sh`](../scripts/install.sh) и [installation reference](installation.md). Если persistent volumes существуют, но `.env` потерян, installer останавливается и требует восстановить исходные secrets вместо генерации новых поверх данных.
+Реализация и таблица deterministic preflight/exit codes: [`scripts/install.sh`](../scripts/install.sh), [`scripts/build-one-command-installer.sh`](../scripts/build-one-command-installer.sh) и [installation reference](installation.md). Публичный URL является release gate: до выбора лицензии и размещения собранного артефакта по стабильному HTTPS-адресу документация показывает синтаксис, но не выдумывает работающий endpoint.
 
 ## Операционный контур
 

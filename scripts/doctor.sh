@@ -130,7 +130,7 @@ check_env() {
   if [[ "$N8N_HOST_VALUE" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$ ]]; then
     result OK config.host "N8N_HOST имеет формат FQDN" "действий не требуется."
   else
-    result FAIL config.host "N8N_HOST отсутствует или не является FQDN" "задайте домен без схемы и пути."
+    result FAIL config.host "N8N_HOST отсутствует или не является FQDN" "повторите installer для автоматического hostname или задайте custom FQDN без схемы и пути."
   fi
 }
 

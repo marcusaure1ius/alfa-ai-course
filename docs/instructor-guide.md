@@ -24,7 +24,7 @@ Local demo не доказывает Ubuntu host lifecycle, cloud firewall, publ
 
 ### 1. Ownership и границы
 
-Участник создаёт provider account, VPS, domain records и SSH key под своим контролем. Преподаватель показывает действия, но не регистрирует ресурсы на свой email и не просит recovery codes.
+Участник создаёт provider account, VPS и SSH key под своим контролем. Собственный домен не требуется: стартовый адрес создаёт installer. Преподаватель показывает действия, но не регистрирует ресурсы на свой email, не подключает свой домен и не просит recovery codes.
 
 Checkpoint: participant самостоятельно входит в provider console и открывает новую SSH-сессию.
 

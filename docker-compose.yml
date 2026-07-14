@@ -107,7 +107,6 @@ services:
         condition: service_healthy
     environment:
       N8N_HOST: ${N8N_HOST:?N8N_HOST must be set}
-      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL must be set}
     ports:
       - target: 80
         published: "80"

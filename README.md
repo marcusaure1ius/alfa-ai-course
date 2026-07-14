@@ -8,7 +8,7 @@ Foundation/onboarding, official research и architecture gate завершены
 
 ## Цель MVP
 
-Пользователь с чистым VPS на Ubuntu 24.04 LTS, доменом и sudo-доступом должен развернуть собственный экземпляр n8n с PostgreSQL и HTTPS за 15–30 минут, после чего подключить внешние credentials и импортировать диагностические и демонстрационные workflow.
+Пользователь с чистым VPS на Ubuntu 24.04 LTS, публичным IPv4 и sudo-доступом должен одной командой развернуть собственный экземпляр n8n с PostgreSQL и HTTPS за 15–30 минут. Покупка домена и ручная настройка DNS для базового пути не нужны.
 
 Starter kit не является SaaS, не перепродаёт доступ к n8n, не использует white label и не запускает LLM локально.
 
@@ -20,7 +20,8 @@ Starter kit не является SaaS, не перепродаёт доступ
 - постоянные данные: отдельные Docker volumes;
 - внешний доступ: HTTPS, PostgreSQL наружу не публикуется;
 - LLM: внешние API через заменяемый LLM Gateway;
-- основной интерфейс установки: локальный Bash-скрипт, а не `curl | bash`;
+- основной интерфейс установки после входа на VPS: один автономный HTTPS bootstrap вида `curl -fsSL <адрес>/install.sh | sh`;
+- стартовый hostname автоматически строится из публичного IPv4 через `sslip.io`; собственный домен — необязательное улучшение;
 - версии контейнеров явно закреплены в ADR-0003 по dated official-source research;
 - Redis, queue workers, Kubernetes, Ollama, Qdrant и LiteLLM не входят в базовый профиль.
 
@@ -33,16 +34,18 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [ADR-0001](adr/0001-platform-and-scope.md) — платформа и границы базового профиля;
 - [ADR-0002](adr/0002-llm-integration-strategy.md) — стратегия интеграции LLM;
 - [ADR-0003](adr/0003-version-pinning-policy.md) — политика выбора и фиксации версий.
+- [ADR-0004](adr/0004-domainless-one-command-onboarding.md) — установка одной командой без собственного домена;
 - [Platform/version/license research](docs/research/2026-07-13-platform-versions-and-license.md) — dated official-source baseline;
 - [Provider capability matrix](docs/research/provider-capabilities.md) — verified/unverified paths для n8n, Yandex, GigaChat и Bitrix24;
 - [LLM Gateway contract](docs/contracts/llm-gateway.md) — normalized inputs, outputs, errors и secret rules;
 - [Runtime configuration](docs/runtime-configuration.md) — Compose files, variables, topology and health semantics;
-- [Quick Start](docs/quick-start.md) — проверяемый 15-минутный путь от готового VPS/DNS до HTTPS n8n;
+- [Quick Start](docs/quick-start.md) — путь от чистого VPS до HTTPS n8n одной командой;
 - [Timeweb Cloud](docs/timeweb-cloud.md) — чистый Ubuntu VPS, public IPv4 и безопасный SSH;
 - [Фактическая установка в Timeweb](docs/timeweb-clean-install.md) — пошаговый проход со стоимостью, безопасными скриншотами, HTTPS evidence и решением Docker Hub `429`;
 - [Yandex Cloud](docs/yandex-cloud.md) — Compute Cloud VM, static IP и security group;
-- [Домен и DNS](docs/domain-and-dns.md) — authoritative A-record, propagation и безопасная диагностика;
+- [Домен и DNS](docs/domain-and-dns.md) — необязательный переход со стартового адреса на собственный домен;
 - [Установка](docs/installation.md) — preflight, interactive/non-interactive modes, rerun safety и exit codes;
+- [Публикация installer](docs/release-publication.md) — exact artifact, HTTPS hosting и gates перед заменой placeholder реальным URL;
 - [Security baseline](docs/security.md) — least-privilege defaults, retention и SSH-safe opt-in UFW;
 - [Диагностика](docs/diagnostics.md) — redacted OK/WARN/FAIL report и symptom mapping;
 - [Troubleshooting](docs/troubleshooting.md) — безопасные сценарии симптом → проверка → решение;
@@ -71,4 +74,4 @@ Starter kit не является SaaS, не перепродаёт доступ
 
 ## Следующий шаг
 
-Pinned runtime, безопасный installer, diagnostics и security baseline реализованы в `T-0005`–`T-0008`. Следующая задача выбирается только из dependency-ready очереди и выполняется через обязательный lifecycle Projects Control.
+Domainless one-command path реализуется в `T-0035`. Публичный install URL нельзя объявлять готовым до выбора лицензии starter kit и публикации автономного артефакта по стабильному HTTPS-адресу.

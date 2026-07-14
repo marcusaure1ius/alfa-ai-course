@@ -1,6 +1,6 @@
-# Домен и DNS для n8n
+# Необязательный собственный домен и DNS
 
-Проверено: 2026-07-14. Guide не зависит от конкретного регистратора: редактируйте записи у текущего authoritative DNS provider. Для панелей доступны официальные инструкции [Timeweb](https://timeweb.cloud/docs/domains/dns-records-management-other-registrars) и [Yandex Cloud DNS](https://yandex.cloud/ru/docs/dns/operations/resource-record-create).
+Проверено: 2026-07-14. Базовая установка уже работает на бесплатном адресе `n8n-<public-ip>.sslip.io`; покупать домен ради первого запуска не нужно. Этот advanced guide нужен только для осознанного перехода на собственный адрес. Он не зависит от регистратора: редактируйте записи у текущего authoritative DNS provider. Для панелей доступны официальные инструкции [Timeweb](https://timeweb.cloud/docs/domains/dns-records-management-other-registrars) и [Yandex Cloud DNS](https://yandex.cloud/ru/docs/dns/operations/resource-record-create).
 
 ## Результат
 

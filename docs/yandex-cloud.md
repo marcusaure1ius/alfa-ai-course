@@ -4,7 +4,7 @@
 
 ## Итог этого guide
 
-VM Compute Cloud с Ubuntu 24.04 LTS x86_64, статическим публичным IPv4, SSH key и security group для SSH/HTTP/HTTPS. Затем выполните [DNS guide](domain-and-dns.md) и [Quick Start](quick-start.md).
+VM Compute Cloud с Ubuntu 24.04 LTS x86_64, статическим публичным IPv4, SSH key и security group для SSH/HTTP/HTTPS. Затем сразу выполните [Quick Start одной командой](quick-start.md); [собственный домен](domain-and-dns.md) необязателен.
 
 ## 1. Создайте SSH key
 

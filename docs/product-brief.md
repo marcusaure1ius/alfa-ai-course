@@ -15,7 +15,8 @@
 Предприниматель или сотрудник малого бизнеса:
 
 - не имеет системного DevOps-опыта;
-- способен арендовать VPS, купить или использовать домен и выполнить команды по инструкции;
+- способен арендовать VPS, войти в него по SSH или через web-console и вставить одну команду;
+- не обязан заранее владеть доменом или понимать DNS;
 - разворачивает один экземпляр для внутренних задач своей организации;
 - самостоятельно получает credentials внешних Telegram, email, CRM и LLM сервисов.
 
@@ -27,13 +28,13 @@
 
 ## Целевой путь
 
-1. Арендовать VPS и направить A-запись домена на его IPv4.
-2. Подключиться по SSH и загрузить версионированный release или клонировать репозиторий.
-3. Запустить локальный `install.sh`.
-4. Ответить на понятные вопросы или передать config/env в неинтерактивном режиме.
-5. Получить n8n, PostgreSQL и HTTPS, пройти автоматическую диагностику.
-6. Открыть n8n, создать owner account и добавить credentials.
-7. Импортировать стартовые workflow и выполнить LLM/Telegram diagnostics.
+1. Арендовать VPS с Ubuntu 24.04 x86_64 и публичным IPv4.
+2. Подключиться по SSH или открыть web-console провайдера.
+3. Вставить одну опубликованную команду `curl -fsSL <stable HTTPS URL>/install.sh | sh`.
+4. Получить автоматически сформированный бесплатный hostname, n8n, PostgreSQL и валидный HTTPS.
+5. Открыть напечатанный URL, создать owner account и добавить credentials.
+6. Импортировать стартовые workflow и выполнить LLM/Telegram diagnostics.
+7. При желании подключить собственный домен как отдельное advanced-действие.
 8. Получить команды backup, restore, update, rollback и doctor.
 
 ## Главная метрика
@@ -59,7 +60,8 @@
 
 ## В scope MVP
 
-- Ubuntu 24.04 LTS x86_64, sudo, публичный IPv4 и домен/поддомен;
+- Ubuntu 24.04 LTS x86_64, sudo и публичный IPv4;
+- автоматический стартовый hostname через IP-derived DNS и необязательный собственный домен;
 - Docker Engine и Docker Compose plugin;
 - n8n Community Edition, PostgreSQL, Caddy, volumes и health checks;
 - install, doctor, backup, restore, update, rollback, uninstall, import/export workflows;
@@ -74,7 +76,7 @@
 - поддержка всех Linux-дистрибутивов и архитектур;
 - multi-node high availability, Kubernetes, Redis/queue mode и enterprise SSO;
 - локальные LLM, Ollama и vector databases;
-- автоматическая покупка VPS, домена или credentials;
+- автоматическая покупка VPS, собственного домена или credentials;
 - хранение пользовательских secrets в репозитории;
 - LiteLLM в базовом профиле;
 - обещание полной совместимости любого OpenAI-like provider без тестов.
@@ -86,6 +88,8 @@
 - Workflow execution data может содержать персональные данные и требует pruning и осознанной политики хранения.
 - Автоматизация исходящих сообщений и CRM-изменений создаёт бизнес-риск; human approval обязателен по умолчанию.
 - Sustainable Use License и provider terms требуют проверки на дату релиза.
+- Стартовый hostname зависит от внешнего IP-derived DNS; installer обязан fail-closed проверять соответствие hostname публичному IPv4 и объяснять fallback на собственный домен.
+- Публичная one-command установка невозможна без выбранной лицензии и стабильного HTTPS distribution URL.
 
 ## Product gates
 

@@ -37,13 +37,15 @@ for guide in "$ROOT/docs/quick-start.md" "$ROOT/docs/timeweb-cloud.md" "$ROOT/do
 done
 ok "minimum test sizing is separated from working recommendation"
 
-grep -q 'git archive' "$ROOT/docs/quick-start.md"
-grep -q 'sha256sum -c' "$ROOT/docs/quick-start.md"
-grep -q 'scp ' "$ROOT/docs/quick-start.md"
-grep -q 'install.sh --non-interactive --dry-run' "$ROOT/docs/quick-start.md"
-grep -q './scripts/doctor.sh' "$ROOT/docs/quick-start.md"
-grep -q 'Публичный Git remote или release URL пока не зарегистрирован' "$ROOT/docs/quick-start.md"
-ok "Quick Start uses the locally verified archive/checksum/install/doctor path"
+grep -Eq 'curl -fsSL .*install\.sh.*\| sh' "$ROOT/docs/quick-start.md"
+grep -q 'sslip.io' "$ROOT/docs/quick-start.md"
+grep -q 'RELEASE-HOST.example' "$ROOT/docs/quick-start.md"
+grep -q 'лицензия starter kit ещё не выбрана' "$ROOT/docs/quick-start.md"
+grep -q '/opt/n8n-entrepreneur-starter-kit' "$ROOT/docs/quick-start.md"
+if grep -Eq 'git archive|sha256sum -c|(^|[[:space:]])scp[[:space:]]' "$ROOT/docs/quick-start.md"; then
+  fail "legacy multi-command transfer path found in Quick Start"
+fi
+ok "Quick Start defines one-command domainless path and honest publication blocker"
 
 grep -q 'SSH-сес' "$ROOT/docs/timeweb-cloud.md"
 grep -q 'SSH-сес' "$ROOT/docs/yandex-cloud.md"
@@ -52,11 +54,12 @@ grep -q 'AAAA' "$ROOT/docs/domain-and-dns.md"
 grep -q 'curl -k' "$ROOT/docs/domain-and-dns.md"
 ok "DNS and SSH troubleshooting keeps safe recovery boundaries"
 
-if grep -En '(^|[[:space:]])curl[^`]*\|[[:space:]]*(sudo[[:space:]]+)?bash' "${GUIDES[@]}"; then
-  fail "curl pipe bash install path found"
+grep -Eq 'curl -fsSL .*install\.sh.*\| sh' "$ROOT/docs/timeweb-clean-install.md"
+grep -q 'покупать домен' "$ROOT/docs/timeweb-clean-install.md"
+if grep -q 'aimolniya.ru' "${GUIDES[@]}"; then
+  fail "instructor domain leaked into participant onboarding"
 fi
-grep -q 'не предлагает `curl | bash`' "$ROOT/docs/quick-start.md"
-ok "no curl-pipe-shell installation path is offered"
+ok "Timeweb participant path does not require or reuse instructor domain"
 
 for guide in "${GUIDES[@]}" "$ROOT/README.md" "$ROOT/docs/installation.md"; do
   while IFS= read -r target; do
