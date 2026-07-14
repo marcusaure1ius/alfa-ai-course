@@ -42,6 +42,8 @@ Restore восстанавливает env с mode `0600`, полностью з
 
 ## Проверка recovery
 
+Локальный disposable rehearsal с полным удалением PostgreSQL database, restore и exact workflow/credential hashes прошёл 2026-07-14. Среда, команды, checksums и непроверенные VPS gaps зафиксированы в [dated lifecycle report](reports/2026-07-14-destructive-lifecycle.md).
+
 После restore:
 
 ```bash

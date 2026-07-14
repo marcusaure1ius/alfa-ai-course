@@ -36,4 +36,6 @@ State-файл имеет mode `0600` и атомарно хранит status, c
 
 ## Evidence status и границы
 
-Локальные syntax/unit/Compose проверки не доказывают migration safety. Pair считается проверенной только после destructive rehearsal с реальными pinned images и восстановлением данных. Unattended auto-update, arbitrary downgrade, PostgreSQL major upgrade и удалённое backup storage не входят в этот flow.
+Пара `2.29.9 → 2.29.10 → 2.29.9` прошла [dated destructive rehearsal](reports/2026-07-14-destructive-lifecycle.md) с реальными pinned containers, pre-update backup, restore-based rollback и exact workflow/encrypted-credential assertions. Это локальное Docker evidence, а не Ubuntu VPS/DNS/HTTPS/reboot evidence.
+
+Одни syntax/unit/Compose проверки не доказывают migration safety. Unattended auto-update, arbitrary downgrade, PostgreSQL major upgrade и удалённое backup storage не входят в этот flow.

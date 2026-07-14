@@ -2,6 +2,8 @@
 
 Проверено: 2026-07-14. Runtime: n8n `2.29.10` в Compose-проекте этого репозитория.
 
+Default uninstall → сохранение четырёх volumes → повторный start с exact workflow/encrypted-credential assertions фактически пройден в [dated lifecycle report](reports/2026-07-14-destructive-lifecycle.md). Проверка локальная и не заменяет reboot/VPS evidence.
+
 ## Что сохраняется
 
 Обычный uninstall удаляет containers и Compose networks, но сохраняет:
