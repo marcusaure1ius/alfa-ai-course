@@ -78,8 +78,8 @@ read_public_config() {
 check_host() {
   local id version arch mem_kb disk_kb
   if [[ -r "$OS_RELEASE_FILE" ]]; then
-    id="$(awk -F= '$1 == "ID" {gsub(/^\"|\"$/, "", $2); print $2; exit}' "$OS_RELEASE_FILE")"
-    version="$(awk -F= '$1 == "VERSION_ID" {gsub(/^\"|\"$/, "", $2); print $2; exit}' "$OS_RELEASE_FILE")"
+    id="$(awk -F= '$1 == "ID" {gsub(/^"|"$/, "", $2); print $2; exit}' "$OS_RELEASE_FILE")"
+    version="$(awk -F= '$1 == "VERSION_ID" {gsub(/^"|"$/, "", $2); print $2; exit}' "$OS_RELEASE_FILE")"
     if [[ "$id" == ubuntu && "$version" == 24.04 ]]; then
       result OK host.os "Ubuntu 24.04 LTS" "действий не требуется."
     else

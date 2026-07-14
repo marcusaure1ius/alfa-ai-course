@@ -58,6 +58,19 @@ read_config_file "$config_file"
 [[ ! -e /tmp/installer-must-not-eval ]] || fail "config file был выполнен как shell"
 ok "config parser не выполняет shell-код"
 
+version_config="$temporary_root/version.env"
+printf 'N8N_VERSION=2.29.10\n' > "$version_config"
+chmod 0600 "$version_config"
+read_config_file "$version_config"
+printf 'N8N_VERSION=latest\n' > "$version_config"
+set +e
+version_output="$(read_config_file "$version_config" 2>&1)"
+version_code=$?
+set -e
+[[ "$version_code" == "$EXIT_USAGE" ]] || fail "неверный N8N_VERSION вернул $version_code"
+assert_contains "$version_output" "закреплённой версией 2.29.10"
+ok "runtime env принимает только exact n8n pin"
+
 ENV_FILE="$temporary_root/runtime.env"
 N8N_HOST_VALUE="n8n.example.com"
 ACME_EMAIL_VALUE="admin@example.com"
@@ -71,7 +84,7 @@ EXECUTIONS_DATA_PRUNE_MAX_COUNT_VALUE="10000"
 DRY_RUN=0
 CHECK_ONLY=0
 write_output="$(write_env_atomically)"
-[[ "$(stat -f '%Lp' "$ENV_FILE" 2>/dev/null || stat -c '%a' "$ENV_FILE")" == "600" ]] || fail "env mode не 600"
+[[ "$(stat -c '%a' "$ENV_FILE" 2>/dev/null || stat -f '%Lp' "$ENV_FILE")" == "600" ]] || fail "env mode не 600"
 [[ "$write_output" != *"fixture-postgres-secret"* ]] || fail "PostgreSQL secret попал в output"
 [[ "$write_output" != *"fixture-encryption-secret"* ]] || fail "encryption secret попал в output"
 ok "атомарный env mode 0600 без утечки secrets"
@@ -96,6 +109,30 @@ side_effect="$temporary_root/side-effect"
 run_mutation touch "$side_effect" >/dev/null
 [[ ! -e "$side_effect" ]] || fail "dry-run выполнил mutation"
 ok "dry-run блокирует mutation"
+
+CONFIGURE_FIREWALL=0
+configure_firewall_if_requested \
+  || fail "отсутствие firewall opt-in завершило installer с ошибкой"
+ok "firewall opt-in необязателен"
+
+doctor_fixture_dir="$temporary_root/doctor-fixture"
+mkdir -p "$doctor_fixture_dir"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$doctor_fixture_dir/doctor.sh"
+chmod +x "$doctor_fixture_dir/doctor.sh"
+original_script_dir="$SCRIPT_DIR"
+SCRIPT_DIR="$doctor_fixture_dir"
+run_post_install_doctor
+SCRIPT_DIR="$original_script_dir"
+ok "post-install doctor принимает WARN"
+
+fake_docker() {
+  printf 'postgres-container\nn8n-container\ncaddy-container\n'
+}
+original_docker_cmd=("${DOCKER_CMD[@]}")
+DOCKER_CMD=(fake_docker)
+assert_running_services
+DOCKER_CMD=("${original_docker_cmd[@]}")
+ok "проверка running services принимает полный список без SIGPIPE"
 
 NON_INTERACTIVE=1
 N8N_HOST_VALUE=""

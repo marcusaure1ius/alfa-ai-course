@@ -181,6 +181,10 @@ assign_config_value() {
     N8N_HOST) N8N_HOST_VALUE="$value" ;;
     ACME_EMAIL) ACME_EMAIL_VALUE="$value" ;;
     TIMEZONE) TIMEZONE_VALUE="$value" ;;
+    N8N_VERSION)
+      [[ "$value" == "2.29.10" ]] \
+        || fatal "$EXIT_USAGE" "N8N_VERSION должен совпадать с закреплённой версией 2.29.10."
+      ;;
     POSTGRES_DB) POSTGRES_DB_VALUE="$value" ;;
     POSTGRES_USER) POSTGRES_USER_VALUE="$value" ;;
     POSTGRES_PASSWORD) POSTGRES_PASSWORD_VALUE="$value" ;;
@@ -295,8 +299,8 @@ validate_configuration() {
 check_os() {
   local id version
   [[ -r "$OS_RELEASE_FILE" ]] || fatal "$EXIT_OS" "Не найден $OS_RELEASE_FILE. Поддерживается только Ubuntu 24.04."
-  id="$(awk -F= '$1 == "ID" {gsub(/^\"|\"$/, "", $2); print $2; exit}' "$OS_RELEASE_FILE")"
-  version="$(awk -F= '$1 == "VERSION_ID" {gsub(/^\"|\"$/, "", $2); print $2; exit}' "$OS_RELEASE_FILE")"
+  id="$(awk -F= '$1 == "ID" {gsub(/^"|"$/, "", $2); print $2; exit}' "$OS_RELEASE_FILE")"
+  version="$(awk -F= '$1 == "VERSION_ID" {gsub(/^"|"$/, "", $2); print $2; exit}' "$OS_RELEASE_FILE")"
   [[ "$id" == "ubuntu" && "$version" == "24.04" ]] || fatal "$EXIT_OS" "Поддерживается только Ubuntu 24.04 LTS; обнаружено ${id:-unknown} ${version:-unknown}."
   pass "ОС: Ubuntu 24.04 LTS."
 }
@@ -607,8 +611,26 @@ validate_compose() {
   pass "Compose-конфигурация валидна."
 }
 
-start_stack() {
+run_post_install_doctor() {
   local doctor_code
+
+  if "$SCRIPT_DIR/doctor.sh" --env-file "$ENV_FILE" --local-only; then
+    doctor_code=0
+  else
+    doctor_code=$?
+  fi
+  (( doctor_code < 2 )) || fatal "$EXIT_HEALTH" "Post-install doctor обнаружил FAIL. Запустите scripts/doctor.sh --local-only."
+}
+
+assert_running_services() {
+  local running_ids
+
+  running_ids="$("${DOCKER_CMD[@]}" compose --project-directory "$PROJECT_ROOT" --env-file "$ENV_FILE" ps --status running -q)" \
+    || fatal "$EXIT_HEALTH" "Не удалось получить список работающих сервисов."
+  [[ -n "$running_ids" ]] || fatal "$EXIT_HEALTH" "После запуска нет работающих сервисов."
+}
+
+start_stack() {
   if (( DRY_RUN || CHECK_ONLY )); then
     info "Будут выполнены pinned image pull и docker compose up -d --wait; volumes не удаляются."
     return
@@ -617,19 +639,14 @@ start_stack() {
     || fatal "$EXIT_START" "Не удалось скачать pinned images."
   "${DOCKER_CMD[@]}" compose --project-directory "$PROJECT_ROOT" --env-file "$ENV_FILE" up -d --wait --wait-timeout 300 \
     || fatal "$EXIT_HEALTH" "Сервисы не достигли healthy за 300 секунд. Запустите docker compose ps и logs."
-  "${DOCKER_CMD[@]}" compose --project-directory "$PROJECT_ROOT" --env-file "$ENV_FILE" ps --status running -q \
-    | grep -q . || fatal "$EXIT_HEALTH" "После запуска нет работающих сервисов."
-  set +e
-  "$SCRIPT_DIR/doctor.sh" --env-file "$ENV_FILE" --local-only
-  doctor_code=$?
-  set -e
-  (( doctor_code < 2 )) || fatal "$EXIT_HEALTH" "Post-install doctor обнаружил FAIL. Запустите scripts/doctor.sh --local-only."
+  assert_running_services
+  run_post_install_doctor
   pass "Compose stack запущен и достиг healthy."
 }
 
 configure_firewall_if_requested() {
   local -a firewall_args
-  (( CONFIGURE_FIREWALL )) || return
+  (( CONFIGURE_FIREWALL )) || return 0
   firewall_args=("$SCRIPT_DIR/firewall.sh")
   if (( DRY_RUN )); then
     firewall_args+=(--preview)
