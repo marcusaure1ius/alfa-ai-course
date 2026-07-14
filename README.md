@@ -37,6 +37,10 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Provider capability matrix](docs/research/provider-capabilities.md) — verified/unverified paths для n8n, Yandex, GigaChat и Bitrix24;
 - [LLM Gateway contract](docs/contracts/llm-gateway.md) — normalized inputs, outputs, errors и secret rules;
 - [Runtime configuration](docs/runtime-configuration.md) — Compose files, variables, topology and health semantics;
+- [Quick Start](docs/quick-start.md) — проверяемый 15-минутный путь от готового VPS/DNS до HTTPS n8n;
+- [Timeweb Cloud](docs/timeweb-cloud.md) — чистый Ubuntu VPS, public IPv4 и безопасный SSH;
+- [Yandex Cloud](docs/yandex-cloud.md) — Compute Cloud VM, static IP и security group;
+- [Домен и DNS](docs/domain-and-dns.md) — authoritative A-record, propagation и безопасная диагностика;
 - [Установка](docs/installation.md) — preflight, interactive/non-interactive modes, rerun safety и exit codes;
 - [Security baseline](docs/security.md) — least-privilege defaults, retention и SSH-safe opt-in UFW;
 - [Диагностика](docs/diagnostics.md) — redacted OK/WARN/FAIL report и symptom mapping;

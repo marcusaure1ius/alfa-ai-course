@@ -2,6 +2,8 @@
 
 `scripts/install.sh` устанавливает базовый профиль n8n Entrepreneur Starter Kit на чистую Ubuntu 24.04 LTS x86_64. Скрипт нужно скачать вместе со всем репозиторием и проверить локально; запуск через `curl | bash` не поддерживается.
 
+Если VPS и DNS ещё не подготовлены или это первая установка, начните с [Quick Start](quick-start.md), [Timeweb Cloud](timeweb-cloud.md) либо [Yandex Cloud](yandex-cloud.md) и [DNS guide](domain-and-dns.md).
+
 ## До запуска
 
 Подготовьте:
