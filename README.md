@@ -62,6 +62,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Participant handoff](docs/participant-handoff.md) — проверяемая передача владения и операционной ответственности;
 - [Instructor guide](docs/instructor-guide.md) — подготовка, проведение и безопасная поддержка курса;
 - [Instructor setup на neurokurs.ru](docs/instructor-setup.md) — пять человеческих шагов для отдельного демонстрационного стенда преподавателя;
+- [Шаблоны для занятия](docs/instructor-templates.md) — четыре понятных бизнес-сценария и безопасный порядок первого показа;
 - [Backup и restore](docs/backup-and-restore.md) — recovery archive, checksums, safety backup и rehearsal;
 - [Update и rollback](docs/update-and-rollback.md) — approved version pair, backup gate и restore-based recovery;
 - [Uninstall и перенос workflow](docs/uninstall-and-workflow-portability.md) — data-preserving uninstall, credential-free deterministic export и repeatable batch import;
