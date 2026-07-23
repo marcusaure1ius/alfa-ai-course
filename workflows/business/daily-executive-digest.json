@@ -5,7 +5,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "# Цифры дня → короткая сводка\n\n1. Запустите тест.\n2. В блоке **1. Введите цифры дня** замените учебные показатели.\n3. ИИ подготовит понятную сводку.\n4. Telegram-блок создаст только preview: ничего не отправится.\n\nПозже расписание может запускать workflow каждый день в 09:00.",
+        "content": "# Цифры дня → короткая сводка\n\n1. Запустите тест.\n2. В блоке **1. Введите цифры дня** замените учебные показатели.\n3. ИИ подготовит понятную сводку.\n4. Последний блок покажет Telegram preview: ничего не отправится.\n\nПозже расписание может запускать workflow каждый день в 09:00.",
         "height": 300,
         "width": 520,
         "color": 5
@@ -18,7 +18,7 @@
     },
     {
       "parameters": {
-        "content": "## Telegram в режиме preview\n\n`testMode=true` и `draftOnly=true` уже заполнены. Служебный Telegram workflow покажет, что было бы отправлено, но не обратится к Telegram API.",
+        "content": "## Telegram в режиме preview\n\nПоследний блок только показывает готовый текст внутри n8n. Блока отправки Telegram в уроке нет.",
         "height": 190,
         "width": 430,
         "color": 4
@@ -65,6 +65,12 @@
               "type": "string"
             },
             {
+              "id": "digest-folder",
+              "name": "folderId",
+              "value": "REPLACE_WITH_FOLDER_ID",
+              "type": "string"
+            },
+            {
               "id": "digest-instruction",
               "name": "instruction",
               "value": "Ты помощник руководителя. Напиши короткую сводку из 4 пунктов: что произошло, что хорошо, где нужно внимание и одно действие на сегодня. Используй только переданные цифры.",
@@ -89,69 +95,59 @@
     },
     {
       "parameters": {
-        "source": "database",
-        "workflowId": "helperBeginnerYandexPromptV1",
-        "mode": "once",
+        "method": "POST",
+        "url": "https://ai.api.cloud.yandex.net/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "OpenAI-Project",
+              "value": "={{ $json.folderId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: $json.model, messages: [{ role: 'system', content: $json.instruction }, { role: 'user', content: $json.text }], temperature: 0.2, max_tokens: 700, stream: false }) }}",
         "options": {
-          "waitForSubWorkflow": true
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
         }
       },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [-500, 60],
       "id": "b4000000-0000-4100-8100-000000000006",
-      "name": "2. ИИ пишет сводку"
+      "name": "2. ИИ пишет сводку",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID",
+          "name": "Yandex AI Studio Api-Key"
+        }
+      }
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             {
-              "id": "digest-contract",
-              "name": "contractVersion",
-              "value": "1.0",
-              "type": "string"
-            },
-            {
-              "id": "digest-test",
-              "name": "testMode",
-              "value": true,
-              "type": "boolean"
-            },
-            {
-              "id": "digest-draft",
-              "name": "draftOnly",
-              "value": true,
-              "type": "boolean"
-            },
-            {
-              "id": "digest-correlation",
-              "name": "correlationId",
-              "value": "beginner-digest-preview",
-              "type": "string"
-            },
-            {
-              "id": "digest-idempotency",
-              "name": "idempotencyKey",
-              "value": "={{ 'beginner-digest-' + $execution.id }}",
-              "type": "string"
-            },
-            {
-              "id": "digest-chat",
-              "name": "chatId",
-              "value": "REPLACE_WITH_OWNER_CHAT_ID",
-              "type": "string"
-            },
-            {
               "id": "digest-message",
-              "name": "text",
-              "value": "={{ $json.content || 'ИИ не ответил. Проверьте настройки YandexGPT.' }}",
+              "name": "Telegram preview",
+              "value": "={{ $json.choices?.[0]?.message?.content || 'ИИ не ответил. Проверьте folderId, model и Yandex credential в блоке 2.' }}",
               "type": "string"
             },
             {
-              "id": "digest-format",
-              "name": "format",
-              "value": "plain",
+              "id": "digest-next",
+              "name": "Что сделать",
+              "value": "Проверьте цифры и текст. В этом уроке сообщение в Telegram не отправляется.",
               "type": "string"
             }
           ]
@@ -163,22 +159,7 @@
       "typeVersion": 3.4,
       "position": [-120, 60],
       "id": "b4000000-0000-4100-8100-000000000007",
-      "name": "3. Подготовьте Telegram preview"
-    },
-    {
-      "parameters": {
-        "source": "database",
-        "workflowId": "coreSendTelegramMessageV1",
-        "mode": "once",
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
-      "position": [280, 60],
-      "id": "b4000000-0000-4100-8100-000000000008",
-      "name": "4. Посмотрите preview"
+      "name": "3. Посмотрите Telegram preview"
     }
   ],
   "connections": {
@@ -192,10 +173,7 @@
       "main": [[{"node": "2. ИИ пишет сводку", "type": "main", "index": 0}]]
     },
     "2. ИИ пишет сводку": {
-      "main": [[{"node": "3. Подготовьте Telegram preview", "type": "main", "index": 0}]]
-    },
-    "3. Подготовьте Telegram preview": {
-      "main": [[{"node": "4. Посмотрите preview", "type": "main", "index": 0}]]
+      "main": [[{"node": "3. Посмотрите Telegram preview", "type": "main", "index": 0}]]
     }
   },
   "settings": {

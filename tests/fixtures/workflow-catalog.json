@@ -3,41 +3,6 @@
   "n8nImage": "docker.n8n.io/n8nio/n8n:2.29.10",
   "importOrder": [
     {
-      "name": "core",
-      "workflows": [
-        {"path": "workflows/core/crm-generic-lead-upsert.json", "id": "coreGenericCrmLeadUpsertV1"},
-        {"path": "workflows/core/crm-generic-task-create.json", "id": "coreGenericCrmTaskCreateV1"},
-        {"path": "workflows/core/handle-workflow-error.json", "id": "coreWorkflowErrorV1"},
-        {"path": "workflows/core/llm-gateway.json", "id": "coreGenericLlmGatewayV1"},
-        {"path": "workflows/core/log-business-event.json", "id": "coreBusinessEventLogV1"},
-        {"path": "workflows/core/mail-gateway.json", "id": "coreMailGatewayV1"},
-        {"path": "workflows/core/normalize-incoming-message.json", "id": "coreNormalizeMessageV1"},
-        {"path": "workflows/core/request-human-approval.json", "id": "coreHumanApprovalV1"},
-        {"path": "workflows/core/send-telegram-message.json", "id": "coreSendTelegramMessageV1"}
-      ]
-    },
-    {
-      "name": "adapters",
-      "workflows": [
-        {"path": "workflows/adapters/crm-bitrix24.json", "id": "adapterBitrix24CrmV1"},
-        {"path": "workflows/adapters/llm-gigachat.json", "id": "adapterGigaChatLlmV1"},
-        {"path": "workflows/adapters/llm-yandex.json", "id": "adapterYandexAiStudioLlmV1"}
-      ]
-    },
-    {
-      "name": "helpers",
-      "workflows": [
-        {"path": "workflows/helpers/beginner-yandex-prompt.json", "id": "helperBeginnerYandexPromptV1"}
-      ]
-    },
-    {
-      "name": "diagnostics",
-      "workflows": [
-        {"path": "workflows/diagnostics/generic-llm-connection-test.json", "id": "diagnosticGenericLlmConnectionV1"},
-        {"path": "workflows/diagnostics/yandex-llm-connection-test.json", "id": "diagnosticYandexAiStudioConnectionV1"}
-      ]
-    },
-    {
       "name": "business",
       "workflows": [
         {"path": "workflows/business/daily-executive-digest.json", "id": "businessDailyExecutiveDigestV1"},

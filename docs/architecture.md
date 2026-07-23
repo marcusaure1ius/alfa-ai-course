@@ -112,9 +112,8 @@ Caddy выбран для базового профиля из-за неболь
 
 ```mermaid
 flowchart TD
-  B["Beginner business lessons\n5–6 visual nodes"] --> H["Beginner YandexGPT helper\n3 visual nodes"]
-  B --> T["Safe Telegram preview"]
-  H --> G["Yandex AI Studio adapter"]
+  B["Beginner business lessons\n5 visual nodes"] --> G["Yandex AI Studio\none visual HTTP node"]
+  B --> T["Local Telegram/email preview"]
   S["Advanced service layer"] --> A["Human approval"]
   S --> M["Mail / CRM / logging contracts"]
   S --> E["Shared error handler"]
@@ -125,11 +124,11 @@ Core sub-workflows: LLM Gateway, Send Telegram Message, Request Human Approval, 
 
 Mail Gateway разделяет три операции одним строгим контрактом: IMAP adapter нормализует provider output в bounded untrusted plain text; бизнес-workflow создаёт draft; SMTP-ветка открывается только точным unexpired approval result T-0017 с тем же `idempotencyKey`, при `testMode=false`, `draftOnly=false` и без attachments. Canonical processing marker, threading IDs и durable state дают adapter данные для deduplication/reply-loop protection; credentials остаются в n8n credential store. Pinned Send Email node не поддерживает custom threading headers, поэтому это ограничение явно fail-visible в [mail contract](contracts/mail.md); настройка описана в [IMAP/SMTP guide](credentials/mail.md).
 
-Учебный business layer состоит из пяти коротких уроков: Telegram assistant, email assistant, lead card, daily executive digest и RF Email Triage to Telegram. В каждом 5–6 исполняемых визуальных nodes, русские подписи, Manual Trigger с вымышленным примером и реальный trigger для следующего шага. Code, Function, Function Item и `jsCode` в этом слое запрещены автоматическим beginner UX gate.
+Учебный business layer состоит из пяти коротких самостоятельных уроков: Telegram assistant, email assistant, lead card, daily executive digest и RF Email Triage to Telegram preview. В каждом ровно пять исполняемых визуальных nodes, русские подписи, Manual Trigger с вымышленным примером и реальный trigger для следующего шага. Code, Function, Function Item, `jsCode` и Execute Workflow в этом слое запрещены автоматическим beginner UX gate.
 
-Сборка provider-specific payload спрятана в `Служебный · Простой запрос к YandexGPT`. Helper также не содержит Code nodes и вызывает проверяемый Yandex AI Studio adapter. Участник первого занятия не открывает Core, Adapter, Diagnostics и служебный workflow.
+Каждый урок содержит один визуальный HTTP Request к фиксированному Yandex AI Studio endpoint. API key хранится только в n8n credential, а `folderId` и `model` видны в Edit Fields. Default beginner deployment импортирует только эти пять уроков; Core, Adapter и Diagnostics остаются advanced-библиотекой репозитория.
 
-Прямые опасные outbound nodes в учебном слое запрещены. Telegram-сводка и email triage передают результат в общий Telegram sender только с `testMode=true` и `draftOnly=true`; Telegram assistant и email assistant показывают черновик внутри n8n; lead card не изменяет CRM. Production mutations остаются в advanced service contracts и требуют отдельного урока с human approval.
+Прямые Telegram Send и Email Send nodes в учебном слое запрещены. Telegram assistant и email assistant показывают черновик внутри n8n; сводка и email triage заканчиваются локальным Telegram preview; lead card не изменяет CRM. Production mutations остаются в advanced service contracts и требуют отдельного урока с human approval.
 
 ## Trust boundaries и secrets
 

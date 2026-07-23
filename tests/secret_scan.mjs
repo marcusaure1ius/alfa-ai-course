@@ -83,6 +83,7 @@ const findings = [];
 let scanned = 0;
 
 for (const file of [...files].sort()) {
+  if (!fs.existsSync(file)) continue;
   const stat = fs.statSync(file);
   if (stat.size > 2 * 1024 * 1024) continue;
   const buffer = fs.readFileSync(file);

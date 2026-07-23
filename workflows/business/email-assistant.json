@@ -72,6 +72,12 @@
               "type": "string"
             },
             {
+              "id": "mail-folder",
+              "name": "folderId",
+              "value": "REPLACE_WITH_FOLDER_ID",
+              "type": "string"
+            },
+            {
               "id": "mail-instruction",
               "name": "instruction",
               "value": "Ты помощник предпринимателя. Подготовь вежливый черновик ответа на письмо. Не придумывай цены, сроки и факты. Если информации не хватает, задай один уточняющий вопрос. Верни только текст письма.",
@@ -96,18 +102,44 @@
     },
     {
       "parameters": {
-        "source": "database",
-        "workflowId": "helperBeginnerYandexPromptV1",
-        "mode": "once",
+        "method": "POST",
+        "url": "https://ai.api.cloud.yandex.net/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "OpenAI-Project",
+              "value": "={{ $json.folderId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: $json.model, messages: [{ role: 'system', content: $json.instruction }, { role: 'user', content: $json.text }], temperature: 0.2, max_tokens: 700, stream: false }) }}",
         "options": {
-          "waitForSubWorkflow": true
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
         }
       },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [-380, 60],
       "id": "b2000000-0000-4100-8100-000000000006",
-      "name": "2. ИИ пишет ответ"
+      "name": "2. ИИ пишет ответ",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID",
+          "name": "Yandex AI Studio Api-Key"
+        }
+      }
     },
     {
       "parameters": {
@@ -116,7 +148,7 @@
             {
               "id": "mail-result",
               "name": "Черновик письма",
-              "value": "={{ $json.content || 'ИИ не ответил. Проверьте модель и credential в служебном workflow.' }}",
+              "value": "={{ $json.choices?.[0]?.message?.content || 'ИИ не ответил. Проверьте folderId, model и Yandex credential в блоке 2.' }}",
               "type": "string"
             },
             {

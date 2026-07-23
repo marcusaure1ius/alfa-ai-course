@@ -49,9 +49,9 @@ if (process.argv[2] === '--verify-export') {
 assert.equal(catalog.schemaVersion, 1);
 assert.equal(catalog.n8nImage, 'docker.n8n.io/n8nio/n8n:2.29.10');
 const entries = catalog.importOrder.flatMap((group, groupIndex) => group.workflows.map((workflow) => ({...workflow, group: group.name, groupIndex})));
-assert.equal(entries.length, 20);
-assert.deepEqual(entries.map(({path: workflowPath}) => workflowPath).sort(), listJson('workflows'));
-ok('catalog covers exactly all 20 workflow JSON files and the pinned n8n image');
+assert.equal(entries.length, 5);
+assert.deepEqual(entries.map(({path: workflowPath}) => workflowPath).sort(), listJson('workflows/business'));
+ok('lessons-only catalog covers exactly five business workflow JSON files and the pinned n8n image');
 
 const workflowsById = new Map();
 const entryById = new Map();
@@ -99,8 +99,8 @@ for (const [workflowId, workflow] of workflowsById) {
   }
 }
 assert.equal(dynamicReferenceCount, catalog.dynamicReferences.length);
-assert.equal(staticReferenceCount, 8);
-ok('eight static sub-workflow links resolve in import order; dynamic workflow selection is absent');
+assert.equal(staticReferenceCount, 0);
+ok('all five lessons are standalone: static and dynamic sub-workflow references are absent');
 
 assert.equal(catalog.demos.length, 5);
 assert.deepEqual(catalog.demos.map(({lesson}) => lesson), [1, 2, 3, 4, 5]);
@@ -115,19 +115,18 @@ const beginnerWorkflowIds = catalog.demos.map(({workflow}) => readJson(workflow)
 const beginnerWorkflows = beginnerWorkflowIds.map((id) => workflowsById.get(id));
 for (const workflow of beginnerWorkflows) {
   const executable = workflow.nodes.filter(({type}) => type !== 'n8n-nodes-base.stickyNote');
-  assert.ok(executable.length <= 12, `${workflow.id}: beginner node limit`);
+  assert.ok(executable.length <= 10, `${workflow.id}: beginner node limit`);
   assert.ok(workflow.nodes.every(({type}) => ![
     'n8n-nodes-base.code',
     'n8n-nodes-base.function',
     'n8n-nodes-base.functionItem',
   ].includes(type)), `${workflow.id}: no Code/Function nodes`);
   assert.ok(workflow.nodes.every(({type}) => ![
-    'n8n-nodes-base.httpRequest',
     'n8n-nodes-base.telegram',
     'n8n-nodes-base.emailSend',
-  ].includes(type)), `${workflow.id}: no direct dangerous outbound node`);
+  ].includes(type)), `${workflow.id}: no direct Telegram/email send node`);
 }
-ok('five business lessons are inactive visual no-code graphs with at most 12 executable nodes');
+ok('five business lessons are inactive standalone visual no-code graphs with at most 10 executable nodes');
 
 for (const testPath of [...catalog.demos.map(({contractTest}) => contractTest), ...catalog.supportingContractTests]) {
   assert.ok(fs.existsSync(path.join(root, testPath)), `missing supporting contract test ${testPath}`);

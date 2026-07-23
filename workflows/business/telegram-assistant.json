@@ -5,7 +5,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "# Начните здесь\n\n1. Нажмите **Выполнить workflow** — сработает тестовый пример.\n2. Откройте блок **1. Настройте пример** и замените вопрос клиента.\n3. Блок **2. ИИ готовит черновик** обращается к служебному YandexGPT workflow.\n4. Прочитайте ответ в последнем блоке.\n\nЧтобы получать реальные сообщения, позже выберите Telegram credential в зелёном триггере. Код писать не нужно.",
+        "content": "# Начните здесь\n\n1. Нажмите **Выполнить workflow** — сработает тестовый пример.\n2. Откройте блок **1. Настройте пример** и замените вопрос клиента.\n3. Блок **2. ИИ готовит черновик** обращается к YandexGPT.\n4. Прочитайте ответ в последнем блоке.\n\nЧтобы получать реальные сообщения, позже выберите Telegram credential в зелёном триггере. Код писать не нужно.",
         "height": 300,
         "width": 520,
         "color": 5
@@ -69,6 +69,12 @@
               "type": "string"
             },
             {
+              "id": "tg-folder",
+              "name": "folderId",
+              "value": "REPLACE_WITH_FOLDER_ID",
+              "type": "string"
+            },
+            {
               "id": "tg-instruction",
               "name": "instruction",
               "value": "Ты помощник малого бизнеса. Подготовь короткий и вежливый черновик ответа клиенту. Не обещай скидки, сроки или действия от имени владельца. В конце предложи человеку проверить ответ.",
@@ -93,18 +99,44 @@
     },
     {
       "parameters": {
-        "source": "database",
-        "workflowId": "helperBeginnerYandexPromptV1",
-        "mode": "once",
+        "method": "POST",
+        "url": "https://ai.api.cloud.yandex.net/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "OpenAI-Project",
+              "value": "={{ $json.folderId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: $json.model, messages: [{ role: 'system', content: $json.instruction }, { role: 'user', content: $json.text }], temperature: 0.2, max_tokens: 700, stream: false }) }}",
         "options": {
-          "waitForSubWorkflow": true
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
         }
       },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [-380, 60],
       "id": "b1000000-0000-4100-8100-000000000006",
-      "name": "2. ИИ готовит черновик"
+      "name": "2. ИИ готовит черновик",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID",
+          "name": "Yandex AI Studio Api-Key"
+        }
+      }
     },
     {
       "parameters": {
@@ -113,7 +145,7 @@
             {
               "id": "tg-result",
               "name": "Черновик ответа",
-              "value": "={{ $json.content || 'ИИ не ответил. Проверьте модель и credential в служебном workflow.' }}",
+              "value": "={{ $json.choices?.[0]?.message?.content || 'ИИ не ответил. Проверьте folderId, model и Yandex credential в блоке 2.' }}",
               "type": "string"
             },
             {

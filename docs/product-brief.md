@@ -67,7 +67,8 @@
 - n8n Community Edition, PostgreSQL, Caddy, volumes и health checks;
 - install, doctor, backup, restore, update, rollback, uninstall, import/export workflows;
 - generic OpenAI-compatible LLM path, Yandex AI Studio и GigaChat после отдельной проверки официальных API;
-- reusable sub-workflows и пять демонстрационных бизнес-сценариев без Code/Function nodes в учебном слое;
+- пять самостоятельных демонстрационных бизнес-сценариев без Code/Function/Execute Workflow nodes в beginner distribution;
+- reusable advanced sub-workflows в репозитории, но не в beginner runtime;
 - автоматические статические, integration и end-to-end проверки;
 - русскоязычная документация для участника и преподавателя.
 

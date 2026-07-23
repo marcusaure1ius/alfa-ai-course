@@ -84,7 +84,8 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Daily Executive Digest](docs/workflows/daily-executive-digest.md) — четыре цифры → короткая сводка;
 - [RF Email Triage to Telegram](docs/workflows/rf-email-telegram-triage.md) — важное письмо → безопасный Telegram preview;
 - [RF-каталог популярных сценариев](docs/research/2026-07-23-rf-popular-scenarios.md) — popularity-сигналы, приоритеты и LLM-пути без обязательного VPN;
-- [Каталог workflow и test report](docs/workflow-catalog-and-test-report.md) — 20 workflow, beginner UX gate и clean pinned import;
+- [Курсы и готовые сценарии n8n для РФ](docs/research/2026-07-23-n8n-courses-and-templates.md) — актуальный shortlist, цены, готовые JSON и ограничения доступности;
+- [Каталог workflow и test report](docs/workflow-catalog-and-test-report.md) — пять standalone-уроков, beginner UX gate и clean pinned import;
 - [Apache License 2.0](LICENSE) — лицензия оригинальных файлов starter kit;
 - [License notes](LICENSE-NOTES.md) — границы лицензии starter kit, n8n и сторонних компонентов.
 
