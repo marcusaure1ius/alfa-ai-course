@@ -62,7 +62,8 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Participant handoff](docs/participant-handoff.md) — проверяемая передача владения и операционной ответственности;
 - [Instructor guide](docs/instructor-guide.md) — подготовка, проведение и безопасная поддержка курса;
 - [Instructor setup на neurokurs.ru](docs/instructor-setup.md) — пять человеческих шагов для отдельного демонстрационного стенда преподавателя;
-- [Шаблоны для занятия](docs/instructor-templates.md) — четыре понятных бизнес-сценария и безопасный порядок первого показа;
+- [Шаблоны для занятия](docs/instructor-templates.md) — пять no-code уроков для участника, который впервые открыл n8n;
+- [Маршрут участника без кода](docs/beginner-no-code-workflows.md) — как читать сценарии, менять примеры и подключать Telegram, Gmail/Яндекс Почту и YandexGPT;
 - [Backup и restore](docs/backup-and-restore.md) — recovery archive, checksums, safety backup и rehearsal;
 - [Update и rollback](docs/update-and-rollback.md) — approved version pair, backup gate и restore-based recovery;
 - [Uninstall и перенос workflow](docs/uninstall-and-workflow-portability.md) — data-preserving uninstall, credential-free deterministic export и repeatable batch import;
@@ -77,13 +78,13 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Telegram sender contract](docs/contracts/telegram.md) — allowlist, safe modes, idempotency и normalized errors;
 - [Telegram integration](docs/telegram.md) — BotFather, token-safe credential, allowlist и controlled smoke;
 - [CRM integration](docs/crm.md) — OAuth2 Bitrix24, least privilege, preview/rehearsal и rotation;
-- [Telegram Assistant](docs/workflows/telegram-assistant.md) — draft-only demo, owner approval commands, dedupe и loop guards;
-- [Email Assistant](docs/workflows/email-assistant.md) — IMAP setup, guarded LLM extraction, draft-only output и privacy notes;
-- [Lead Handler](docs/workflows/lead-handler.md) — Header Auth webhook, нормализация контакта, approval-bound CRM mutation и recovery;
-- [Daily Executive Digest](docs/workflows/daily-executive-digest.md) — окно 09:00 MSK, event-source coverage, privacy-minimized summary и честные `partial`/`н/д` метрики;
-- [RF Email Triage to Telegram](docs/workflows/rf-email-telegram-triage.md) — Gmail/Яндекс IMAP, LLM-классификация и safe Telegram alerts;
+- [Telegram Assistant](docs/workflows/telegram-assistant.md) — вопрос клиента → черновик ответа;
+- [Email Assistant](docs/workflows/email-assistant.md) — Gmail/Яндекс IMAP → черновик без отправки;
+- [Lead Handler](docs/workflows/lead-handler.md) — заявка → понятная карточка без CRM mutation;
+- [Daily Executive Digest](docs/workflows/daily-executive-digest.md) — четыре цифры → короткая сводка;
+- [RF Email Triage to Telegram](docs/workflows/rf-email-telegram-triage.md) — важное письмо → безопасный Telegram preview;
 - [RF-каталог популярных сценариев](docs/research/2026-07-23-rf-popular-scenarios.md) — popularity-сигналы, приоритеты и LLM-пути без обязательного VPN;
-- [Каталог workflow и test report](docs/workflow-catalog-and-test-report.md) — 19 workflow, import order, fixture coverage, clean pinned import и границы mock/external evidence;
+- [Каталог workflow и test report](docs/workflow-catalog-and-test-report.md) — 20 workflow, beginner UX gate и clean pinned import;
 - [Apache License 2.0](LICENSE) — лицензия оригинальных файлов starter kit;
 - [License notes](LICENSE-NOTES.md) — границы лицензии starter kit, n8n и сторонних компонентов.
 

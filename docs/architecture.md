@@ -112,13 +112,12 @@ Caddy выбран для базового профиля из-за неболь
 
 ```mermaid
 flowchart TD
-  B["Business workflows"] --> A["Human approval"]
-  B --> G["LLM Gateway"]
-  B --> T["Telegram adapter"]
-  B --> M["Mail adapter"]
-  B --> R["CRM adapter"]
-  B --> L["Business event log"]
-  B --> E["Shared error handler"]
+  B["Beginner business lessons\n5–6 visual nodes"] --> H["Beginner YandexGPT helper\n3 visual nodes"]
+  B --> T["Safe Telegram preview"]
+  H --> G["Yandex AI Studio adapter"]
+  S["Advanced service layer"] --> A["Human approval"]
+  S --> M["Mail / CRM / logging contracts"]
+  S --> E["Shared error handler"]
   G --> X["External LLM providers"]
 ```
 
@@ -126,13 +125,11 @@ Core sub-workflows: LLM Gateway, Send Telegram Message, Request Human Approval, 
 
 Mail Gateway разделяет три операции одним строгим контрактом: IMAP adapter нормализует provider output в bounded untrusted plain text; бизнес-workflow создаёт draft; SMTP-ветка открывается только точным unexpired approval result T-0017 с тем же `idempotencyKey`, при `testMode=false`, `draftOnly=false` и без attachments. Canonical processing marker, threading IDs и durable state дают adapter данные для deduplication/reply-loop protection; credentials остаются в n8n credential store. Pinned Send Email node не поддерживает custom threading headers, поэтому это ограничение явно fail-visible в [mail contract](contracts/mail.md); настройка описана в [IMAP/SMTP guide](credentials/mail.md).
 
-Business workflows: Telegram assistant, email assistant, lead handler, daily executive digest и добавочный RF Email Triage to Telegram. Любое внешнее сообщение или изменение CRM требует human approval/safe mode по умолчанию; Telegram assistant и RF triage работают в `draft-only` по умолчанию.
+Учебный business layer состоит из пяти коротких уроков: Telegram assistant, email assistant, lead card, daily executive digest и RF Email Triage to Telegram. В каждом 5–6 исполняемых визуальных nodes, русские подписи, Manual Trigger с вымышленным примером и реальный trigger для следующего шага. Code, Function, Function Item и `jsCode` в этом слое запрещены автоматическим beginner UX gate.
 
-RF Email Triage переиспользует Mail Gateway, LLM Gateway, Telegram sender и Business Event Log. Он не добавляет provider-specific вызовы в business layer: Gmail/Яндекс Почта подключаются через IMAP contract, а Yandex AI Studio/GigaChat — через существующие LLM adapters. В LLM передаётся bounded plain text и sender domain; Telegram получает только маскированный sender, subject и проверенный локальной schema summary.
+Сборка provider-specific payload спрятана в `Служебный · Простой запрос к YandexGPT`. Helper также не содержит Code nodes и вызывает проверяемый Yandex AI Studio adapter. Участник первого занятия не открывает Core, Adapter, Diagnostics и служебный workflow.
 
-Lead handler реализован как Header Auth webhook с отдельными intake/resolve фазами: `eventId` останавливает replay до LLM, nullable extraction не может разрешить mutation, а точный owner-bound approval открывает последовательность lead upsert → task create → Telegram notice. Provider-neutral mapping, partial-failure reconciliation и setup зафиксированы в [руководстве Lead Handler](workflows/lead-handler.md).
-
-Daily executive digest использует детерминированное окно `[предыдущие 09:00, текущие 09:00)` в `Europe/Moscow` и агрегирует только каноническую схему `Log Business Event`. Встроенный schedule является единственным production-планировщиком и синхронно вызывает настраиваемый source-adapter sub-workflow с точными границами окна; direct trigger предназначен для test/manual batch. Полные метрики допустимы лишь при явном source coverage всего окна; partial source показывает наблюдаемые числа с предупреждением, missing source — `null`/`н/д`, но никогда не молчаливые нули. LLM получает только окно, статус покрытия и агрегаты, а точные числа в Telegram формируются детерминированно. Core logger сейчас является schema/normalization boundary, а не durable query store; production source adapter или event store требует отдельной проверки. Контракт и setup описаны в [руководстве Daily Executive Digest](workflows/daily-executive-digest.md).
+Прямые опасные outbound nodes в учебном слое запрещены. Telegram-сводка и email triage передают результат в общий Telegram sender только с `testMode=true` и `draftOnly=true`; Telegram assistant и email assistant показывают черновик внутри n8n; lead card не изменяет CRM. Production mutations остаются в advanced service contracts и требуют отдельного урока с human approval.
 
 ## Trust boundaries и secrets
 

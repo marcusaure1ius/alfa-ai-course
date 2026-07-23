@@ -1,286 +1,214 @@
 {
-  "name": "Business - Daily Executive Digest",
+  "id": "businessDailyExecutiveDigestV1",
+  "name": "Business · Урок 4 — Сводка руководителю",
+  "active": false,
   "nodes": [
     {
-      "parameters": {"rule":{"interval":[{"field":"days","triggerAtHour":9}]}},
-      "id": "d2400000-0000-4111-8111-000000000001",
-      "name": "Daily at 09:00 Moscow",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [-1320, -140]
-    },
-    {
-      "parameters": {"inputSource":"passthrough"},
-      "id": "d2400000-0000-4222-8222-000000000002",
-      "name": "Called by Test or Source Workflow",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1.1,
-      "position": [-1320, 60]
-    },
-    {
-      "parameters": {"assignments":{"assignments":[
-        {"id":"digest-timezone","name":"profileTimezone","value":"Europe/Moscow","type":"string"},
-        {"id":"digest-hour","name":"profileDigestHour","value":9,"type":"number"},
-        {"id":"digest-test","name":"profileTestMode","value":true,"type":"boolean"},
-        {"id":"digest-draft","name":"profileDraftOnly","value":true,"type":"boolean"},
-        {"id":"digest-chat","name":"profileOwnerChatId","value":"REPLACE_WITH_OWNER_CHAT_ID","type":"string"},
-        {"id":"digest-model","name":"profileModel","value":"REPLACE_WITH_MODEL_ID","type":"string"},
-        {"id":"digest-source-name","name":"profileSourceName","value":"business-event-source","type":"string"},
-        {"id":"digest-source-configured","name":"profileSourceConfigured","value":false,"type":"boolean"},
-        {"id":"digest-source-complete","name":"profileSourceComplete","value":false,"type":"boolean"},
-        {"id":"digest-source-workflow","name":"profileSourceWorkflowId","value":"REPLACE_WITH_EVENT_SOURCE_WORKFLOW_ID","type":"string"},
-        {"id":"digest-events","name":"profileEventsJson","value":"[]","type":"string"}
-      ]},"includeOtherFields":true,"options":{}},
-      "id": "d2400000-0000-4333-8333-000000000003",
-      "name": "Digest Profile and Source Defaults",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [-1100, -40]
-    },
-    {
-      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-supplied-source","leftValue":"={{ Array.isArray($json.events) || ($json.source !== undefined && $json.source !== null) }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
-      "id": "d2400000-0000-4070-8070-000000000023",
-      "name": "Use Supplied Event Batch?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [-990, -40]
-    },
-    {
-      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-adapter-enabled","leftValue":"={{ $json.profileSourceConfigured }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
-      "id": "d2400000-0000-4080-8080-000000000024",
-      "name": "Source Adapter Enabled?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [-880, 80]
-    },
-    {
-      "parameters": {"jsCode":"const input=$input.first().json;const correlationId=typeof input.correlationId==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId)?input.correlationId:`digest-${Date.now()}`;const fail=(code,message)=>[{json:{ok:false,correlationId,testMode:true,draftOnly:true,error:{code,message,retryable:false}}}];const workflowId=String(input.profileSourceWorkflowId??'');if(workflowId.startsWith('REPLACE_WITH_')||!/^[A-Za-z0-9_-]{3,128}$/.test(workflowId))return fail('SOURCE_ADAPTER_NOT_CONFIGURED','Configure a valid event source workflow ID');if(input.profileTimezone!=='Europe/Moscow'||input.profileDigestHour!==9)return fail('INVALID_SCHEDULE_PROFILE','Digest requires Europe/Moscow at 09:00');const now=new Date(input.runAt??Date.now());if(Number.isNaN(now.getTime()))return fail('INVALID_RUN_TIME','runAt must be an ISO timestamp');const offsetMs=3*60*60*1000;const local=new Date(now.getTime()+offsetMs);let endMs=Date.UTC(local.getUTCFullYear(),local.getUTCMonth(),local.getUTCDate(),9)-offsetMs;if(endMs>now.getTime())endMs-=24*60*60*1000;const startMs=endMs-24*60*60*1000;return [{json:{ok:true,contractVersion:'1.0',operation:'listBusinessEvents',correlationId,testMode:input.profileTestMode!==false,window:{timezone:'Europe/Moscow',semantics:'[start,end)',start:new Date(startMs).toISOString(),end:new Date(endMs).toISOString()}}}];"},
-      "id": "d2400000-0000-4090-8090-000000000025",
-      "name": "Build Event Source Request",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-660, 80]
-    },
-    {
-      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-source-request-ok","leftValue":"={{ $json.ok }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
-      "id": "d2400000-0000-40a0-80a0-000000000026",
-      "name": "Source Request Valid?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [-440, 80]
-    },
-    {
-      "parameters": {"workflowId":"={{ $('Digest Profile and Source Defaults').first().json.profileSourceWorkflowId }}","options":{"waitForSubWorkflow":true}},
-      "id": "d2400000-0000-40b0-80b0-000000000027",
-      "name": "Load Scheduled Business Events",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [-220, 80],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {"jsCode":"const response=$input.first().json;const profile=$('Digest Profile and Source Defaults').first().json;const request=$('Build Event Source Request').first().json;const fail=(code,message)=>[{json:{ok:false,correlationId:request.correlationId,testMode:true,draftOnly:true,error:{code,message,retryable:false}}}];if(response.error)return fail('SOURCE_ADAPTER_FAILED','Event source workflow failed');const allowed=new Set(['contractVersion','correlationId','source','events']);if(!response||Array.isArray(response)||typeof response!=='object'||Object.keys(response).some(k=>!allowed.has(k)))return fail('SOURCE_ADAPTER_INVALID','Event source returned unknown or invalid fields');if(response.contractVersion!=='1.0'||response.correlationId!==request.correlationId||!Array.isArray(response.events))return fail('SOURCE_ADAPTER_INVALID','Event source contract version, correlation ID or events is invalid');const source=response.source;if(!source||Array.isArray(source)||typeof source!=='object')return fail('SOURCE_ADAPTER_INVALID','Event source metadata is required');const sourceAllowed=new Set(['name','configured','complete','coverageStart','coverageEnd']);if(Object.keys(source).some(k=>!sourceAllowed.has(k))||source.configured!==true||typeof source.complete!=='boolean'||typeof source.name!=='string'||source.name.length<1||source.name.length>128)return fail('SOURCE_ADAPTER_INVALID','Event source metadata is invalid');return [{json:{...profile,events:response.events,source}}];"},
-      "id": "d2400000-0000-40c0-80c0-000000000028",
-      "name": "Validate Event Source Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [0, 80]
-    },
-    {
-      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-source-response-ok","leftValue":"={{ $json.ok !== false }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
-      "id": "d2400000-0000-40d0-80d0-000000000029",
-      "name": "Source Response Valid?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [220, 80]
-    },
-    {
-      "parameters": {"jsCode":"const input=$input.first().json;const correlationId=typeof input.correlationId==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(input.correlationId)?input.correlationId:`digest-${Date.now()}`;const testMode=input.profileTestMode!==false;const draftOnly=input.profileDraftOnly!==false;const fail=(code,message)=>[{json:{ok:false,correlationId,testMode:true,draftOnly:true,error:{code,message,retryable:false}}}];if(input.profileTimezone!=='Europe/Moscow'||input.profileDigestHour!==9)return fail('INVALID_SCHEDULE_PROFILE','Digest requires Europe/Moscow at 09:00');const now=new Date(input.runAt??Date.now());if(Number.isNaN(now.getTime()))return fail('INVALID_RUN_TIME','runAt must be an ISO timestamp');const offsetMs=3*60*60*1000;const local=new Date(now.getTime()+offsetMs);let endMs=Date.UTC(local.getUTCFullYear(),local.getUTCMonth(),local.getUTCDate(),9)-offsetMs;if(endMs>now.getTime())endMs-=24*60*60*1000;const startMs=endMs-24*60*60*1000;const window={timezone:'Europe/Moscow',semantics:'[start,end)',start:new Date(startMs).toISOString(),end:new Date(endMs).toISOString(),localLabel:`${new Date(startMs+offsetMs).toISOString().slice(0,16)}+03:00 — ${new Date(endMs+offsetMs).toISOString().slice(0,16)}+03:00`};let events=input.events;let parseError=false;if(events===undefined){try{events=JSON.parse(input.profileEventsJson??'[]');}catch{events=[];parseError=true;}}if(!Array.isArray(events))return fail('INVALID_EVENT_SOURCE','events must be an array');const sourceInput=input.source&&typeof input.source==='object'&&!Array.isArray(input.source)?input.source:{};const configured=sourceInput.configured??input.profileSourceConfigured===true;const declaredComplete=sourceInput.complete??input.profileSourceComplete===true;const sourceName=String(sourceInput.name??input.profileSourceName??'business-event-source').slice(0,128);const coverageStart=new Date(sourceInput.coverageStart??'invalid');const coverageEnd=new Date(sourceInput.coverageEnd??'invalid');const coverageValid=!Number.isNaN(coverageStart.getTime())&&!Number.isNaN(coverageEnd.getTime())&&coverageStart.getTime()<=startMs&&coverageEnd.getTime()>=endMs;const eventAllowed=new Set(['eventType','outcome','correlationId','occurredAt','subjectRef','metadata']);const metadataAllowed=new Set(['workflowKey','actionType','channel','durationMs','retryCount','errorCode']);const normalized=[];let invalidEvents=0;let outsideWindow=0;for(const raw of events){const event=raw&&typeof raw==='object'&&!Array.isArray(raw)&&raw.record&&typeof raw.record==='object'?raw.record:raw;if(!event||Array.isArray(event)||typeof event!=='object'||Object.keys(event).some(k=>!eventAllowed.has(k))){invalidEvents++;continue;}const occurredAt=new Date(event.occurredAt);const metadata=event.metadata??{};const valid=typeof event.eventType==='string'&&/^[a-z][a-z0-9._-]{2,63}$/.test(event.eventType)&&['success','failure','denied','skipped'].includes(event.outcome)&&typeof event.correlationId==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(event.correlationId)&&!Number.isNaN(occurredAt.getTime())&&metadata&&typeof metadata==='object'&&!Array.isArray(metadata)&&Object.keys(metadata).every(k=>metadataAllowed.has(k));if(!valid){invalidEvents++;continue;}if(occurredAt.getTime()<startMs||occurredAt.getTime()>=endMs){outsideWindow++;continue;}normalized.push({eventType:event.eventType,outcome:event.outcome,correlationId:event.correlationId,occurredAt:occurredAt.toISOString(),metadata});}const unique=[];const seen=new Set();let duplicatesIgnored=0;for(const event of normalized){const key=`${event.eventType}|${event.correlationId}|${event.occurredAt}`;if(seen.has(key)){duplicatesIgnored++;continue;}seen.add(key);unique.push(event);}let sourceStatus='missing';if(configured)sourceStatus=declaredComplete&&coverageValid&&!parseError&&invalidEvents===0?'complete':'partial';const available=sourceStatus!=='missing';const count=(predicate)=>unique.filter(predicate).length;const metrics=available?{eventsObserved:unique.length,leadsProcessed:count(e=>e.eventType==='lead.handler.processed'),errors:count(e=>e.outcome==='failure'||typeof e.metadata.errorCode==='string'),unhandledEmails:count(e=>e.eventType==='email.assistant.processed'&&(e.outcome!=='success'||['unhandled','manual_review','failed'].includes(e.metadata.actionType))),pendingApprovals:count(e=>['pending','pending_approval'].includes(e.metadata.actionType)),otherEvents:0,invalidEvents:invalidEvents+(parseError?1:0),duplicatesIgnored,outsideWindow}: {eventsObserved:null,leadsProcessed:null,errors:null,unhandledEmails:null,pendingApprovals:null,otherEvents:null,invalidEvents:parseError?1:0,duplicatesIgnored:0,outsideWindow:0};if(available)metrics.otherEvents=Math.max(0,metrics.eventsObserved-metrics.leadsProcessed-count(e=>e.eventType==='email.assistant.processed'));return [{json:{ok:true,contractVersion:'1.0',correlationId,testMode,draftOnly,ownerChatId:String(input.profileOwnerChatId??''),model:String(input.profileModel??''),window,source:{name:sourceName,status:sourceStatus,configured,declaredComplete,coverageValid,coverageStart:Number.isNaN(coverageStart.getTime())?null:coverageStart.toISOString(),coverageEnd:Number.isNaN(coverageEnd.getTime())?null:coverageEnd.toISOString(),parseError},metrics,summarizable:sourceStatus==='complete'}}];"},
-      "id": "d2400000-0000-4444-8444-000000000004",
-      "name": "Aggregate Documented Business Events",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [440, -40]
-    },
-    {
-      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-ok","leftValue":"={{ $json.ok }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
-      "id": "d2400000-0000-4555-8555-000000000005",
-      "name": "Aggregation Valid?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [-660, -40]
-    },
-    {
-      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-complete","leftValue":"={{ $json.summarizable }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
-      "id": "d2400000-0000-4666-8666-000000000006",
-      "name": "Source Complete?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [-440, -40]
-    },
-    {
-      "parameters": {"jsCode":"const digest=$input.first().json;if(typeof digest.model!=='string'||digest.model.startsWith('REPLACE_WITH_'))return [{json:{...digest,ok:false,error:{code:'MODEL_NOT_CONFIGURED',message:'Configure a verified LLM model',retryable:false}}}];const minimized={window:digest.window,sourceStatus:digest.source.status,metrics:digest.metrics};return [{json:{provider:'generic',model:digest.model,messages:[{role:'system',content:'Write a concise Russian executive digest using only the supplied aggregate metrics. Never infer people, customers, revenue, causes or events. Do not add numbers. Mention attention only when errors, unhandled emails or pending approvals are above zero.'},{role:'user',content:JSON.stringify(minimized)}],output:{mode:'json',schema:{type:'object',additionalProperties:false,required:['headline','summary','attentionRequired'],properties:{headline:{type:'string'},summary:{type:'string'},attentionRequired:{type:'boolean'}}}},capabilities:{tools:false},temperature:0,maxOutputTokens:300,correlationId:digest.correlationId,testMode:digest.testMode}}];"},
-      "id": "d2400000-0000-4777-8777-000000000007",
-      "name": "Build Minimized Digest Prompt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-220, -160]
-    },
-    {
-      "parameters": {"workflowId":"coreGenericLlmGatewayV1","options":{"waitForSubWorkflow":true}},
-      "id": "d2400000-0000-4888-8888-000000000008",
-      "name": "Summarize via LLM Gateway",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [0, -160]
-    },
-    {
-      "parameters": {"jsCode":"const response=$input.first().json;const digest=$('Aggregate Documented Business Events').first().json;const fail=(code,message)=>[{json:{...digest,ok:false,error:{code,message,retryable:false}}}];if(response.ok!==true)return fail(response.error?.code??'LLM_FAILED','Digest summarization failed');const data=response.json;if(!data||Array.isArray(data)||typeof data!=='object'||Object.keys(data).sort().join(',')!=='attentionRequired,headline,summary')return fail('LLM_OUTPUT_INVALID','Exact digest fields are required');if(typeof data.headline!=='string'||data.headline.trim().length<1||data.headline.length>100||typeof data.summary!=='string'||data.summary.trim().length<1||data.summary.length>600||typeof data.attentionRequired!=='boolean')return fail('LLM_OUTPUT_INVALID','Digest fields are invalid or oversized');return [{json:{...digest,summary:{headline:data.headline.trim(),text:data.summary.trim(),attentionRequired:data.attentionRequired}}}];"},
-      "id": "d2400000-0000-4999-8999-000000000009",
-      "name": "Validate LLM Digest",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [220, -160]
-    },
-    {
-      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-summary-ok","leftValue":"={{ $json.ok }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
-      "id": "d2400000-0000-4aaa-8aaa-000000000010",
-      "name": "Summary Valid?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [440, -160]
-    },
-    {
-      "parameters": {"jsCode":"const digest=$input.first().json;const m=digest.metrics;const lines=[digest.summary.headline,`Период: ${digest.window.localLabel}`,`Лиды: ${m.leadsProcessed}; ошибки: ${m.errors}; необработанные письма: ${m.unhandledEmails}; ожидают согласования: ${m.pendingApprovals}.`,digest.summary.text];return [{json:{contractVersion:'1.0',testMode:digest.testMode,draftOnly:digest.draftOnly,correlationId:digest.correlationId,idempotencyKey:`daily-digest-${digest.window.end.slice(0,10)}`,chatId:digest.ownerChatId,text:lines.join('\\n'),format:'plain'}}];"},
-      "id": "d2400000-0000-4bbb-8bbb-000000000011",
-      "name": "Prepare Complete Digest Telegram Contract",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [660, -240]
-    },
-    {
-      "parameters": {"jsCode":"const digest=$input.first().json;const partial=digest.source.status==='partial';const m=digest.metrics;const value=(v)=>v===null?'н/д':String(v);const reason=digest.source.status==='missing'?'источник business events не настроен':`покрытие неполное (coverage=${digest.source.coverageValid}, invalid=${m.invalidEvents})`;return [{json:{contractVersion:'1.0',testMode:digest.testMode,draftOnly:digest.draftOnly,correlationId:digest.correlationId,idempotencyKey:`daily-digest-${digest.window.end.slice(0,10)}`,chatId:digest.ownerChatId,text:[`Ежедневный дайджест: данные ${partial?'частичные':'недоступны'}`,`Период: ${digest.window.localLabel}`,`Лиды: ${value(m.leadsProcessed)}; ошибки: ${value(m.errors)}; необработанные письма: ${value(m.unhandledEmails)}; ожидают согласования: ${value(m.pendingApprovals)}.`,`Причина: ${reason}. Нули не считаются подтверждёнными до полного coverage.`].join('\\n'),format:'plain'}}];"},
-      "id": "d2400000-0000-4ccc-8ccc-000000000012",
-      "name": "Prepare Coverage Alert Telegram Contract",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [0, 60]
-    },
-    {
-      "parameters": {"workflowId":"coreSendTelegramMessageV1","options":{"waitForSubWorkflow":true}},
-      "id": "d2400000-0000-4ddd-8ddd-000000000013",
-      "name": "Send Digest via Telegram",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [880, -40]
-    },
-    {
-      "parameters": {"jsCode":"const sent=$input.first().json;const digest=$('Aggregate Documented Business Events').first().json;return [{json:{ok:sent.ok===true,status:sent.ok===true?'delivered_or_previewed':'telegram_failed',correlationId:digest.correlationId,testMode:digest.testMode,draftOnly:digest.draftOnly,sourceStatus:digest.source.status,window:digest.window,metrics:digest.metrics,telegramStatus:sent.status??'failed',error:sent.ok===true?null:sent.error}}];"},
-      "id": "d2400000-0000-4eee-8eee-000000000014",
-      "name": "Finalize Digest Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1100, -40]
-    },
-    {
-      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"digest-telegram-ok","leftValue":"={{ $json.ok }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
-      "id": "d2400000-0000-4efe-8efe-000000000022",
-      "name": "Telegram Delivery Succeeded?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [1210, -40]
-    },
-    {
-      "parameters": {"jsCode":"const input=$input.first().json;return [{json:{contractVersion:'1.0',testMode:true,correlationId:input.correlationId,workflowKey:'business.daily-executive-digest',error:{code:input.error?.code??'DIGEST_FAILED',message:input.error?.message??'Daily digest failed',retryable:input.error?.retryable===true,httpStatus:input.error?.httpStatus}}}];"},
-      "id": "d2400000-0000-4fff-8fff-000000000015",
-      "name": "Prepare Shared Error Contract",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [220, 260]
-    },
-    {
-      "parameters": {"workflowId":"coreWorkflowErrorV1","options":{"waitForSubWorkflow":true}},
-      "id": "d2400000-0000-4010-8010-000000000016",
-      "name": "Handle via Shared Error Workflow",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [440, 260]
-    },
-    {
-      "parameters": {"jsCode":"const handled=$input.first().json;return [{json:{ok:false,status:'failed',correlationId:handled.correlationId,testMode:true,draftOnly:true,sourceStatus:'unknown',error:handled.error}}];"},
-      "id": "d2400000-0000-4020-8020-000000000017",
-      "name": "Return Safe Digest Error",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [660, 260]
-    },
-    {
-      "parameters": {"jsCode":"const result=$input.first().json;return [{json:{contractVersion:'1.0',testMode:true,correlationId:result.correlationId,eventType:'executive.digest.processed',outcome:result.ok?'success':'failure',subjectRef:result.correlationId,metadata:{workflowKey:'business.daily-executive-digest',actionType:result.sourceStatus??'unknown',channel:'telegram'}}}];"},
-      "id": "d2400000-0000-4030-8030-000000000018",
-      "name": "Prepare Minimal Digest Event",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1320, 60]
-    },
-    {
-      "parameters": {"workflowId":"coreBusinessEventLogV1","options":{"waitForSubWorkflow":true}},
-      "id": "d2400000-0000-4040-8040-000000000019",
-      "name": "Log via Shared Workflow",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [1540, 60]
-    },
-    {
-      "parameters": {"jsCode":"for(const name of ['Finalize Digest Result','Return Safe Digest Error']){const node=$(name);if(node.isExecuted)return [{json:node.first().json}];}return [{json:{ok:false,status:'failed',error:{code:'RESULT_NOT_FOUND',message:'Digest result unavailable'}}}];"},
-      "id": "d2400000-0000-4050-8050-000000000020",
-      "name": "Return Safe Business Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1760, 60]
-    },
-    {
-      "parameters": {"content":"## Daily executive digest v1\n\n- Built-in schedule is the only scheduler: at 09:00 Europe/Moscow it calls the configured source workflow for the exact [start,end) window.\n- Source adapter must return canonical Log Business Event records plus coverageStart/coverageEnd. Direct trigger is for test/manual batches.\n- Missing source produces null/н/д; partial source exposes observed counts and warnings.\n- LLM sees only window, coverage status and aggregates. Telegram and errors use shared workflows.\n- Defaults are testMode and draftOnly; no credentials or personal examples are stored.","height":390,"width":520,"color":5},
-      "id": "d2400000-0000-4060-8060-000000000021",
-      "name": "Metrics Source Privacy and Setup Notes",
+      "parameters": {
+        "content": "# Цифры дня → короткая сводка\n\n1. Запустите тест.\n2. В блоке **1. Введите цифры дня** замените учебные показатели.\n3. ИИ подготовит понятную сводку.\n4. Telegram-блок создаст только preview: ничего не отправится.\n\nПозже расписание может запускать workflow каждый день в 09:00.",
+        "height": 300,
+        "width": 520,
+        "color": 5
+      },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-1320, 300]
+      "position": [-1340, -440],
+      "id": "b4000000-0000-4100-8100-000000000001",
+      "name": "Инструкция к уроку"
+    },
+    {
+      "parameters": {
+        "content": "## Telegram в режиме preview\n\n`testMode=true` и `draftOnly=true` уже заполнены. Служебный Telegram workflow покажет, что было бы отправлено, но не обратится к Telegram API.",
+        "height": 190,
+        "width": 430,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [140, -320],
+      "id": "b4000000-0000-4100-8100-000000000002",
+      "name": "Без реальной отправки"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1200, -40],
+      "id": "b4000000-0000-4100-8100-000000000003",
+      "name": "▶ Запустить тест"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1200, 180],
+      "id": "b4000000-0000-4100-8100-000000000004",
+      "name": "Каждый день в 09:00"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "digest-model",
+              "name": "model",
+              "value": "gpt://REPLACE_WITH_FOLDER_ID/yandexgpt/latest",
+              "type": "string"
+            },
+            {
+              "id": "digest-instruction",
+              "name": "instruction",
+              "value": "Ты помощник руководителя. Напиши короткую сводку из 4 пунктов: что произошло, что хорошо, где нужно внимание и одно действие на сегодня. Используй только переданные цифры.",
+              "type": "string"
+            },
+            {
+              "id": "digest-text",
+              "name": "text",
+              "value": "Новые заявки: 8\nПродажи: 3\nПисьма без ответа: 2\nПросроченные задачи: 1",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-860, 60],
+      "id": "b4000000-0000-4100-8100-000000000005",
+      "name": "1. Введите цифры дня"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": "helperBeginnerYandexPromptV1",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [-500, 60],
+      "id": "b4000000-0000-4100-8100-000000000006",
+      "name": "2. ИИ пишет сводку"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "digest-contract",
+              "name": "contractVersion",
+              "value": "1.0",
+              "type": "string"
+            },
+            {
+              "id": "digest-test",
+              "name": "testMode",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "digest-draft",
+              "name": "draftOnly",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "digest-correlation",
+              "name": "correlationId",
+              "value": "beginner-digest-preview",
+              "type": "string"
+            },
+            {
+              "id": "digest-idempotency",
+              "name": "idempotencyKey",
+              "value": "={{ 'beginner-digest-' + $execution.id }}",
+              "type": "string"
+            },
+            {
+              "id": "digest-chat",
+              "name": "chatId",
+              "value": "REPLACE_WITH_OWNER_CHAT_ID",
+              "type": "string"
+            },
+            {
+              "id": "digest-message",
+              "name": "text",
+              "value": "={{ $json.content || 'ИИ не ответил. Проверьте настройки YandexGPT.' }}",
+              "type": "string"
+            },
+            {
+              "id": "digest-format",
+              "name": "format",
+              "value": "plain",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-120, 60],
+      "id": "b4000000-0000-4100-8100-000000000007",
+      "name": "3. Подготовьте Telegram preview"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": "coreSendTelegramMessageV1",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [280, 60],
+      "id": "b4000000-0000-4100-8100-000000000008",
+      "name": "4. Посмотрите preview"
     }
   ],
-  "pinData": {},
   "connections": {
-    "Daily at 09:00 Moscow":{"main":[[{"node":"Digest Profile and Source Defaults","type":"main","index":0}]]},
-    "Called by Test or Source Workflow":{"main":[[{"node":"Digest Profile and Source Defaults","type":"main","index":0}]]},
-    "Digest Profile and Source Defaults":{"main":[[{"node":"Use Supplied Event Batch?","type":"main","index":0}]]},
-    "Use Supplied Event Batch?":{"main":[[{"node":"Aggregate Documented Business Events","type":"main","index":0}],[{"node":"Source Adapter Enabled?","type":"main","index":0}]]},
-    "Source Adapter Enabled?":{"main":[[{"node":"Build Event Source Request","type":"main","index":0}],[{"node":"Aggregate Documented Business Events","type":"main","index":0}]]},
-    "Build Event Source Request":{"main":[[{"node":"Source Request Valid?","type":"main","index":0}]]},
-    "Source Request Valid?":{"main":[[{"node":"Load Scheduled Business Events","type":"main","index":0}],[{"node":"Prepare Shared Error Contract","type":"main","index":0}]]},
-    "Load Scheduled Business Events":{"main":[[{"node":"Validate Event Source Response","type":"main","index":0}]]},
-    "Validate Event Source Response":{"main":[[{"node":"Source Response Valid?","type":"main","index":0}]]},
-    "Source Response Valid?":{"main":[[{"node":"Aggregate Documented Business Events","type":"main","index":0}],[{"node":"Prepare Shared Error Contract","type":"main","index":0}]]},
-    "Aggregate Documented Business Events":{"main":[[{"node":"Aggregation Valid?","type":"main","index":0}]]},
-    "Aggregation Valid?":{"main":[[{"node":"Source Complete?","type":"main","index":0}],[{"node":"Prepare Shared Error Contract","type":"main","index":0}]]},
-    "Source Complete?":{"main":[[{"node":"Build Minimized Digest Prompt","type":"main","index":0}],[{"node":"Prepare Coverage Alert Telegram Contract","type":"main","index":0}]]},
-    "Build Minimized Digest Prompt":{"main":[[{"node":"Summarize via LLM Gateway","type":"main","index":0}]]},
-    "Summarize via LLM Gateway":{"main":[[{"node":"Validate LLM Digest","type":"main","index":0}]]},
-    "Validate LLM Digest":{"main":[[{"node":"Summary Valid?","type":"main","index":0}]]},
-    "Summary Valid?":{"main":[[{"node":"Prepare Complete Digest Telegram Contract","type":"main","index":0}],[{"node":"Prepare Shared Error Contract","type":"main","index":0}]]},
-    "Prepare Complete Digest Telegram Contract":{"main":[[{"node":"Send Digest via Telegram","type":"main","index":0}]]},
-    "Prepare Coverage Alert Telegram Contract":{"main":[[{"node":"Send Digest via Telegram","type":"main","index":0}]]},
-    "Send Digest via Telegram":{"main":[[{"node":"Finalize Digest Result","type":"main","index":0}]]},
-    "Finalize Digest Result":{"main":[[{"node":"Telegram Delivery Succeeded?","type":"main","index":0}]]},
-    "Telegram Delivery Succeeded?":{"main":[[{"node":"Prepare Minimal Digest Event","type":"main","index":0}],[{"node":"Prepare Shared Error Contract","type":"main","index":0}]]},
-    "Prepare Shared Error Contract":{"main":[[{"node":"Handle via Shared Error Workflow","type":"main","index":0}]]},
-    "Handle via Shared Error Workflow":{"main":[[{"node":"Return Safe Digest Error","type":"main","index":0}]]},
-    "Return Safe Digest Error":{"main":[[{"node":"Prepare Minimal Digest Event","type":"main","index":0}]]},
-    "Prepare Minimal Digest Event":{"main":[[{"node":"Log via Shared Workflow","type":"main","index":0}]]},
-    "Log via Shared Workflow":{"main":[[{"node":"Return Safe Business Result","type":"main","index":0}]]}
+    "▶ Запустить тест": {
+      "main": [[{"node": "1. Введите цифры дня", "type": "main", "index": 0}]]
+    },
+    "Каждый день в 09:00": {
+      "main": [[{"node": "1. Введите цифры дня", "type": "main", "index": 0}]]
+    },
+    "1. Введите цифры дня": {
+      "main": [[{"node": "2. ИИ пишет сводку", "type": "main", "index": 0}]]
+    },
+    "2. ИИ пишет сводку": {
+      "main": [[{"node": "3. Подготовьте Telegram preview", "type": "main", "index": 0}]]
+    },
+    "3. Подготовьте Telegram preview": {
+      "main": [[{"node": "4. Посмотрите preview", "type": "main", "index": 0}]]
+    }
   },
-  "active": false,
-  "settings": {"executionOrder":"v1","timezone":"Europe/Moscow","saveDataErrorExecution":"all","saveDataSuccessExecution":"all","saveManualExecutions":true},
-  "versionId": "d2400000-0000-4000-8000-000000000001",
-  "meta": {"templateCredsSetupCompleted":false},
-  "id": "businessDailyExecutiveDigestV1",
-  "tags": []
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Moscow",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true
+  },
+  "versionId": "b4000000-0000-4200-8200-000000000001",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [],
+  "pinData": {}
 }

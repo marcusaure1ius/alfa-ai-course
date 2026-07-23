@@ -22,19 +22,6 @@ function listJson(relativeDirectory) {
   return result.sort();
 }
 
-function collectStrings(value, pathParts = [], output = []) {
-  if (Array.isArray(value)) value.forEach((item, index) => collectStrings(item, [...pathParts, index], output));
-  else if (value && typeof value === 'object') Object.entries(value).forEach(([key, item]) => collectStrings(item, [...pathParts, key], output));
-  else if (typeof value === 'string') output.push({path: pathParts, value});
-  return output;
-}
-
-function profileValues(workflow, nodeName) {
-  const node = workflow.nodes.find((candidate) => candidate.name === nodeName);
-  assert.ok(node, `${workflow.id}: missing ${nodeName}`);
-  return Object.fromEntries((node.parameters?.assignments?.assignments ?? []).map(({name, value}) => [name, value]));
-}
-
 function verifyExport(exportPath, requireNoCredentialReferences) {
   const exported = JSON.parse(fs.readFileSync(exportPath, 'utf8'));
   const expectedIds = catalog.importOrder.flatMap(({workflows}) => workflows.map(({id}) => id)).sort();
@@ -62,9 +49,9 @@ if (process.argv[2] === '--verify-export') {
 assert.equal(catalog.schemaVersion, 1);
 assert.equal(catalog.n8nImage, 'docker.n8n.io/n8nio/n8n:2.29.10');
 const entries = catalog.importOrder.flatMap((group, groupIndex) => group.workflows.map((workflow) => ({...workflow, group: group.name, groupIndex})));
-assert.equal(entries.length, 19);
+assert.equal(entries.length, 20);
 assert.deepEqual(entries.map(({path: workflowPath}) => workflowPath).sort(), listJson('workflows'));
-ok('catalog covers exactly all 19 workflow JSON files and the pinned n8n image');
+ok('catalog covers exactly all 20 workflow JSON files and the pinned n8n image');
 
 const workflowsById = new Map();
 const entryById = new Map();
@@ -112,74 +99,39 @@ for (const [workflowId, workflow] of workflowsById) {
   }
 }
 assert.equal(dynamicReferenceCount, catalog.dynamicReferences.length);
-assert.equal(staticReferenceCount, 28);
-ok('28 static sub-workflow links resolve in import order and two closed dynamic contracts are declared');
+assert.equal(staticReferenceCount, 8);
+ok('eight static sub-workflow links resolve in import order; dynamic workflow selection is absent');
 
-const allFixtureStrings = [];
+assert.equal(catalog.demos.length, 5);
+assert.deepEqual(catalog.demos.map(({lesson}) => lesson), [1, 2, 3, 4, 5]);
 for (const demo of catalog.demos) {
-  const fixture = readJson(demo.fixture);
-  const cases = demo.fixtureGroups.length === 0 ? fixture : demo.fixtureGroups.flatMap((group) => {
-    assert.ok(Array.isArray(fixture[group]), `${demo.key}: missing fixture group ${group}`);
-    return fixture[group];
-  });
-  assert.equal(cases.length, demo.expectedCount, `${demo.key}: fixture count`);
-  assert.ok(cases.length >= 10, `${demo.key}: minimum fixture count`);
-  assert.equal(new Set(cases.map(({name}) => name)).size, cases.length, `${demo.key}: unique fixture names`);
-  for (const fixtureCase of cases) {
-    assert.equal(typeof fixtureCase.name, 'string');
-    assert.ok(fixtureCase.name.length > 0);
-    assert.ok(fixtureCase.input && typeof fixtureCase.input === 'object');
-    assert.ok(fixtureCase.expected && typeof fixtureCase.expected === 'object' && Object.keys(fixtureCase.expected).length > 0);
-  }
-  assert.ok(fs.existsSync(path.join(root, demo.contractTest)), `${demo.key}: contract test`);
-  allFixtureStrings.push(...collectStrings(fixture));
+  const workflow = readJson(demo.workflow);
+  assert.equal(entryById.get(workflow.id).group, 'business', `${demo.key}: business workflow`);
+  assert.ok(fs.existsSync(path.join(root, demo.contractTest)), `${demo.key}: beginner contract test`);
 }
-ok('five demos provide 20/13/21/14/12 named fixtures with inputs and expected outputs');
+ok('five beginner lessons map to business workflows and one executable UX contract suite');
 
-for (const {value} of allFixtureStrings) {
-  for (const email of value.matchAll(/[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/gi)) {
-    assert.ok(catalog.piiPolicy.allowedSyntheticEmailDomains.includes(email[1].toLowerCase()), `non-synthetic email domain: ${email[1]}`);
-  }
+const beginnerWorkflowIds = catalog.demos.map(({workflow}) => readJson(workflow).id);
+const beginnerWorkflows = beginnerWorkflowIds.map((id) => workflowsById.get(id));
+for (const workflow of beginnerWorkflows) {
+  const executable = workflow.nodes.filter(({type}) => type !== 'n8n-nodes-base.stickyNote');
+  assert.ok(executable.length <= 12, `${workflow.id}: beginner node limit`);
+  assert.ok(workflow.nodes.every(({type}) => ![
+    'n8n-nodes-base.code',
+    'n8n-nodes-base.function',
+    'n8n-nodes-base.functionItem',
+  ].includes(type)), `${workflow.id}: no Code/Function nodes`);
+  assert.ok(workflow.nodes.every(({type}) => ![
+    'n8n-nodes-base.httpRequest',
+    'n8n-nodes-base.telegram',
+    'n8n-nodes-base.emailSend',
+  ].includes(type)), `${workflow.id}: no direct dangerous outbound node`);
 }
-for (const demo of catalog.demos) {
-  for (const {path: valuePath, value} of collectStrings(readJson(demo.fixture))) {
-    if (valuePath.some((part) => String(part).toLowerCase().includes('phone'))) {
-      assert.ok(catalog.piiPolicy.allowedSyntheticPhones.includes(value), `${demo.key}: undeclared phone fixture ${value}`);
-    }
-  }
-}
-assert.ok(!secretPattern.test(JSON.stringify(catalog.demos.map(({fixture}) => readJson(fixture)))));
-ok('fixture contacts are limited to declared synthetic domains/phone values and no token/private-key pattern is present');
-
-const telegram = workflowsById.get('businessTelegramAssistantV1');
-const telegramProfile = profileValues(telegram, 'Telegram Assistant Profile');
-assert.equal(telegramProfile.profileTestMode, true);
-assert.equal(telegramProfile.profileDraftOnly, true);
-const lead = workflowsById.get('businessGuardedLeadHandlerV1');
-const leadProfile = profileValues(lead, 'Lead Handler Profile');
-assert.equal(leadProfile.profileTestMode, true);
-assert.equal(leadProfile.profileDraftOnly, true);
-const digest = workflowsById.get('businessDailyExecutiveDigestV1');
-const digestProfile = profileValues(digest, 'Digest Profile and Source Defaults');
-assert.equal(digestProfile.profileTestMode, true);
-assert.equal(digestProfile.profileDraftOnly, true);
-const email = workflowsById.get('businessEmailAssistantV1');
-assert.equal(profileValues(email, 'Email Assistant Profile').profileTestMode, true);
-assert.match(email.name, /Draft Only/);
-const rfTriage = workflowsById.get('businessRfEmailTelegramTriageV1');
-const rfTriageProfile = profileValues(rfTriage, 'RF Triage Profile');
-assert.equal(rfTriageProfile.profileTestMode, true);
-assert.equal(rfTriageProfile.profileDraftOnly, true);
-assert.equal(rfTriageProfile.profileLlmProvider, 'yandex');
-assert.equal(rfTriageProfile.profileNotifyMinPriority, 'high');
-for (const workflow of [telegram, lead, digest, email, rfTriage]) {
-  assert.ok(workflow.nodes.every(({type}) => !['n8n-nodes-base.httpRequest', 'n8n-nodes-base.telegram', 'n8n-nodes-base.emailSend'].includes(type)), `${workflow.id}: direct dangerous outbound node`);
-}
-ok('five business workflows are inactive and keep dangerous outbound actions behind test/draft shared contracts');
+ok('five business lessons are inactive visual no-code graphs with at most 12 executable nodes');
 
 for (const testPath of [...catalog.demos.map(({contractTest}) => contractTest), ...catalog.supportingContractTests]) {
   assert.ok(fs.existsSync(path.join(root, testPath)), `missing supporting contract test ${testPath}`);
 }
-ok('catalog maps every demo plus approval, mail, Telegram and CRM safety contracts to executable tests');
+ok('catalog maps beginner UX plus approval, mail, Telegram and CRM safety contracts to executable tests');
 
 console.log(`1..${assertionCount}`);

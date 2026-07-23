@@ -25,6 +25,12 @@
       ]
     },
     {
+      "name": "helpers",
+      "workflows": [
+        {"path": "workflows/helpers/beginner-yandex-prompt.json", "id": "helperBeginnerYandexPromptV1"}
+      ]
+    },
+    {
       "name": "diagnostics",
       "workflows": [
         {"path": "workflows/diagnostics/generic-llm-connection-test.json", "id": "diagnosticGenericLlmConnectionV1"},
@@ -42,60 +48,37 @@
       ]
     }
   ],
-  "dynamicReferences": [
-    {
-      "workflowId": "businessDailyExecutiveDigestV1",
-      "node": "Load Scheduled Business Events",
-      "expression": "={{ $('Digest Profile and Source Defaults').first().json.profileSourceWorkflowId }}",
-      "configurationField": "profileSourceWorkflowId"
-    },
-    {
-      "workflowId": "businessRfEmailTelegramTriageV1",
-      "node": "Classify via Selected LLM Gateway",
-      "expression": "={{ ({generic:'coreGenericLlmGatewayV1',yandex:'adapterYandexAiStudioLlmV1',gigachat:'adapterGigaChatLlmV1'})[$('RF Triage Profile').first().json.profileLlmProvider] }}",
-      "configurationField": "profileLlmProvider"
-    }
-  ],
+  "dynamicReferences": [],
   "demos": [
     {
       "key": "telegram-assistant",
       "workflow": "workflows/business/telegram-assistant.json",
-      "fixture": "tests/fixtures/telegram-assistant/contracts.json",
-      "fixtureGroups": ["inbound", "llm"],
-      "expectedCount": 20,
-      "contractTest": "tests/telegram_assistant_test.sh"
+      "lesson": 1,
+      "contractTest": "tests/beginner_workflows_test.sh"
     },
     {
       "key": "email-assistant",
       "workflow": "workflows/business/email-assistant.json",
-      "fixture": "tests/fixtures/email-assistant/extraction.json",
-      "fixtureGroups": [],
-      "expectedCount": 13,
-      "contractTest": "tests/email_assistant_test.sh"
+      "lesson": 2,
+      "contractTest": "tests/beginner_workflows_test.sh"
     },
     {
       "key": "lead-handler",
       "workflow": "workflows/business/lead-handler.json",
-      "fixture": "tests/fixtures/lead-handler/contracts.json",
-      "fixtureGroups": ["intake", "llm"],
-      "expectedCount": 21,
-      "contractTest": "tests/lead_handler_test.sh"
+      "lesson": 3,
+      "contractTest": "tests/beginner_workflows_test.sh"
     },
     {
       "key": "daily-executive-digest",
       "workflow": "workflows/business/daily-executive-digest.json",
-      "fixture": "tests/fixtures/executive-digest/contracts.json",
-      "fixtureGroups": ["aggregation"],
-      "expectedCount": 14,
-      "contractTest": "tests/executive_digest_test.sh"
+      "lesson": 4,
+      "contractTest": "tests/beginner_workflows_test.sh"
     },
     {
       "key": "rf-email-telegram-triage",
       "workflow": "workflows/business/rf-email-telegram-triage.json",
-      "fixture": "tests/fixtures/rf-email-telegram-triage/contracts.json",
-      "fixtureGroups": [],
-      "expectedCount": 12,
-      "contractTest": "tests/rf_email_telegram_triage_test.sh"
+      "lesson": 5,
+      "contractTest": "tests/beginner_workflows_test.sh"
     }
   ],
   "supportingContractTests": [
