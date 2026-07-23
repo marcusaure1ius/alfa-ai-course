@@ -5,7 +5,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "# Измените исходную картинку\n\n1. Нажмите **Выполнить workflow**.\n2. В блоке **1. Добавьте образец** вставьте прямую ссылку на JPG или PNG и напишите, что изменить.\n3. Polza.ai передаст изображение модели Qwen Image.\n4. Откройте результат в последнем блоке.\n\nИсходная ссылка должна быть доступна без пароля.",
+        "content": "# Измените исходную картинку\n\n1. Нажмите **Выполнить workflow**.\n2. В блоке **1. Добавьте образец** вставьте прямую ссылку на JPG или PNG и напишите, что изменить.\n3. Polza.ai передаст изображение модели Nano Banana.\n4. Откройте результат в последнем блоке.\n\nИсходная ссылка должна быть доступна без пароля.",
         "height": 320,
         "width": 540,
         "color": 5
@@ -65,7 +65,7 @@
             {
               "id": "edit-model",
               "name": "model",
-              "value": "qwen/image",
+              "value": "google/gemini-2.5-flash-image",
               "type": "string"
             },
             {
@@ -79,12 +79,6 @@
               "name": "referenceImageUrl",
               "value": "={{ $json.body?.imageUrl || 'https://placehold.co/1024x1024/png?text=Demo+Product' }}",
               "type": "string"
-            },
-            {
-              "id": "edit-strength",
-              "name": "strength",
-              "value": 0.75,
-              "type": "number"
             }
           ]
         },
@@ -106,13 +100,12 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ model: $json.model, input: { prompt: $json.prompt, aspect_ratio: '1:1', output_format: 'png', strength: $json.strength, images: [{ type: 'url', data: $json.referenceImageUrl }] }, async: false }) }}",
+        "body": "={{ JSON.stringify({ model: $json.model, input: { prompt: $json.prompt, aspect_ratio: '1:1', output_format: 'png', images: [{ type: 'url', data: $json.referenceImageUrl }] }, async: false }) }}",
         "options": {
           "timeout": 600000,
           "response": {
             "response": {
-              "neverError": true,
-              "responseFormat": "json"
+              "neverError": true
             }
           }
         }

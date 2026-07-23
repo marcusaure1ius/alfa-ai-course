@@ -9,7 +9,7 @@
       "endpoint": "https://polza.ai/api/v2/images/generations",
       "manualInput": {},
       "expectedRequest": {
-        "model": "dall-e-3",
+        "model": "openai/gpt-image-1.5",
         "n": 1,
         "size": "1024x1024",
         "quality": "auto",
@@ -41,7 +41,7 @@
       "endpoint": "https://polza.ai/api/v1/media",
       "manualInput": {},
       "expectedRequest": {
-        "model": "qwen/image",
+        "model": "google/gemini-2.5-flash-image",
         "async": false
       },
       "successResponse": {

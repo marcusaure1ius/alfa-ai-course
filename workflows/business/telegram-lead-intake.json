@@ -111,8 +111,7 @@
           "timeout": 600000,
           "response": {
             "response": {
-              "neverError": true,
-              "responseFormat": "json"
+              "neverError": true
             }
           }
         }

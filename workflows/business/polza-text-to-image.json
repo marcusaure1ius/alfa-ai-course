@@ -65,7 +65,7 @@
             {
               "id": "image-model",
               "name": "model",
-              "value": "dall-e-3",
+              "value": "openai/gpt-image-1.5",
               "type": "string"
             },
             {
@@ -111,8 +111,7 @@
           "timeout": 600000,
           "response": {
             "response": {
-              "neverError": true,
-              "responseFormat": "json"
+              "neverError": true
             }
           }
         }

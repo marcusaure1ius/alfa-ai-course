@@ -64,6 +64,11 @@ for (const {fixture, workflow} of workflows) {
   assert.equal(requestNode.parameters.genericAuthType, 'httpHeaderAuth');
   assert.equal(requestNode.credentials?.httpHeaderAuth?.id, 'REPLACE_WITH_POLZA_AI_CREDENTIAL_ID');
   assert.equal(requestNode.parameters.options.timeout, 600000);
+  assert.equal(
+    requestNode.parameters.options.response?.response?.responseFormat,
+    undefined,
+    `${workflow.id}: raw JSON bodies must use response autodetection so n8n resolves the response stream`,
+  );
   assert.equal(requestNode.retryOnFail, undefined, `${workflow.id}: implicit paid retry is forbidden`);
 
   const configured = assignments(workflow, fixture.configureNode, fixture.manualInput);
@@ -94,8 +99,8 @@ assert.equal(editRequest.input.images.length, 1);
 assert.deepEqual(editRequest.input.images[0], {type: 'url', data: 'https://placehold.co/1024x1024/png?text=Demo+Product'});
 assert.equal(editRequest.input.aspect_ratio, '1:1');
 assert.equal(editRequest.input.output_format, 'png');
-assert.equal(editRequest.input.strength, 0.75);
-ok('image-to-image sends exactly one public synthetic URL reference to qwen/image');
+assert.equal(editRequest.input.strength, undefined);
+ok('image-to-image sends exactly one public synthetic URL reference to Nano Banana');
 
 for (const id of ['businessTelegramLeadIntakeV1', 'businessTelegramPersonalAgentV1']) {
   const {fixture, workflow} = workflows.find(({workflow}) => workflow.id === id);
