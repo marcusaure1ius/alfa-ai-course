@@ -8,7 +8,7 @@
 ./scripts/import-workflows.sh --input workflows/business
 ```
 
-Default distribution содержит только пять самостоятельных уроков. Core, Adapter и Diagnostics JSON остаются в репозитории как advanced-библиотека и не импортируются на beginner-стенд.
+Default distribution содержит только десять самостоятельных уроков. Core, Adapter и Diagnostics JSON остаются в репозитории как advanced-библиотека и не импортируются на beginner-стенд.
 
 | ID | Название | Рабочих блоков | Code/Function | Sub-workflows |
 |---|---|---:|---:|---:|
@@ -17,20 +17,25 @@ Default distribution содержит только пять самостояте
 | `businessGuardedLeadHandlerV1` | Урок 3 — Заявка: карточка | 5 | 0 | 0 |
 | `businessDailyExecutiveDigestV1` | Урок 4 — Сводка | 5 | 0 | 0 |
 | `businessRfEmailTelegramTriageV1` | Урок 5 — Письмо → Telegram preview | 5 | 0 | 0 |
+| `businessPolzaTextToImageV1` | Урок 6 — Картинка по тексту | 5 | 0 | 0 |
+| `businessPolzaImageEditV1` | Урок 7 — Картинка по образцу | 5 | 0 | 0 |
+| `businessTelegramLeadIntakeV1` | Урок 8 — Лид из Telegram | 5 | 0 | 0 |
+| `businessTelegramPersonalAgentV1` | Урок 9 — Персональный помощник | 5 | 0 | 0 |
+| `businessAccountingDocumentReviewV1` | Урок 10 — Первичный документ | 5 | 0 | 0 |
 
 Каждый урок содержит:
 
 - Manual Trigger с вымышленным примером;
 - один реальный trigger: Telegram, IMAP, webhook или schedule;
 - Edit Fields с понятными входными данными;
-- один визуальный HTTP Request к фиксированному Yandex AI Studio endpoint;
+- один визуальный HTTP Request к фиксированному Yandex AI Studio или Polza.ai endpoint;
 - локальный результат или preview без автоматической отправки.
 
 ## Credentials
 
 В source JSON находятся только placeholder references. Import script удаляет их из staging copy, поэтому runtime получает выключенные workflow без credential references.
 
-После импорта преподаватель создаёт credential `Yandex AI Studio Api-Key`, выбирает его в блоке `2. ИИ…` каждого урока и указывает `folderId`/`model` в блоке `1`.
+После импорта преподаватель создаёт credential `Yandex AI Studio Api-Key` для уроков 1–5 и `Polza.ai API` для уроков 6–10. В Polza credential заголовок `Authorization` содержит `Bearer …`; секрет не вставляется в JSON.
 
 Telegram Trigger, IMAP и webhook credentials добавляются только перед контролируемым тестом реального сервиса. Telegram Send и Email Send nodes в beginner-уроках отсутствуют.
 
@@ -44,18 +49,18 @@ Telegram Trigger, IMAP и webhook credentials добавляются тольк�
 
 Проверки подтверждают:
 
-1. lessons-only каталог содержит ровно пять business JSON;
-2. workflow идут в порядке уроков 1–5;
+1. lessons-only каталог содержит ровно десять business JSON;
+2. workflow идут в порядке уроков 1–10;
 3. в них нет Code, Function, Function Item, `jsCode` и Execute Workflow;
 4. в каждом ровно пять исполняемых визуальных блоков и не более трёх выходных веток;
 5. названия и Sticky Notes написаны по-русски;
-6. Yandex endpoint фиксирован, а API key находится только в credential placeholder;
+6. Yandex и Polza endpoints фиксированы, а API keys находятся только в credential placeholders;
 7. почтовые triggers не скачивают вложения;
 8. Telegram/email send nodes отсутствуют;
-9. пять source JSON и пять credential-free staging JSON импортируются в чистый pinned n8n;
+9. десять source JSON и десять credential-free staging JSON импортируются в чистый pinned n8n;
 10. повторный import обновляет стабильные IDs без дублей.
 
-Clean import подтверждает совместимость структуры, но не является проверкой внешних аккаунтов. Yandex AI Studio, Telegram, Gmail и Яндекс Почта требуют user-owned credentials и отдельного smoke-test.
+Clean import подтверждает совместимость структуры, но не является проверкой внешних аккаунтов. Yandex AI Studio, Polza.ai, Telegram, Gmail и Яндекс Почта требуют user-owned credentials и отдельного smoke-test.
 
 ## Внешние шаблоны
 

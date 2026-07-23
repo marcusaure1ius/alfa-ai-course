@@ -55,7 +55,7 @@
 - backup → удаление тестовых данных → restore фактически подтверждает восстановление;
 - update и rollback проверены между заранее выбранными совместимыми версиями;
 - generic LLM test и Telegram test проходят после ввода пользователем credentials;
-- пять демонстрационных no-code workflow импортируются без секретов;
+- десять демонстрационных no-code workflow импортируются без секретов;
 - Quick Start, Timeweb Cloud и Yandex Cloud инструкции проходимы;
 - лицензирование и ограничения использования объяснены без представления текста как юридического заключения.
 
@@ -67,7 +67,7 @@
 - n8n Community Edition, PostgreSQL, Caddy, volumes и health checks;
 - install, doctor, backup, restore, update, rollback, uninstall, import/export workflows;
 - generic OpenAI-compatible LLM path, Yandex AI Studio и GigaChat после отдельной проверки официальных API;
-- пять самостоятельных демонстрационных бизнес-сценариев без Code/Function/Execute Workflow nodes в beginner distribution;
+- десять самостоятельных демонстрационных бизнес-сценариев без Code/Function/Execute Workflow nodes в beginner distribution;
 - reusable advanced sub-workflows в репозитории, но не в beginner runtime;
 - автоматические статические, integration и end-to-end проверки;
 - русскоязычная документация для участника и преподавателя.

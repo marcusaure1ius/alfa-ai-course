@@ -32,7 +32,7 @@ ok "catalog, fixture, link, PII and safety contracts"
 while IFS= read -r test_path; do
   "$ROOT/$test_path" >/dev/null || fatal "Contract test failed: $test_path"
 done < <(jq -r '[.demos[].contractTest, .supportingContractTests[]] | unique[]' "$CATALOG")
-ok "five demo and supporting dangerous-action contract suites"
+ok "ten demo and supporting dangerous-action contract suites"
 
 # shellcheck source=scripts/lib/workflow-portability.sh
 source "$ROOT/scripts/lib/workflow-portability.sh"
@@ -70,7 +70,7 @@ docker run --rm --pull=never --platform linux/amd64 \
   -v "$VOLUME_NAME:/home/node/.n8n" \
   "$IMAGE" export:workflow --all > "$TEMP_DIR/source-export.json"
 node "$ROOT/tests/workflow_catalog_test.mjs" --verify-export "$TEMP_DIR/source-export.json" >/dev/null
-ok "all five exact source lesson JSON files import into one clean pinned n8n database"
+ok "all ten exact source lesson JSON files import into one clean pinned n8n database"
 
 docker volume rm -f "$VOLUME_NAME" >/dev/null
 docker volume create "$VOLUME_NAME" >/dev/null
@@ -90,7 +90,7 @@ docker run --rm --pull=never --platform linux/amd64 \
   -v "$VOLUME_NAME:/home/node/.n8n" \
   "$IMAGE" export:workflow --all > "$TEMP_DIR/sanitized-export.json"
 node "$ROOT/tests/workflow_catalog_test.mjs" --verify-export "$TEMP_DIR/sanitized-export.json" --require-no-credentials >/dev/null
-ok "portability-staged import contains five inactive lessons without credential references"
+ok "portability-staged import contains ten inactive lessons without credential references"
 
 if ! docker run --rm --pull=never --platform linux/amd64 \
   -e N8N_ENCRYPTION_KEY=T0025-CLEAN-IMPORT-FIXTURE-KEY-NOT-SECRET \

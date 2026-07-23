@@ -5,11 +5,16 @@
     {
       "name": "business",
       "workflows": [
+        {"path": "workflows/business/accounting-document-review.json", "id": "businessAccountingDocumentReviewV1"},
         {"path": "workflows/business/daily-executive-digest.json", "id": "businessDailyExecutiveDigestV1"},
         {"path": "workflows/business/email-assistant.json", "id": "businessEmailAssistantV1"},
         {"path": "workflows/business/lead-handler.json", "id": "businessGuardedLeadHandlerV1"},
+        {"path": "workflows/business/polza-image-edit.json", "id": "businessPolzaImageEditV1"},
+        {"path": "workflows/business/polza-text-to-image.json", "id": "businessPolzaTextToImageV1"},
         {"path": "workflows/business/rf-email-telegram-triage.json", "id": "businessRfEmailTelegramTriageV1"},
-        {"path": "workflows/business/telegram-assistant.json", "id": "businessTelegramAssistantV1"}
+        {"path": "workflows/business/telegram-assistant.json", "id": "businessTelegramAssistantV1"},
+        {"path": "workflows/business/telegram-lead-intake.json", "id": "businessTelegramLeadIntakeV1"},
+        {"path": "workflows/business/telegram-personal-agent.json", "id": "businessTelegramPersonalAgentV1"}
       ]
     }
   ],
@@ -43,6 +48,36 @@
       "key": "rf-email-telegram-triage",
       "workflow": "workflows/business/rf-email-telegram-triage.json",
       "lesson": 5,
+      "contractTest": "tests/beginner_workflows_test.sh"
+    },
+    {
+      "key": "polza-text-to-image",
+      "workflow": "workflows/business/polza-text-to-image.json",
+      "lesson": 6,
+      "contractTest": "tests/beginner_workflows_test.sh"
+    },
+    {
+      "key": "polza-image-edit",
+      "workflow": "workflows/business/polza-image-edit.json",
+      "lesson": 7,
+      "contractTest": "tests/beginner_workflows_test.sh"
+    },
+    {
+      "key": "telegram-lead-intake",
+      "workflow": "workflows/business/telegram-lead-intake.json",
+      "lesson": 8,
+      "contractTest": "tests/beginner_workflows_test.sh"
+    },
+    {
+      "key": "telegram-personal-agent",
+      "workflow": "workflows/business/telegram-personal-agent.json",
+      "lesson": 9,
+      "contractTest": "tests/beginner_workflows_test.sh"
+    },
+    {
+      "key": "accounting-document-review",
+      "workflow": "workflows/business/accounting-document-review.json",
+      "lesson": 10,
       "contractTest": "tests/beginner_workflows_test.sh"
     }
   ],

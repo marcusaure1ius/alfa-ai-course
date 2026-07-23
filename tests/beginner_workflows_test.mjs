@@ -21,9 +21,52 @@ const directOutboundTypes = new Set([
 let assertionCount = 0;
 const ok = (name) => console.log(`ok ${++assertionCount} - ${name}`);
 
-assert.equal(demos.length, 5);
-assert.deepEqual(demos.map(({lesson}) => lesson), [1, 2, 3, 4, 5]);
-ok('каталог содержит пять уроков в понятном порядке');
+assert.equal(demos.length, 10);
+assert.deepEqual(demos.map(({lesson}) => lesson), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+ok('каталог содержит десять уроков в понятном порядке');
+
+const providerProfiles = new Map([
+  ['businessTelegramAssistantV1', {
+    url: 'https://ai.api.cloud.yandex.net/v1/chat/completions',
+    credential: 'REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID',
+  }],
+  ['businessEmailAssistantV1', {
+    url: 'https://ai.api.cloud.yandex.net/v1/chat/completions',
+    credential: 'REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID',
+  }],
+  ['businessGuardedLeadHandlerV1', {
+    url: 'https://ai.api.cloud.yandex.net/v1/chat/completions',
+    credential: 'REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID',
+  }],
+  ['businessDailyExecutiveDigestV1', {
+    url: 'https://ai.api.cloud.yandex.net/v1/chat/completions',
+    credential: 'REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID',
+  }],
+  ['businessRfEmailTelegramTriageV1', {
+    url: 'https://ai.api.cloud.yandex.net/v1/chat/completions',
+    credential: 'REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID',
+  }],
+  ['businessPolzaTextToImageV1', {
+    url: 'https://polza.ai/api/v2/images/generations',
+    credential: 'REPLACE_WITH_POLZA_AI_CREDENTIAL_ID',
+  }],
+  ['businessPolzaImageEditV1', {
+    url: 'https://polza.ai/api/v1/media',
+    credential: 'REPLACE_WITH_POLZA_AI_CREDENTIAL_ID',
+  }],
+  ['businessTelegramLeadIntakeV1', {
+    url: 'https://polza.ai/api/v1/chat/completions',
+    credential: 'REPLACE_WITH_POLZA_AI_CREDENTIAL_ID',
+  }],
+  ['businessTelegramPersonalAgentV1', {
+    url: 'https://polza.ai/api/v1/chat/completions',
+    credential: 'REPLACE_WITH_POLZA_AI_CREDENTIAL_ID',
+  }],
+  ['businessAccountingDocumentReviewV1', {
+    url: 'https://polza.ai/api/v1/chat/completions',
+    credential: 'REPLACE_WITH_POLZA_AI_CREDENTIAL_ID',
+  }],
+]);
 
 for (const {lesson, workflowJson: workflow} of demos) {
   const executable = workflow.nodes.filter(({type}) => type !== stickyType);
@@ -49,11 +92,13 @@ for (const {lesson, workflowJson: workflow} of demos) {
   assert.ok(executable.every(({type}) => !directOutboundTypes.has(type)), `${workflow.id}: нет прямой опасной отправки`);
   const llmNodes = executable.filter(({type}) => type === 'n8n-nodes-base.httpRequest');
   assert.equal(llmNodes.length, 1, `${workflow.id}: один визуальный LLM HTTP node`);
-  assert.equal(llmNodes[0].parameters.url, 'https://ai.api.cloud.yandex.net/v1/chat/completions', `${workflow.id}: фиксированный Yandex endpoint`);
+  const provider = providerProfiles.get(workflow.id);
+  assert.ok(provider, `${workflow.id}: описан профиль провайдера`);
+  assert.equal(llmNodes[0].parameters.url, provider.url, `${workflow.id}: фиксированный endpoint`);
   assert.equal(llmNodes[0].parameters.authentication, 'genericCredentialType', `${workflow.id}: credential-only auth`);
-  assert.equal(llmNodes[0].credentials?.httpHeaderAuth?.id, 'REPLACE_WITH_YANDEX_AI_STUDIO_CREDENTIAL_ID', `${workflow.id}: placeholder credential`);
+  assert.equal(llmNodes[0].credentials?.httpHeaderAuth?.id, provider.credential, `${workflow.id}: placeholder credential`);
 }
-ok('пять standalone-уроков проходят beginner UX gate: 4–10 блоков, русские подписи, заметки, ноль Code nodes и ноль sub-workflows');
+ok('десять standalone-уроков проходят beginner UX gate: 4–10 блоков, русские подписи, заметки, ноль Code nodes и ноль sub-workflows');
 
 const realTriggerTypes = new Map([
   ['businessTelegramAssistantV1', 'n8n-nodes-base.telegramTrigger'],
@@ -61,6 +106,11 @@ const realTriggerTypes = new Map([
   ['businessGuardedLeadHandlerV1', 'n8n-nodes-base.webhook'],
   ['businessDailyExecutiveDigestV1', 'n8n-nodes-base.scheduleTrigger'],
   ['businessRfEmailTelegramTriageV1', 'n8n-nodes-base.emailReadImap'],
+  ['businessPolzaTextToImageV1', 'n8n-nodes-base.webhook'],
+  ['businessPolzaImageEditV1', 'n8n-nodes-base.webhook'],
+  ['businessTelegramLeadIntakeV1', 'n8n-nodes-base.telegramTrigger'],
+  ['businessTelegramPersonalAgentV1', 'n8n-nodes-base.telegramTrigger'],
+  ['businessAccountingDocumentReviewV1', 'n8n-nodes-base.webhook'],
 ]);
 for (const {workflowJson: workflow} of demos) {
   assert.ok(workflow.nodes.some(({type}) => type === realTriggerTypes.get(workflow.id)), `${workflow.id}: реальный trigger рядом с ручным примером`);
@@ -83,5 +133,24 @@ for (const workflow of emailWorkflows) {
   assert.equal(trigger.parameters.downloadAttachments, false, `${workflow.id}: вложения не загружаются`);
 }
 ok('почтовые уроки не загружают вложения и не отправляют письма');
+
+for (const id of ['businessTelegramLeadIntakeV1', 'businessTelegramPersonalAgentV1']) {
+  const workflow = demos.find(({workflowJson}) => workflowJson.id === id).workflowJson;
+  const trigger = workflow.nodes.find(({type}) => type === 'n8n-nodes-base.telegramTrigger');
+  assert.equal(trigger.parameters.additionalFields.download, false, `${id}: Telegram-вложения не загружаются`);
+  assert.match(trigger.parameters.additionalFields.chatIds, /^REPLACE_WITH_/, `${id}: доступ ограничивается явным chat ID`);
+  assert.ok(workflow.nodes.every(({type}) => type !== 'n8n-nodes-base.telegram'), `${id}: нет автоматического ответа в Telegram`);
+}
+ok('новые Telegram-уроки требуют allowlist chat ID и заканчиваются локальным preview');
+
+const accounting = demos.find(({workflowJson}) => workflowJson.id === 'businessAccountingDocumentReviewV1').workflowJson;
+assert.match(JSON.stringify(accounting), /бухгалтером|бухгалтерской/i);
+assert.match(JSON.stringify(accounting), /не записывается|не переносите/i);
+assert.ok(accounting.nodes.every(({type}) => ![
+  'n8n-nodes-base.postgres',
+  'n8n-nodes-base.mySql',
+  'n8n-nodes-base.googleSheets',
+].includes(type)));
+ok('бухгалтерский урок требует ручной сверки и не меняет учётные системы');
 
 console.log(`1..${assertionCount}`);

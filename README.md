@@ -62,7 +62,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Participant handoff](docs/participant-handoff.md) — проверяемая передача владения и операционной ответственности;
 - [Instructor guide](docs/instructor-guide.md) — подготовка, проведение и безопасная поддержка курса;
 - [Instructor setup на neurokurs.ru](docs/instructor-setup.md) — пять человеческих шагов для отдельного демонстрационного стенда преподавателя;
-- [Шаблоны для занятия](docs/instructor-templates.md) — пять no-code уроков для участника, который впервые открыл n8n;
+- [Шаблоны для занятия](docs/instructor-templates.md) — десять no-code уроков для участника, который впервые открыл n8n;
 - [Маршрут участника без кода](docs/beginner-no-code-workflows.md) — как читать сценарии, менять примеры и подключать Telegram, Gmail/Яндекс Почту и YandexGPT;
 - [Backup и restore](docs/backup-and-restore.md) — recovery archive, checksums, safety backup и rehearsal;
 - [Update и rollback](docs/update-and-rollback.md) — approved version pair, backup gate и restore-based recovery;
@@ -85,7 +85,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [RF Email Triage to Telegram](docs/workflows/rf-email-telegram-triage.md) — важное письмо → безопасный Telegram preview;
 - [RF-каталог популярных сценариев](docs/research/2026-07-23-rf-popular-scenarios.md) — popularity-сигналы, приоритеты и LLM-пути без обязательного VPN;
 - [Курсы и готовые сценарии n8n для РФ](docs/research/2026-07-23-n8n-courses-and-templates.md) — актуальный shortlist, цены, готовые JSON и ограничения доступности;
-- [Каталог workflow и test report](docs/workflow-catalog-and-test-report.md) — пять standalone-уроков, beginner UX gate и clean pinned import;
+- [Каталог workflow и test report](docs/workflow-catalog-and-test-report.md) — десять standalone-уроков, beginner UX gate и clean pinned import;
 - [Apache License 2.0](LICENSE) — лицензия оригинальных файлов starter kit;
 - [License notes](LICENSE-NOTES.md) — границы лицензии starter kit, n8n и сторонних компонентов.
 

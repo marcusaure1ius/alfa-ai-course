@@ -1,0 +1,186 @@
+{
+  "id": "businessAccountingDocumentReviewV1",
+  "name": "Business · Урок 10 — Бухгалтерия: разбор первичного документа",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# Фото документа → данные для проверки\n\n1. Нажмите **Выполнить workflow**.\n2. В блоке **1. Добавьте документ** вставьте прямую ссылку на JPG или PNG счёта, акта, накладной или чека.\n3. ИИ попробует извлечь реквизиты.\n4. Сверьте каждый результат с оригиналом.\n\nВ 1С, банк и бухгалтерскую систему ничего не записывается.",
+        "height": 340,
+        "width": 560,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1240, -420],
+      "id": "ba000000-0000-4100-8100-000000000001",
+      "name": "Инструкция к уроку"
+    },
+    {
+      "parameters": {
+        "content": "## Обязательная проверка бухгалтером\n\nРезультат ИИ не является бухгалтерской, налоговой или юридической проверкой. Он может ошибиться в сумме, НДС, ИНН и дате. Не загружайте документы с лишними персональными данными и всегда сверяйте поля вручную.",
+        "height": 220,
+        "width": 470,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [140, -320],
+      "id": "ba000000-0000-4100-8100-000000000002",
+      "name": "Это не бухгалтерская проверка"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1100, -40],
+      "id": "ba000000-0000-4100-8100-000000000003",
+      "name": "▶ Запустить тест"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lesson-10-accounting-document-v1",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-1100, 180],
+      "id": "ba000000-0000-4100-8100-000000000004",
+      "name": "Получить ссылку на документ",
+      "webhookId": "REPLACE_WITH_ACCOUNTING_DOCUMENT_WEBHOOK_ID",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_ACCOUNTING_WEBHOOK_HEADER_AUTH_ID",
+          "name": "REPLACE_WITH_ACCOUNTING_WEBHOOK_HEADER_AUTH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "document-model",
+              "name": "model",
+              "value": "openai/gpt-4o",
+              "type": "string"
+            },
+            {
+              "id": "document-url",
+              "name": "documentUrl",
+              "value": "={{ $json.body?.documentUrl || 'https://placehold.co/1200x1600/png?text=Demo+Invoice+No+100+Total+12000+RUB' }}",
+              "type": "string"
+            },
+            {
+              "id": "document-instruction",
+              "name": "instruction",
+              "value": "Извлеки данные из изображения российского первичного документа. Верни только JSON с ключами document_type, number, date, seller, seller_inn, buyer, buyer_inn, total, vat, currency, confidence и warnings. Если поле не видно, используй null. Не вычисляй и не исправляй реквизиты, не делай вывод о действительности документа. В warnings перечисли всё, что бухгалтер должен проверить вручную.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-760, 60],
+      "id": "ba000000-0000-4100-8100-000000000005",
+      "name": "1. Добавьте документ"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://polza.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: $json.model, messages: [{ role: 'user', content: [{ type: 'text', text: $json.instruction }, { type: 'image_url', image_url: { url: $json.documentUrl } }] }], temperature: 0, max_tokens: 1200, stream: false }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-380, 60],
+      "id": "ba000000-0000-4100-8100-000000000006",
+      "name": "2. Polza читает документ",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_POLZA_AI_CREDENTIAL_ID",
+          "name": "Polza.ai API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "document-result",
+              "name": "Данные для сверки",
+              "value": "={{ $json.choices?.[0]?.message?.content || 'ИИ не ответил. Проверьте Polza credential, баланс, модель и доступность ссылки.' }}",
+              "type": "string"
+            },
+            {
+              "id": "document-warning",
+              "name": "Обязательно",
+              "value": "Сверьте каждое поле с оригиналом вместе с бухгалтером. Не переносите результат в учётную систему автоматически.",
+              "type": "string"
+            },
+            {
+              "id": "document-scope",
+              "name": "Формат урока",
+              "value": "Учебная версия принимает прямую ссылку на JPG или PNG. PDF и закрытые хранилища подключаются отдельным безопасным шагом.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [20, 60],
+      "id": "ba000000-0000-4100-8100-000000000007",
+      "name": "3. Сверьте с оригиналом"
+    }
+  ],
+  "connections": {
+    "▶ Запустить тест": {
+      "main": [[{"node": "1. Добавьте документ", "type": "main", "index": 0}]]
+    },
+    "Получить ссылку на документ": {
+      "main": [[{"node": "1. Добавьте документ", "type": "main", "index": 0}]]
+    },
+    "1. Добавьте документ": {
+      "main": [[{"node": "2. Polza читает документ", "type": "main", "index": 0}]]
+    },
+    "2. Polza читает документ": {
+      "main": [[{"node": "3. Сверьте с оригиналом", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true
+  },
+  "versionId": "ba000000-0000-4200-8200-000000000001",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [],
+  "pinData": {}
+}

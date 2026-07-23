@@ -104,7 +104,7 @@ RF-набор не включает VPN, proxy или обход огранич�
 - маскирует email отправителя и не передаёт полный текст письма;
 - по умолчанию остаётся inactive, `testMode: true`, `draftOnly: true`.
 
-Вместе с уже существующими workflows это образует пять готовых business-сценариев; все пять используют LLM через общий контракт, а Mail/Telegram/provider logic остаётся переиспользуемой.
+Этот первый набор образовал пять готовых business-сценариев. Задача `T-0044` позже расширила beginner distribution до десяти уроков: добавлены два сценария создания изображений, Telegram lead intake, персональный Telegram assistant и разбор первичного документа через Polza.ai. Новые уроки остаются standalone и не используют advanced sub-workflows.
 
 ## Ограничения evidence
 

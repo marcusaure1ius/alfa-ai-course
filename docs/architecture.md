@@ -112,7 +112,7 @@ Caddy выбран для базового профиля из-за неболь
 
 ```mermaid
 flowchart TD
-  B["Beginner business lessons\n5 visual nodes"] --> G["Yandex AI Studio\none visual HTTP node"]
+  B["Beginner business lessons\n5 visual nodes"] --> G["Yandex AI Studio or Polza.ai\none visual HTTP node"]
   B --> T["Local Telegram/email preview"]
   S["Advanced service layer"] --> A["Human approval"]
   S --> M["Mail / CRM / logging contracts"]
@@ -124,11 +124,11 @@ Core sub-workflows: LLM Gateway, Send Telegram Message, Request Human Approval, 
 
 Mail Gateway разделяет три операции одним строгим контрактом: IMAP adapter нормализует provider output в bounded untrusted plain text; бизнес-workflow создаёт draft; SMTP-ветка открывается только точным unexpired approval result T-0017 с тем же `idempotencyKey`, при `testMode=false`, `draftOnly=false` и без attachments. Canonical processing marker, threading IDs и durable state дают adapter данные для deduplication/reply-loop protection; credentials остаются в n8n credential store. Pinned Send Email node не поддерживает custom threading headers, поэтому это ограничение явно fail-visible в [mail contract](contracts/mail.md); настройка описана в [IMAP/SMTP guide](credentials/mail.md).
 
-Учебный business layer состоит из пяти коротких самостоятельных уроков: Telegram assistant, email assistant, lead card, daily executive digest и RF Email Triage to Telegram preview. В каждом ровно пять исполняемых визуальных nodes, русские подписи, Manual Trigger с вымышленным примером и реальный trigger для следующего шага. Code, Function, Function Item, `jsCode` и Execute Workflow в этом слое запрещены автоматическим beginner UX gate.
+Учебный business layer состоит из десяти коротких самостоятельных уроков: Telegram assistant, email assistant, lead card, daily executive digest, RF Email Triage to Telegram preview, text-to-image, image-to-image, Telegram lead intake, personal Telegram assistant и accounting document review. В каждом ровно пять исполняемых визуальных nodes, русские подписи, Manual Trigger с вымышленным примером и реальный trigger для следующего шага. Code, Function, Function Item, `jsCode` и Execute Workflow в этом слое запрещены автоматическим beginner UX gate.
 
-Каждый урок содержит один визуальный HTTP Request к фиксированному Yandex AI Studio endpoint. API key хранится только в n8n credential, а `folderId` и `model` видны в Edit Fields. Default beginner deployment импортирует только эти пять уроков; Core, Adapter и Diagnostics остаются advanced-библиотекой репозитория.
+Каждый урок содержит один визуальный HTTP Request к фиксированному Yandex AI Studio или Polza.ai endpoint. API key хранится только в n8n credential, а model и доступные учебные параметры видны в Edit Fields. Default beginner deployment импортирует только эти десять уроков; Core, Adapter и Diagnostics остаются advanced-библиотекой репозитория.
 
-Прямые Telegram Send и Email Send nodes в учебном слое запрещены. Telegram assistant и email assistant показывают черновик внутри n8n; сводка и email triage заканчиваются локальным Telegram preview; lead card не изменяет CRM. Production mutations остаются в advanced service contracts и требуют отдельного урока с human approval.
+Прямые Telegram Send и Email Send nodes в учебном слое запрещены. Telegram assistant, email assistant, lead intake и personal assistant показывают черновик внутри n8n; сводка и email triage заканчиваются локальным Telegram preview; lead card не изменяет CRM; изображения не публикуются; accounting document review не меняет 1С, банк или таблицу и требует сверки человеком. Production mutations остаются в advanced service contracts и требуют отдельного урока с human approval.
 
 ## Trust boundaries и secrets
 
@@ -143,6 +143,7 @@ Mail Gateway разделяет три операции одним строги�
 - Canonical Bitrix24 adapter использует OAuth 2.0 credential с Bearer header. Incoming webhook допускается только как локальный ручной smoke test и не входит в экспортируемый workflow, пока нет проверенного encrypted credential path для URL secret.
 - GigaChat authorization key хранится в credential; временный access token живёт только внутри execution и маскируется в errors/logs.
 - Yandex API key хранится только в HTTP Header Auth credential; folder/model identifiers проверяются до provider call, а raw auth/model error bodies наружу не передаются.
+- Polza.ai API key хранится только в HTTP Header Auth credential; workflow JSON содержит placeholder, а import staging удаляет credential references. Документы и изображения пересекают границы Polza.ai и upstream model provider, поэтому реальные ПДн не используются в beginner smoke.
 - Execution data может содержать ПДн. Default: pruning включён, max age `168` часов, max count `10000`; успешные и ошибочные executions сохраняются в пределах этих лимитов для учебной диагностики. Guide обязан объяснить уменьшение retention.
 - Diagnostics/personalization выключены в default profile; доступ к environment из workflow nodes не открывается ради обхода credential store.
 - TLS certificate verification не отключается. Необходимые доверенные root certificates устанавливаются и проверяются явно.

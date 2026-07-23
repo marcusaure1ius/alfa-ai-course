@@ -1,0 +1,192 @@
+{
+  "id": "businessPolzaImageEditV1",
+  "name": "Business · Урок 7 — Контент: новая картинка по образцу",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# Измените исходную картинку\n\n1. Нажмите **Выполнить workflow**.\n2. В блоке **1. Добавьте образец** вставьте прямую ссылку на JPG или PNG и напишите, что изменить.\n3. Polza.ai передаст изображение модели Qwen Image.\n4. Откройте результат в последнем блоке.\n\nИсходная ссылка должна быть доступна без пароля.",
+        "height": 320,
+        "width": 540,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1240, -420],
+      "id": "b7000000-0000-4100-8100-000000000001",
+      "name": "Инструкция к уроку"
+    },
+    {
+      "parameters": {
+        "content": "## Берегите данные и права\n\nНе используйте фото клиентов и закрытые документы. Загружайте только изображения, которыми вправе распоряжаться. Результат остаётся черновиком и никуда не публикуется.",
+        "height": 190,
+        "width": 440,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [140, -300],
+      "id": "b7000000-0000-4100-8100-000000000002",
+      "name": "Не загружайте лишнее"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1100, -40],
+      "id": "b7000000-0000-4100-8100-000000000003",
+      "name": "▶ Запустить тест"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lesson-7-image-from-reference-v1",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-1100, 180],
+      "id": "b7000000-0000-4100-8100-000000000004",
+      "name": "Получить образец из формы",
+      "webhookId": "REPLACE_WITH_IMAGE_EDIT_WEBHOOK_ID",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_IMAGE_EDIT_WEBHOOK_HEADER_AUTH_ID",
+          "name": "REPLACE_WITH_IMAGE_EDIT_WEBHOOK_HEADER_AUTH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "edit-model",
+              "name": "model",
+              "value": "qwen/image",
+              "type": "string"
+            },
+            {
+              "id": "edit-prompt",
+              "name": "prompt",
+              "value": "={{ $json.body?.prompt || 'Сохрани форму товара, замени фон на уютную кофейню с мягким дневным светом, убери любые надписи и логотипы' }}",
+              "type": "string"
+            },
+            {
+              "id": "edit-reference",
+              "name": "referenceImageUrl",
+              "value": "={{ $json.body?.imageUrl || 'https://placehold.co/1024x1024/png?text=Demo+Product' }}",
+              "type": "string"
+            },
+            {
+              "id": "edit-strength",
+              "name": "strength",
+              "value": 0.75,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-760, 60],
+      "id": "b7000000-0000-4100-8100-000000000005",
+      "name": "1. Добавьте образец"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://polza.ai/api/v1/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: $json.model, input: { prompt: $json.prompt, aspect_ratio: '1:1', output_format: 'png', strength: $json.strength, images: [{ type: 'url', data: $json.referenceImageUrl }] }, async: false }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-380, 60],
+      "id": "b7000000-0000-4100-8100-000000000006",
+      "name": "2. Polza меняет картинку",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_POLZA_AI_CREDENTIAL_ID",
+          "name": "Polza.ai API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "edit-result",
+              "name": "Ссылка на результат",
+              "value": "={{ $json.data?.[0]?.url || $json.data?.url || $json.data?.[0] || 'Результат не получен. Проверьте credential, баланс и ответ блока 2.' }}",
+              "type": "string"
+            },
+            {
+              "id": "edit-status",
+              "name": "Статус",
+              "value": "={{ $json.status || 'Ответ получен' }}",
+              "type": "string"
+            },
+            {
+              "id": "edit-cost",
+              "name": "Стоимость запроса, ₽",
+              "value": "={{ $json.usage?.cost_rub ?? $json.cost ?? 'Смотрите в личном кабинете Polza.ai' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [20, 60],
+      "id": "b7000000-0000-4100-8100-000000000007",
+      "name": "3. Проверьте результат"
+    }
+  ],
+  "connections": {
+    "▶ Запустить тест": {
+      "main": [[{"node": "1. Добавьте образец", "type": "main", "index": 0}]]
+    },
+    "Получить образец из формы": {
+      "main": [[{"node": "1. Добавьте образец", "type": "main", "index": 0}]]
+    },
+    "1. Добавьте образец": {
+      "main": [[{"node": "2. Polza меняет картинку", "type": "main", "index": 0}]]
+    },
+    "2. Polza меняет картинку": {
+      "main": [[{"node": "3. Проверьте результат", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true
+  },
+  "versionId": "b7000000-0000-4200-8200-000000000001",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [],
+  "pinData": {}
+}

@@ -1,0 +1,186 @@
+{
+  "id": "businessTelegramLeadIntakeV1",
+  "name": "Business · Урок 8 — Telegram: разбор нового лида",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# Сообщение клиента → карточка лида\n\n1. Нажмите **Выполнить workflow** и посмотрите учебный пример.\n2. Измените сообщение в блоке **1. Настройте обращение**.\n3. ИИ выделит контакт, потребность и следующий вопрос.\n4. Подключите Telegram credential только после проверки ручного теста.\n\nСообщение в CRM не записывается и клиенту ничего не отправляется.",
+        "height": 330,
+        "width": 550,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1240, -420],
+      "id": "b8000000-0000-4100-8100-000000000001",
+      "name": "Инструкция к уроку"
+    },
+    {
+      "parameters": {
+        "content": "## Сначала проверяет человек\n\nИИ может неверно понять имя, телефон или срочность. Менеджер сверяет карточку с исходным сообщением и только потом переносит её в CRM. Автоматическая запись намеренно не добавлена.",
+        "height": 200,
+        "width": 450,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [140, -300],
+      "id": "b8000000-0000-4100-8100-000000000002",
+      "name": "CRM не меняется"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1100, -40],
+      "id": "b8000000-0000-4100-8100-000000000003",
+      "name": "▶ Запустить тест"
+    },
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {
+          "download": false,
+          "chatIds": "REPLACE_WITH_ALLOWED_CHAT_IDS"
+        }
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.3,
+      "position": [-1100, 180],
+      "id": "b8000000-0000-4100-8100-000000000004",
+      "name": "Получить лид из Telegram",
+      "webhookId": "REPLACE_WITH_TELEGRAM_LEAD_WEBHOOK_ID",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_TELEGRAM_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "lead-model",
+              "name": "model",
+              "value": "openai/gpt-4o",
+              "type": "string"
+            },
+            {
+              "id": "lead-instruction",
+              "name": "instruction",
+              "value": "Ты помощник российского малого бизнеса. Разбери входящее сообщение и составь понятную карточку: имя, username или телефон, что нужно клиенту, срочность низкая/обычная/высокая, недостающие данные и один следующий вопрос менеджера. Не придумывай факты: если данных нет, пиши «не указано». Не отвечай клиенту и не обещай цену или срок.",
+              "type": "string"
+            },
+            {
+              "id": "lead-text",
+              "name": "text",
+              "value": "={{ $json.message?.text || 'Добрый день! Я Анна, нужна уборка офиса 120 м² на следующей неделе. Напишите в Telegram @anna_demo, сколько это стоит?' }}",
+              "type": "string"
+            },
+            {
+              "id": "lead-source",
+              "name": "source",
+              "value": "Telegram",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-760, 60],
+      "id": "b8000000-0000-4100-8100-000000000005",
+      "name": "1. Настройте обращение"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://polza.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: $json.model, messages: [{ role: 'system', content: $json.instruction }, { role: 'user', content: $json.text }], temperature: 0.1, max_tokens: 700, stream: false }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-380, 60],
+      "id": "b8000000-0000-4100-8100-000000000006",
+      "name": "2. Polza собирает карточку",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_POLZA_AI_CREDENTIAL_ID",
+          "name": "Polza.ai API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "lead-result",
+              "name": "Карточка лида",
+              "value": "={{ $json.choices?.[0]?.message?.content || 'ИИ не ответил. Проверьте Polza credential, баланс и модель в блоке 2.' }}",
+              "type": "string"
+            },
+            {
+              "id": "lead-next",
+              "name": "Действие менеджера",
+              "value": "Сверьте карточку с исходным сообщением. После проверки вручную ответьте клиенту или перенесите данные в CRM.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [20, 60],
+      "id": "b8000000-0000-4100-8100-000000000007",
+      "name": "3. Проверьте лид"
+    }
+  ],
+  "connections": {
+    "▶ Запустить тест": {
+      "main": [[{"node": "1. Настройте обращение", "type": "main", "index": 0}]]
+    },
+    "Получить лид из Telegram": {
+      "main": [[{"node": "1. Настройте обращение", "type": "main", "index": 0}]]
+    },
+    "1. Настройте обращение": {
+      "main": [[{"node": "2. Polza собирает карточку", "type": "main", "index": 0}]]
+    },
+    "2. Polza собирает карточку": {
+      "main": [[{"node": "3. Проверьте лид", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true
+  },
+  "versionId": "b8000000-0000-4200-8200-000000000001",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [],
+  "pinData": {}
+}

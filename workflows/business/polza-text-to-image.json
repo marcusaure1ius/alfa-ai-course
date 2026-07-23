@@ -1,0 +1,192 @@
+{
+  "id": "businessPolzaTextToImageV1",
+  "name": "Business · Урок 6 — Контент: картинка по тексту",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# Картинка из обычного описания\n\n1. Нажмите **Выполнить workflow**.\n2. В блоке **1. Опишите картинку** замените учебный текст своим.\n3. Блок **2. Polza создаёт картинку** отправит один запрос.\n4. Откройте последний блок и скопируйте ссылку на результат.\n\nКод писать не нужно. Для настоящего запуска потребуется один API-ключ Polza.ai.",
+        "height": 320,
+        "width": 540,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1240, -420],
+      "id": "b6000000-0000-4100-8100-000000000001",
+      "name": "Инструкция к уроку"
+    },
+    {
+      "parameters": {
+        "content": "## Перед публикацией\n\nИИ может исказить надписи, логотипы и детали товара. Всегда откройте результат, проверьте факты и права на исходные материалы. Этот workflow ничего не публикует автоматически.",
+        "height": 190,
+        "width": 440,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [140, -300],
+      "id": "b6000000-0000-4100-8100-000000000002",
+      "name": "Проверьте изображение"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1100, -40],
+      "id": "b6000000-0000-4100-8100-000000000003",
+      "name": "▶ Запустить тест"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lesson-6-image-from-text-v1",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-1100, 180],
+      "id": "b6000000-0000-4100-8100-000000000004",
+      "name": "Получить описание из формы",
+      "webhookId": "REPLACE_WITH_TEXT_TO_IMAGE_WEBHOOK_ID",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_IMAGE_WEBHOOK_HEADER_AUTH_ID",
+          "name": "REPLACE_WITH_IMAGE_WEBHOOK_HEADER_AUTH"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "image-model",
+              "name": "model",
+              "value": "dall-e-3",
+              "type": "string"
+            },
+            {
+              "id": "image-prompt",
+              "name": "prompt",
+              "value": "={{ $json.body?.prompt || 'Предметная фотография керамической кружки ручной работы на светлом деревянном столе, мягкий дневной свет, спокойный бежевый фон, без текста и логотипов' }}",
+              "type": "string"
+            },
+            {
+              "id": "image-size",
+              "name": "size",
+              "value": "1024x1024",
+              "type": "string"
+            },
+            {
+              "id": "image-quality",
+              "name": "quality",
+              "value": "auto",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-760, 60],
+      "id": "b6000000-0000-4100-8100-000000000005",
+      "name": "1. Опишите картинку"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://polza.ai/api/v2/images/generations",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: $json.model, prompt: $json.prompt, n: 1, size: $json.size, quality: $json.quality, response_format: 'url' }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-380, 60],
+      "id": "b6000000-0000-4100-8100-000000000006",
+      "name": "2. Polza создаёт картинку",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_POLZA_AI_CREDENTIAL_ID",
+          "name": "Polza.ai API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "image-result",
+              "name": "Ссылка на картинку",
+              "value": "={{ $json.data?.[0]?.url || 'Картинка не получена. Проверьте credential, баланс и настройки в блоке 2.' }}",
+              "type": "string"
+            },
+            {
+              "id": "image-cost",
+              "name": "Стоимость запроса, ₽",
+              "value": "={{ $json.usage?.cost_rub ?? 'Смотрите в личном кабинете Polza.ai' }}",
+              "type": "string"
+            },
+            {
+              "id": "image-next",
+              "name": "Следующий шаг",
+              "value": "Откройте ссылку и проверьте изображение вручную. Автопубликация в этом уроке отключена.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [20, 60],
+      "id": "b6000000-0000-4100-8100-000000000007",
+      "name": "3. Проверьте картинку"
+    }
+  ],
+  "connections": {
+    "▶ Запустить тест": {
+      "main": [[{"node": "1. Опишите картинку", "type": "main", "index": 0}]]
+    },
+    "Получить описание из формы": {
+      "main": [[{"node": "1. Опишите картинку", "type": "main", "index": 0}]]
+    },
+    "1. Опишите картинку": {
+      "main": [[{"node": "2. Polza создаёт картинку", "type": "main", "index": 0}]]
+    },
+    "2. Polza создаёт картинку": {
+      "main": [[{"node": "3. Проверьте картинку", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true
+  },
+  "versionId": "b6000000-0000-4200-8200-000000000001",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [],
+  "pinData": {}
+}

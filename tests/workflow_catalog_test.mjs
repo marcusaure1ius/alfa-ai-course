@@ -49,9 +49,9 @@ if (process.argv[2] === '--verify-export') {
 assert.equal(catalog.schemaVersion, 1);
 assert.equal(catalog.n8nImage, 'docker.n8n.io/n8nio/n8n:2.29.10');
 const entries = catalog.importOrder.flatMap((group, groupIndex) => group.workflows.map((workflow) => ({...workflow, group: group.name, groupIndex})));
-assert.equal(entries.length, 5);
+assert.equal(entries.length, 10);
 assert.deepEqual(entries.map(({path: workflowPath}) => workflowPath).sort(), listJson('workflows/business'));
-ok('lessons-only catalog covers exactly five business workflow JSON files and the pinned n8n image');
+ok('lessons-only catalog covers exactly ten business workflow JSON files and the pinned n8n image');
 
 const workflowsById = new Map();
 const entryById = new Map();
@@ -100,16 +100,16 @@ for (const [workflowId, workflow] of workflowsById) {
 }
 assert.equal(dynamicReferenceCount, catalog.dynamicReferences.length);
 assert.equal(staticReferenceCount, 0);
-ok('all five lessons are standalone: static and dynamic sub-workflow references are absent');
+ok('all ten lessons are standalone: static and dynamic sub-workflow references are absent');
 
-assert.equal(catalog.demos.length, 5);
-assert.deepEqual(catalog.demos.map(({lesson}) => lesson), [1, 2, 3, 4, 5]);
+assert.equal(catalog.demos.length, 10);
+assert.deepEqual(catalog.demos.map(({lesson}) => lesson), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 for (const demo of catalog.demos) {
   const workflow = readJson(demo.workflow);
   assert.equal(entryById.get(workflow.id).group, 'business', `${demo.key}: business workflow`);
   assert.ok(fs.existsSync(path.join(root, demo.contractTest)), `${demo.key}: beginner contract test`);
 }
-ok('five beginner lessons map to business workflows and one executable UX contract suite');
+ok('ten beginner lessons map to business workflows and one executable UX contract suite');
 
 const beginnerWorkflowIds = catalog.demos.map(({workflow}) => readJson(workflow).id);
 const beginnerWorkflows = beginnerWorkflowIds.map((id) => workflowsById.get(id));
@@ -126,7 +126,7 @@ for (const workflow of beginnerWorkflows) {
     'n8n-nodes-base.emailSend',
   ].includes(type)), `${workflow.id}: no direct Telegram/email send node`);
 }
-ok('five business lessons are inactive standalone visual no-code graphs with at most 10 executable nodes');
+ok('ten business lessons are inactive standalone visual no-code graphs with at most 10 executable nodes');
 
 for (const testPath of [...catalog.demos.map(({contractTest}) => contractTest), ...catalog.supportingContractTests]) {
   assert.ok(fs.existsSync(path.join(root, testPath)), `missing supporting contract test ${testPath}`);
