@@ -43,6 +43,7 @@ Telegram Trigger, IMAP и webhook credentials добавляются тольк�
 
 ```bash
 ./tests/beginner_workflows_test.sh
+./tests/polza_beginner_workflows_test.sh
 ./tests/workflow_catalog_test.sh
 ./tests/secret_scan.sh
 ```
@@ -58,9 +59,23 @@ Telegram Trigger, IMAP и webhook credentials добавляются тольк�
 7. почтовые triggers не скачивают вложения;
 8. Telegram/email send nodes отсутствуют;
 9. десять source JSON и десять credential-free staging JSON импортируются в чистый pinned n8n;
-10. повторный import обновляет стабильные IDs без дублей.
+10. повторный import обновляет стабильные IDs без дублей;
+11. пять Polza-уроков собирают ожидаемые request bodies, разбирают success responses и показывают понятный fallback на mocked fixtures;
+12. image-to-image передаёт ровно один URL reference, Telegram paths не отвечают автоматически, а accounting path заканчивается ручной сверкой.
 
 Clean import подтверждает совместимость структуры, но не является проверкой внешних аккаунтов. Yandex AI Studio, Polza.ai, Telegram, Gmail и Яндекс Почта требуют user-owned credentials и отдельного smoke-test.
+
+## Credential-free Polza preflight
+
+Проверено с учебного VPS 2026-07-23 без заголовка Authorization и без сохранения response body:
+
+| Endpoint | HTTP | TLS verify | Content-Type |
+|---|---:|---:|---|
+| `POST https://polza.ai/api/v1/chat/completions` | 401 | 0 | `application/json; charset=utf-8` |
+| `POST https://polza.ai/api/v2/images/generations` | 401 | 0 | `application/json; charset=utf-8` |
+| `POST https://polza.ai/api/v1/media` | 401 | 0 | `application/json; charset=utf-8` |
+
+Это подтверждает DNS/TLS/HTTP-достижимость и ожидаемую auth boundary именно из сети учебного VPS. Проверка не подтверждает успешный completion, доступ конкретной модели, баланс, цену или качество результата. Оставшийся gate: владелец регистрируется в Polza.ai, пополняет баланс, создаёт API key и вводит его непосредственно в Credentials n8n.
 
 ## Внешние шаблоны
 

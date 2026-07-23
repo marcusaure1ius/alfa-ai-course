@@ -1,0 +1,166 @@
+{
+  "cases": [
+    {
+      "id": "businessPolzaTextToImageV1",
+      "workflow": "workflows/business/polza-text-to-image.json",
+      "configureNode": "1. Опишите картинку",
+      "requestNode": "2. Polza создаёт картинку",
+      "resultNode": "3. Проверьте картинку",
+      "endpoint": "https://polza.ai/api/v2/images/generations",
+      "manualInput": {},
+      "expectedRequest": {
+        "model": "dall-e-3",
+        "n": 1,
+        "size": "1024x1024",
+        "quality": "auto",
+        "response_format": "url"
+      },
+      "successResponse": {
+        "data": [
+          {
+            "url": "https://cdn.invented.example/generated/lesson-6.png"
+          }
+        ],
+        "usage": {
+          "cost_rub": 1.5
+        }
+      },
+      "expectedResult": {
+        "Ссылка на картинку": "https://cdn.invented.example/generated/lesson-6.png",
+        "Стоимость запроса, ₽": 1.5
+      },
+      "fallbackField": "Ссылка на картинку",
+      "fallbackPattern": "Проверьте credential"
+    },
+    {
+      "id": "businessPolzaImageEditV1",
+      "workflow": "workflows/business/polza-image-edit.json",
+      "configureNode": "1. Добавьте образец",
+      "requestNode": "2. Polza меняет картинку",
+      "resultNode": "3. Проверьте результат",
+      "endpoint": "https://polza.ai/api/v1/media",
+      "manualInput": {},
+      "expectedRequest": {
+        "model": "qwen/image",
+        "async": false
+      },
+      "successResponse": {
+        "data": [
+          {
+            "url": "https://cdn.invented.example/generated/lesson-7.png"
+          }
+        ],
+        "status": "completed",
+        "usage": {
+          "cost_rub": 2.25
+        }
+      },
+      "expectedResult": {
+        "Ссылка на результат": "https://cdn.invented.example/generated/lesson-7.png",
+        "Статус": "completed",
+        "Стоимость запроса, ₽": 2.25
+      },
+      "fallbackField": "Ссылка на результат",
+      "fallbackPattern": "Проверьте credential"
+    },
+    {
+      "id": "businessTelegramLeadIntakeV1",
+      "workflow": "workflows/business/telegram-lead-intake.json",
+      "configureNode": "1. Настройте обращение",
+      "requestNode": "2. Polza собирает карточку",
+      "resultNode": "3. Проверьте лид",
+      "endpoint": "https://polza.ai/api/v1/chat/completions",
+      "manualInput": {
+        "message": {
+          "text": "Я Ирина, нужен расчёт доставки для магазина. Ответьте в Telegram @irina_demo."
+        }
+      },
+      "expectedRequest": {
+        "model": "openai/gpt-4o",
+        "temperature": 0.1,
+        "max_tokens": 700,
+        "stream": false
+      },
+      "successResponse": {
+        "choices": [
+          {
+            "message": {
+              "content": "Имя: Ирина\nКонтакт: @irina_demo\nПотребность: расчёт доставки"
+            }
+          }
+        ]
+      },
+      "expectedResult": {
+        "Карточка лида": "Имя: Ирина\nКонтакт: @irina_demo\nПотребность: расчёт доставки"
+      },
+      "fallbackField": "Карточка лида",
+      "fallbackPattern": "Проверьте Polza credential"
+    },
+    {
+      "id": "businessTelegramPersonalAgentV1",
+      "workflow": "workflows/business/telegram-personal-agent.json",
+      "configureNode": "1. Настройте помощника",
+      "requestNode": "2. Polza готовит ответ",
+      "resultNode": "3. Прочитайте ответ",
+      "endpoint": "https://polza.ai/api/v1/chat/completions",
+      "manualInput": {
+        "message": {
+          "text": "Подготовь план пятнадцатиминутной планёрки."
+        }
+      },
+      "expectedRequest": {
+        "model": "openai/gpt-4o",
+        "temperature": 0.3,
+        "max_tokens": 1000,
+        "stream": false
+      },
+      "successResponse": {
+        "choices": [
+          {
+            "message": {
+              "content": "1. Статус проектов — 5 минут.\n2. Блокеры — 5 минут.\n3. Решения — 5 минут."
+            }
+          }
+        ]
+      },
+      "expectedResult": {
+        "Ответ помощника": "1. Статус проектов — 5 минут.\n2. Блокеры — 5 минут.\n3. Решения — 5 минут."
+      },
+      "fallbackField": "Ответ помощника",
+      "fallbackPattern": "Проверьте Polza credential"
+    },
+    {
+      "id": "businessAccountingDocumentReviewV1",
+      "workflow": "workflows/business/accounting-document-review.json",
+      "configureNode": "1. Добавьте документ",
+      "requestNode": "2. Polza читает документ",
+      "resultNode": "3. Сверьте с оригиналом",
+      "endpoint": "https://polza.ai/api/v1/chat/completions",
+      "manualInput": {
+        "body": {
+          "documentUrl": "https://files.invented.example/accounting/demo-invoice.png"
+        }
+      },
+      "expectedRequest": {
+        "model": "openai/gpt-4o",
+        "temperature": 0,
+        "max_tokens": 1200,
+        "stream": false
+      },
+      "successResponse": {
+        "choices": [
+          {
+            "message": {
+              "content": "{\"document_type\":\"счёт\",\"number\":\"100\",\"total\":12000,\"currency\":\"RUB\",\"warnings\":[\"сверить ИНН\"]}"
+            }
+          }
+        ]
+      },
+      "expectedResult": {
+        "Данные для сверки": "{\"document_type\":\"счёт\",\"number\":\"100\",\"total\":12000,\"currency\":\"RUB\",\"warnings\":[\"сверить ИНН\"]}"
+      },
+      "fallbackField": "Данные для сверки",
+      "fallbackPattern": "Проверьте Polza credential"
+    }
+  ]
+}

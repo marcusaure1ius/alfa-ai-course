@@ -84,6 +84,7 @@
   "supportingContractTests": [
     "tests/core_workflows_test.sh",
     "tests/mail_gateway_test.sh",
+    "tests/polza_beginner_workflows_test.sh",
     "tests/telegram_sender_test.sh",
     "tests/crm_workflows_test.sh"
   ],

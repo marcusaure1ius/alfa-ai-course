@@ -29,6 +29,7 @@ make quality-ci
 | `compose-config` | `tests/compose_config_test.sh` | resolved Compose, exact images, amd64 и private topology | Docker Compose CLI, jq | `FAIL` |
 | `secret-scan` | `tests/secret_scan.sh` и fixture test | private keys, AWS/GitHub tokens и credential assignments без вывода значений | Node.js | `FAIL` |
 | `static-tests` | `tests/run_static_tests.sh` | все существующие contract/unit/doc tests без integration duplication | Bash, Node.js, jq, Compose CLI | `FAIL` |
+| `polza-lessons` | `tests/polza_beginner_workflows_test.sh` | request bodies, success/fallback responses, image reference, Telegram allowlist и accounting human review уроков 6–10 | Node.js | `FAIL` |
 | `workflow-import` | `tests/workflow_catalog_test.sh` | beginner UX gate и clean import десяти standalone-уроков в pinned n8n | Docker daemon, exact n8n image | local `SKIP`, CI `FAIL` |
 | `postgres-health` | `tests/postgres_integration_test.sh` | pinned n8n↔PostgreSQL health, schema и persistence после restart | Docker daemon, exact n8n/PostgreSQL images | local `SKIP`, CI `FAIL` |
 | `artifact-secret-scan` | runner | итоговые log/summary не содержат secret-like material | Node.js | `FAIL` |
