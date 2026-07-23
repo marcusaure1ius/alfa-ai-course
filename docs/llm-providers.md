@@ -1,6 +1,6 @@
 # LLM providers
 
-Проверено: 2026-07-14. Gateway contract: `1.0.0`. Pinned n8n: `2.29.10`.
+Проверено: 2026-07-14. Обновление GigaChat: 2026-07-23. Gateway contract: `1.0.0`. Pinned n8n: `2.29.10`.
 
 Документ описывает provider-specific setup поверх общего [LLM Gateway contract](contracts/llm-gateway.md). Реальный provider smoke не выполнен: в репозитории нет пользовательских credentials, а локальные fixtures проверяют только exported workflow contract и безопасную нормализацию.
 
@@ -160,13 +160,15 @@ Adapter принимает тот же нормализованный запро
 - OAuth exchange: `POST https://ngw.devices.sberbank.ru:9443/api/v2/oauth` с form-urlencoded `scope`, заголовком UUID4 `RqUID` и долгоживущим authorization key в `Authorization: Basic ...`;
 - access token действует 30 минут; token endpoint ограничен 10 запросами в секунду;
 - scopes: `GIGACHAT_API_PERS`, `GIGACHAT_API_B2B`, `GIGACHAT_API_CORP`;
-- основной API base: `https://gigachat.devices.sberbank.ru/api/`; для договора «Салют для Бизнеса»: `https://api.giga.chat/`;
+- с 17 июля 2026 года единый целевой API base для новых подключений физических лиц, ИП и организаций — `https://api.giga.chat`;
+- прежний `https://gigachat.devices.sberbank.ru/` остаётся доступен для подключившихся до 17 июля 2026 года, но больше не должен быть default для новых setup;
 - chat completion возвращает отдельные классы ошибок `400`, `401`, `404`, `422`, `429`, `500`;
 - для TLS нужен доверенный корневой сертификат Минцифры; production-инструкция не разрешает отключать certificate verification.
 
-Официальные источники, перепроверенные 2026-07-14:
+Официальные источники, перепроверенные 2026-07-23:
 
-- [Авторизация, scopes и base URLs](https://developers.sber.ru/docs/ru/gigachat/api/reference/rest/gigachat-api);
+- [Авторизация, scopes и единый API base](https://developers.sber.ru/docs/ru/gigachat/api/reference/rest/gigachat-api);
+- [Changelog: переход на единый `api.giga.chat`](https://developers.sber.ru/docs/ru/gigachat/changelog);
 - [Получение access token](https://developers.sber.ru/docs/ru/gigachat/api/reference/rest/post-token);
 - [Chat completions и коды ответа](https://developers.sber.ru/docs/ru/gigachat/api/reference/rest/post-chat);
 - [Установка сертификатов Минцифры](https://developers.sber.ru/docs/ru/gigachat/certificates).
@@ -206,10 +208,11 @@ Authorization key является долгоживущим секретом. Н
 
 | Тип доступа | `profileScope` | `profileApiBaseUrl` |
 |---|---|---|
-| Физическое лицо | `GIGACHAT_API_PERS` | `https://gigachat.devices.sberbank.ru/api/v1` |
-| ИП/юрлицо, платный пакет | `GIGACHAT_API_B2B` | `https://gigachat.devices.sberbank.ru/api/v1` |
-| ИП/юрлицо, pay-as-you-go | `GIGACHAT_API_CORP` | `https://gigachat.devices.sberbank.ru/api/v1` |
-| «Салют для Бизнеса» | scope из договора | `https://api.giga.chat/v1` |
+| Физическое лицо | `GIGACHAT_API_PERS` | `https://api.giga.chat/v1` |
+| ИП/юрлицо, платный пакет | `GIGACHAT_API_B2B` | `https://api.giga.chat/v1` |
+| ИП/юрлицо, pay-as-you-go | `GIGACHAT_API_CORP` | `https://api.giga.chat/v1` |
+
+Legacy `https://gigachat.devices.sberbank.ru/api/v1` оставлен в allowlist adapter только для уже существующих подключений на время миграции. Новому пользователю starter kit менять unified default не нужно.
 
 Adapter отклоняет произвольные OAuth/API URLs и неизвестные scopes до сетевого запроса. `tools` и provider-native structured output выключены. `output.mode=json` использует обычный chat response, затем локально разбирает и проверяет ограниченную JSON Schema без remote `$ref`.
 

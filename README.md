@@ -81,7 +81,9 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Email Assistant](docs/workflows/email-assistant.md) — IMAP setup, guarded LLM extraction, draft-only output и privacy notes;
 - [Lead Handler](docs/workflows/lead-handler.md) — Header Auth webhook, нормализация контакта, approval-bound CRM mutation и recovery;
 - [Daily Executive Digest](docs/workflows/daily-executive-digest.md) — окно 09:00 MSK, event-source coverage, privacy-minimized summary и честные `partial`/`н/д` метрики;
-- [Каталог workflow и test report](docs/workflow-catalog-and-test-report.md) — 18 workflow, import order, fixture coverage, clean pinned import и границы mock/external evidence;
+- [RF Email Triage to Telegram](docs/workflows/rf-email-telegram-triage.md) — Gmail/Яндекс IMAP, LLM-классификация и safe Telegram alerts;
+- [RF-каталог популярных сценариев](docs/research/2026-07-23-rf-popular-scenarios.md) — popularity-сигналы, приоритеты и LLM-пути без обязательного VPN;
+- [Каталог workflow и test report](docs/workflow-catalog-and-test-report.md) — 19 workflow, import order, fixture coverage, clean pinned import и границы mock/external evidence;
 - [Apache License 2.0](LICENSE) — лицензия оригинальных файлов starter kit;
 - [License notes](LICENSE-NOTES.md) — границы лицензии starter kit, n8n и сторонних компонентов.
 

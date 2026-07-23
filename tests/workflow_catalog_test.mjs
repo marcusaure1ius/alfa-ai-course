@@ -62,9 +62,9 @@ if (process.argv[2] === '--verify-export') {
 assert.equal(catalog.schemaVersion, 1);
 assert.equal(catalog.n8nImage, 'docker.n8n.io/n8nio/n8n:2.29.10');
 const entries = catalog.importOrder.flatMap((group, groupIndex) => group.workflows.map((workflow) => ({...workflow, group: group.name, groupIndex})));
-assert.equal(entries.length, 18);
+assert.equal(entries.length, 19);
 assert.deepEqual(entries.map(({path: workflowPath}) => workflowPath).sort(), listJson('workflows'));
-ok('catalog covers exactly all 18 workflow JSON files and the pinned n8n image');
+ok('catalog covers exactly all 19 workflow JSON files and the pinned n8n image');
 
 const workflowsById = new Map();
 const entryById = new Map();
@@ -112,8 +112,8 @@ for (const [workflowId, workflow] of workflowsById) {
   }
 }
 assert.equal(dynamicReferenceCount, catalog.dynamicReferences.length);
-assert.equal(staticReferenceCount, 25);
-ok('25 static sub-workflow links resolve in import order and the single dynamic source contract is declared');
+assert.equal(staticReferenceCount, 28);
+ok('28 static sub-workflow links resolve in import order and two closed dynamic contracts are declared');
 
 const allFixtureStrings = [];
 for (const demo of catalog.demos) {
@@ -134,7 +134,7 @@ for (const demo of catalog.demos) {
   assert.ok(fs.existsSync(path.join(root, demo.contractTest)), `${demo.key}: contract test`);
   allFixtureStrings.push(...collectStrings(fixture));
 }
-ok('four demos provide 20/13/21/14 named fixtures with inputs and expected outputs');
+ok('five demos provide 20/13/21/14/12 named fixtures with inputs and expected outputs');
 
 for (const {value} of allFixtureStrings) {
   for (const email of value.matchAll(/[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/gi)) {
@@ -166,10 +166,16 @@ assert.equal(digestProfile.profileDraftOnly, true);
 const email = workflowsById.get('businessEmailAssistantV1');
 assert.equal(profileValues(email, 'Email Assistant Profile').profileTestMode, true);
 assert.match(email.name, /Draft Only/);
-for (const workflow of [telegram, lead, digest, email]) {
+const rfTriage = workflowsById.get('businessRfEmailTelegramTriageV1');
+const rfTriageProfile = profileValues(rfTriage, 'RF Triage Profile');
+assert.equal(rfTriageProfile.profileTestMode, true);
+assert.equal(rfTriageProfile.profileDraftOnly, true);
+assert.equal(rfTriageProfile.profileLlmProvider, 'yandex');
+assert.equal(rfTriageProfile.profileNotifyMinPriority, 'high');
+for (const workflow of [telegram, lead, digest, email, rfTriage]) {
   assert.ok(workflow.nodes.every(({type}) => !['n8n-nodes-base.httpRequest', 'n8n-nodes-base.telegram', 'n8n-nodes-base.emailSend'].includes(type)), `${workflow.id}: direct dangerous outbound node`);
 }
-ok('four business workflows are inactive and keep dangerous outbound actions behind test/draft shared contracts');
+ok('five business workflows are inactive and keep dangerous outbound actions behind test/draft shared contracts');
 
 for (const testPath of [...catalog.demos.map(({contractTest}) => contractTest), ...catalog.supportingContractTests]) {
   assert.ok(fs.existsSync(path.join(root, testPath)), `missing supporting contract test ${testPath}`);

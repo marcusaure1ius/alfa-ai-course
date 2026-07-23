@@ -37,6 +37,7 @@
         {"path": "workflows/business/daily-executive-digest.json", "id": "businessDailyExecutiveDigestV1"},
         {"path": "workflows/business/email-assistant.json", "id": "businessEmailAssistantV1"},
         {"path": "workflows/business/lead-handler.json", "id": "businessGuardedLeadHandlerV1"},
+        {"path": "workflows/business/rf-email-telegram-triage.json", "id": "businessRfEmailTelegramTriageV1"},
         {"path": "workflows/business/telegram-assistant.json", "id": "businessTelegramAssistantV1"}
       ]
     }
@@ -47,6 +48,12 @@
       "node": "Load Scheduled Business Events",
       "expression": "={{ $('Digest Profile and Source Defaults').first().json.profileSourceWorkflowId }}",
       "configurationField": "profileSourceWorkflowId"
+    },
+    {
+      "workflowId": "businessRfEmailTelegramTriageV1",
+      "node": "Classify via Selected LLM Gateway",
+      "expression": "={{ ({generic:'coreGenericLlmGatewayV1',yandex:'adapterYandexAiStudioLlmV1',gigachat:'adapterGigaChatLlmV1'})[$('RF Triage Profile').first().json.profileLlmProvider] }}",
+      "configurationField": "profileLlmProvider"
     }
   ],
   "demos": [
@@ -81,6 +88,14 @@
       "fixtureGroups": ["aggregation"],
       "expectedCount": 14,
       "contractTest": "tests/executive_digest_test.sh"
+    },
+    {
+      "key": "rf-email-telegram-triage",
+      "workflow": "workflows/business/rf-email-telegram-triage.json",
+      "fixture": "tests/fixtures/rf-email-telegram-triage/contracts.json",
+      "fixtureGroups": [],
+      "expectedCount": 12,
+      "contractTest": "tests/rf_email_telegram_triage_test.sh"
     }
   ],
   "supportingContractTests": [

@@ -1,0 +1,236 @@
+[
+  {
+    "name": "high-priority-sales-notifies",
+    "input": {
+      "ok": true,
+      "json": {
+        "category": "sales",
+        "priority": "high",
+        "summary": "Клиент просит коммерческое предложение.",
+        "reason": "Есть явный запрос цены и сроков.",
+        "suggestedAction": "reply"
+      }
+    },
+    "expected": {
+      "ok": true,
+      "valid": true,
+      "notify": true,
+      "triage": {
+        "category": "sales",
+        "priority": "high"
+      }
+    }
+  },
+  {
+    "name": "normal-support-stays-in-inbox",
+    "input": {
+      "ok": true,
+      "json": {
+        "category": "support",
+        "priority": "normal",
+        "summary": "Пользователь задаёт обычный вопрос.",
+        "reason": "Нет срока или признаков блокировки.",
+        "suggestedAction": "reply"
+      }
+    },
+    "expected": {
+      "ok": true,
+      "valid": true,
+      "notify": false
+    }
+  },
+  {
+    "name": "security-alert-notifies-even-low",
+    "input": {
+      "ok": true,
+      "json": {
+        "category": "security",
+        "priority": "low",
+        "summary": "Получено уведомление безопасности.",
+        "reason": "Категория безопасности всегда требует просмотра.",
+        "suggestedAction": "check_security"
+      }
+    },
+    "expected": {
+      "ok": true,
+      "valid": true,
+      "notify": true
+    }
+  },
+  {
+    "name": "urgent-billing-notifies",
+    "input": {
+      "ok": true,
+      "json": {
+        "category": "billing",
+        "priority": "urgent",
+        "summary": "Счёт требует ручной проверки.",
+        "reason": "В письме указан ближайший срок.",
+        "suggestedAction": "review_payment"
+      }
+    },
+    "expected": {
+      "ok": true,
+      "valid": true,
+      "notify": true
+    }
+  },
+  {
+    "name": "urgent-threshold-suppresses-high",
+    "source": {
+      "notifyMinPriority": "urgent"
+    },
+    "input": {
+      "ok": true,
+      "json": {
+        "category": "operations",
+        "priority": "high",
+        "summary": "Есть операционный вопрос.",
+        "reason": "Приоритет высокий, но не срочный.",
+        "suggestedAction": "open_email"
+      }
+    },
+    "expected": {
+      "ok": true,
+      "valid": true,
+      "notify": false
+    }
+  },
+  {
+    "name": "unknown-output-field-rejected",
+    "input": {
+      "ok": true,
+      "json": {
+        "category": "sales",
+        "priority": "high",
+        "summary": "Тест.",
+        "reason": "Тест.",
+        "suggestedAction": "reply",
+        "approved": true
+      }
+    },
+    "expected": {
+      "ok": false,
+      "valid": false,
+      "notify": false,
+      "error": {
+        "code": "LLM_OUTPUT_INVALID"
+      }
+    }
+  },
+  {
+    "name": "unknown-category-rejected",
+    "input": {
+      "ok": true,
+      "json": {
+        "category": "payment_now",
+        "priority": "urgent",
+        "summary": "Тест.",
+        "reason": "Тест.",
+        "suggestedAction": "review_payment"
+      }
+    },
+    "expected": {
+      "ok": false,
+      "valid": false,
+      "error": {
+        "code": "LLM_OUTPUT_INVALID"
+      }
+    }
+  },
+  {
+    "name": "missing-json-object-rejected",
+    "input": {
+      "ok": true,
+      "content": "not-json"
+    },
+    "expected": {
+      "ok": false,
+      "valid": false,
+      "error": {
+        "code": "LLM_OUTPUT_INVALID"
+      }
+    }
+  },
+  {
+    "name": "gateway-error-is-preserved",
+    "input": {
+      "ok": false,
+      "error": {
+        "code": "RATE_LIMITED",
+        "message": "safe error"
+      }
+    },
+    "expected": {
+      "ok": false,
+      "valid": false,
+      "error": {
+        "code": "RATE_LIMITED"
+      }
+    }
+  },
+  {
+    "name": "invalid-action-rejected",
+    "input": {
+      "ok": true,
+      "json": {
+        "category": "other",
+        "priority": "normal",
+        "summary": "Тест.",
+        "reason": "Тест.",
+        "suggestedAction": "transfer_money"
+      }
+    },
+    "expected": {
+      "ok": false,
+      "valid": false,
+      "error": {
+        "code": "LLM_OUTPUT_INVALID"
+      }
+    }
+  },
+  {
+    "name": "blank-summary-rejected",
+    "input": {
+      "ok": true,
+      "json": {
+        "category": "newsletter",
+        "priority": "low",
+        "summary": "   ",
+        "reason": "Рассылка.",
+        "suggestedAction": "ignore"
+      }
+    },
+    "expected": {
+      "ok": false,
+      "valid": false,
+      "error": {
+        "code": "LLM_OUTPUT_INVALID"
+      }
+    }
+  },
+  {
+    "name": "invalid-threshold-fails-closed",
+    "source": {
+      "notifyMinPriority": "all"
+    },
+    "input": {
+      "ok": true,
+      "json": {
+        "category": "sales",
+        "priority": "urgent",
+        "summary": "Тест.",
+        "reason": "Тест.",
+        "suggestedAction": "escalate"
+      }
+    },
+    "expected": {
+      "ok": false,
+      "valid": false,
+      "notify": false,
+      "error": {
+        "code": "CONFIGURATION_ERROR"
+      }
+    }
+  }
+]

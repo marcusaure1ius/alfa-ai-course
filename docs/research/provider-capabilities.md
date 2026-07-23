@@ -1,7 +1,8 @@
 # Capability matrix: n8n, LLM и CRM providers
 
 - Статус: baseline принят в `T-0004`; единая provider matrix финализирована в `T-0016`
-- Проверено: 2026-07-14
+- Основной baseline проверен: 2026-07-14
+- GigaChat API base перепроверен: 2026-07-23
 - Базовая версия n8n: `2.29.10`
 - Источники: только официальная документация и исходный код n8n на закреплённом tag; один явно отмеченный HTTP probe без credentials
 
@@ -123,7 +124,7 @@ Tool calling, streaming и JSON Schema — отдельные capability flags. 
 3. `Authorization: Basic <authorization_key>` и уникальный `RqUID` в UUID-формате.
 4. Scope выбирается из `GIGACHAT_API_PERS`, `GIGACHAT_API_B2B`, `GIGACHAT_API_CORP` по account contract.
 5. В ответе приходит Bearer access token с `expires_at`; документированный срок — 30 минут.
-6. API base — `https://gigachat.devices.sberbank.ru/api/` либо `https://api.giga.chat/` для «Салют для Бизнеса».
+6. С 17 июля 2026 года целевой API base для всех новых подключений — `https://api.giga.chat/`; прежний `https://gigachat.devices.sberbank.ru/` доступен только подключившимся ранее и требует миграционного плана.
 
 ### Безопасный MVP renewal path
 
@@ -142,7 +143,7 @@ Per-execution exchange сознательно выбран вместо обще
 
 - OAuth exchange нельзя выразить постоянным Bearer API key.
 - GigaChat function calling использует `functions`, `function_call` и сообщения с ролью `function`; идентичность OpenAI tools schema не подтверждена.
-- Structured output `json_schema` документирован только для клиентов «Салют для Бизнеса» на `https://api.giga.chat/`.
+- Наличие unified `https://api.giga.chat/` не доказывает доступность `json_schema` для каждого account/model; adapter продолжает использовать локальную schema validation до authenticated capability evidence.
 - В exact n8n tag нет встроенного GigaChat node.
 
 Поэтому default — HTTP Request adapter с обычным chat completion. Functions и structured output становятся отдельными opt-in flags после contract tests на выбранном account/base URL.
@@ -150,6 +151,7 @@ Per-execution exchange сознательно выбран вместо обще
 Официальные источники:
 
 - [GigaChat REST API: OAuth, base URLs и models](https://developers.sber.ru/docs/ru/gigachat/api/reference/rest/gigachat-api)
+- [GigaChat changelog: единый API URL с 17 июля 2026](https://developers.sber.ru/docs/ru/gigachat/changelog)
 - [Chat completions endpoint](https://developers.sber.ru/docs/ru/gigachat/api/reference/rest/post-chat)
 - [Работа с функциями](https://developers.sber.ru/docs/ru/gigachat/guides/functions/overview)
 - [Генерация структурированных данных](https://developers.sber.ru/docs/ru/gigachat/guides/structured-output)

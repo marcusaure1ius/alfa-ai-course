@@ -37,10 +37,10 @@ ok('adapter is inactive, persists no execution payload, and uses no shared token
 const profileNode=workflow.nodes.find((node)=>node.name==='GigaChat Provider Profile');
 const profileValues=Object.fromEntries(profileNode.parameters.assignments.assignments.map(({name,value})=>[name,value]));
 assert.equal(profileValues.profileOAuthUrl,'https://ngw.devices.sberbank.ru:9443/api/v2/oauth');
-assert.equal(profileValues.profileApiBaseUrl,'https://gigachat.devices.sberbank.ru/api/v1');
+assert.equal(profileValues.profileApiBaseUrl,'https://api.giga.chat/v1');
 assert.equal(profileValues.profileScope,'GIGACHAT_API_PERS');assert.equal(profileValues.profileRefreshSkewMs,60000);
 const baseProfile={...profileValues};
-ok('profile defaults use the official OAuth endpoint, main API base, PERS scope, and early refresh skew');
+ok('profile defaults use the official OAuth endpoint, unified API base, PERS scope, and early refresh skew');
 
 for(const fixture of fixtures.validation){
   const output=executeCode('Validate GigaChat Contract',{...fixture.input,...baseProfile,...fixture.profile});
@@ -103,7 +103,7 @@ ok('workflow and fixtures contain no authorization value, token, client secret, 
 
 assert.match(compose,/NODE_EXTRA_CA_CERTS: \/etc\/n8n\/host-ca-bundle\.pem/);
 assert.match(compose,/\/etc\/ssl\/certs\/ca-certificates\.crt:\/etc\/n8n\/host-ca-bundle\.pem:ro/);
-assert.match(guide,/Проверено: 2026-07-14/);assert.match(guide,/developers\.sber\.ru\/docs\/ru\/gigachat\/api\/reference\/rest\/post-token/);
+assert.match(guide,/Обновление GigaChat: 2026-07-23/);assert.match(guide,/developers\.sber\.ru\/docs\/ru\/gigachat\/api\/reference\/rest\/gigachat-api/);
 assert.match(guide,/## GigaChat/);assert.match(guide,/### Rotation/);assert.match(guide,/NODE_TLS_REJECT_UNAUTHORIZED=0/);
 ok('Ubuntu CA bundle is read-only, and dated setup documents official sources, scopes, rotation, and TLS troubleshooting');
 

@@ -126,7 +126,9 @@ Core sub-workflows: LLM Gateway, Send Telegram Message, Request Human Approval, 
 
 Mail Gateway разделяет три операции одним строгим контрактом: IMAP adapter нормализует provider output в bounded untrusted plain text; бизнес-workflow создаёт draft; SMTP-ветка открывается только точным unexpired approval result T-0017 с тем же `idempotencyKey`, при `testMode=false`, `draftOnly=false` и без attachments. Canonical processing marker, threading IDs и durable state дают adapter данные для deduplication/reply-loop protection; credentials остаются в n8n credential store. Pinned Send Email node не поддерживает custom threading headers, поэтому это ограничение явно fail-visible в [mail contract](contracts/mail.md); настройка описана в [IMAP/SMTP guide](credentials/mail.md).
 
-Business workflows: Telegram assistant, email assistant, lead handler и daily executive digest. Любое внешнее сообщение или изменение CRM требует human approval по умолчанию; Telegram assistant работает в `draft-only` по умолчанию.
+Business workflows: Telegram assistant, email assistant, lead handler, daily executive digest и добавочный RF Email Triage to Telegram. Любое внешнее сообщение или изменение CRM требует human approval/safe mode по умолчанию; Telegram assistant и RF triage работают в `draft-only` по умолчанию.
+
+RF Email Triage переиспользует Mail Gateway, LLM Gateway, Telegram sender и Business Event Log. Он не добавляет provider-specific вызовы в business layer: Gmail/Яндекс Почта подключаются через IMAP contract, а Yandex AI Studio/GigaChat — через существующие LLM adapters. В LLM передаётся bounded plain text и sender domain; Telegram получает только маскированный sender, subject и проверенный локальной schema summary.
 
 Lead handler реализован как Header Auth webhook с отдельными intake/resolve фазами: `eventId` останавливает replay до LLM, nullable extraction не может разрешить mutation, а точный owner-bound approval открывает последовательность lead upsert → task create → Telegram notice. Provider-neutral mapping, partial-failure reconciliation и setup зафиксированы в [руководстве Lead Handler](workflows/lead-handler.md).
 

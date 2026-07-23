@@ -13,7 +13,7 @@
     {
       "parameters": {"assignments":{"assignments":[
         {"id":"giga-oauth-url","name":"profileOAuthUrl","value":"https://ngw.devices.sberbank.ru:9443/api/v2/oauth","type":"string"},
-        {"id":"giga-api-base","name":"profileApiBaseUrl","value":"https://gigachat.devices.sberbank.ru/api/v1","type":"string"},
+        {"id":"giga-api-base","name":"profileApiBaseUrl","value":"https://api.giga.chat/v1","type":"string"},
         {"id":"giga-scope","name":"profileScope","value":"GIGACHAT_API_PERS","type":"string"},
         {"id":"giga-timeout","name":"profileTimeoutMs","value":120000,"type":"number"},
         {"id":"giga-skew","name":"profileRefreshSkewMs","value":60000,"type":"number"}
@@ -159,7 +159,7 @@
       "position": [820, 180]
     },
     {
-      "parameters": {"content":"## GigaChat OAuth adapter v1\n\n- Bind both OAuth nodes to one HTTP Header Auth credential: header `Authorization`, value `Basic <authorization_key>`. Never put the key in JSON.\n- Scope: PERS, B2B or CORP according to the account contract. API base is allowlisted.\n- Token is execution-local, refreshed once when expiring or after the first chat 401, never stored in static data or returned.\n- No automatic HTTP retry. A second 401 fails safely. Tools/provider-native schema are disabled; JSON is parsed and validated locally.\n- TLS verification stays enabled. Install the Russian trusted root/subordinate CAs on the Ubuntu host/container trust path before production.","height":410,"width":540,"color":5},
+      "parameters": {"content":"## GigaChat OAuth adapter v1\n\n- Bind both OAuth nodes to one HTTP Header Auth credential: header `Authorization`, value `Basic <authorization_key>`. Never put the key in JSON.\n- Scope: PERS, B2B or CORP according to the account contract. New connections use the unified `https://api.giga.chat/v1` base published 17 July 2026; the legacy base remains allowlisted only for pre-existing connections during migration.\n- Token is execution-local, refreshed once when expiring or after the first chat 401, never stored in static data or returned.\n- No automatic HTTP retry. A second 401 fails safely. Tools/provider-native schema are disabled; JSON is parsed and validated locally.\n- TLS verification stays enabled. Install the Russian trusted root/subordinate CAs on the Ubuntu host/container trust path before production.","height":430,"width":560,"color":5},
       "id": "a1500000-0000-4040-8040-000000000019",
       "name": "OAuth Scope TLS Rotation and Retry Notes",
       "type": "n8n-nodes-base.stickyNote",

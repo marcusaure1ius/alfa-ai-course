@@ -1,6 +1,6 @@
 # Каталог workflow и отчёт contract tests
 
-Проверено: 2026-07-14. Pinned runtime: `docker.n8n.io/n8nio/n8n:2.29.10`. Machine-readable источник каталога: [`tests/fixtures/workflow-catalog.json`](../tests/fixtures/workflow-catalog.json).
+Базовый import report проверен: 2026-07-14. RF workflow и static catalog обновлены: 2026-07-23. Pinned runtime: `docker.n8n.io/n8nio/n8n:2.29.10`. Machine-readable источник каталога: [`tests/fixtures/workflow-catalog.json`](../tests/fixtures/workflow-catalog.json).
 
 ## Обязательный порядок импорта
 
@@ -36,15 +36,16 @@
 | business | `businessDailyExecutiveDigestV1` | `workflows/business/daily-executive-digest.json` | daily privacy-minimized digest |
 | business | `businessEmailAssistantV1` | `workflows/business/email-assistant.json` | draft-only email assistant |
 | business | `businessGuardedLeadHandlerV1` | `workflows/business/lead-handler.json` | approval-bound lead processing |
+| business | `businessRfEmailTelegramTriageV1` | `workflows/business/rf-email-telegram-triage.json` | Gmail/Яндекс mail triage и важные Telegram alerts |
 | business | `businessTelegramAssistantV1` | `workflows/business/telegram-assistant.json` | draft/approval Telegram assistant |
 
 ## Связи
 
-Catalog test проверяет 25 статических `Execute Workflow` ссылок. Каждая ссылка указывает на ID из более ранней группы и использует synchronous `waitForSubWorkflow=true`.
+Catalog test проверяет 28 статических `Execute Workflow` ссылок. Каждая ссылка указывает на ID из более ранней группы и использует synchronous `waitForSubWorkflow=true`.
 
-Единственная динамическая ссылка — `Load Scheduled Business Events` в Daily Executive Digest. Она получает ID из `profileSourceWorkflowId`. Это внешний source-adapter contract, поэтому перед production его нужно настроить и проверить отдельно; placeholder закрывает scheduled path с `SOURCE_ADAPTER_NOT_CONFIGURED`.
+Две динамические ссылки объявлены явно. `Load Scheduled Business Events` в Daily Executive Digest получает ID из `profileSourceWorkflowId`; это внешний source-adapter contract, поэтому placeholder закрывает scheduled path с `SOURCE_ADAPTER_NOT_CONFIGURED`. `Classify via Selected LLM Gateway` в RF Email Triage использует закрытую карту `generic → coreGenericLlmGatewayV1`, `yandex → adapterYandexAiStudioLlmV1`, `gigachat → adapterGigaChatLlmV1`; caller не может передать произвольный workflow ID.
 
-## Fixtures четырёх demo
+## Fixtures пяти demo
 
 | Demo | Cases | Что покрыто | Исполнение |
 |---|---:|---|---|
@@ -52,6 +53,7 @@ Catalog test проверяет 25 статических `Execute Workflow` с�
 | Email Assistant | 13 | nullable extraction, anti-invention, draft-only, privacy | Code nodes выполняются локально; IMAP/SMTP не вызываются |
 | Lead Handler | 21 | webhook schema, contact normalization, replay, approval, CRM preview/errors | Code nodes выполняются локально; CRM/Telegram не вызываются |
 | Daily Executive Digest | 14 | time window, coverage, duplicates, partial/missing data, structured summary | Code nodes выполняются локально; source/LLM/Telegram не вызываются |
+| RF Email Triage to Telegram | 12 | IMAP mapping, minimized prompt, schema, priority threshold, masking, dedupe | Code nodes выполняются локально; IMAP/LLM/Telegram не вызываются |
 
 Каждый case имеет уникальное имя, input и ожидаемый result subset. Контактные значения ограничены объявленными synthetic domains/phone fixtures. Реальные customer data в suite не нужны и запрещены.
 
@@ -63,11 +65,11 @@ Catalog test проверяет 25 статических `Execute Workflow` с�
 
 Test выполняет пять gates:
 
-1. каталог точно совпадает со всеми 18 JSON; IDs и node IDs уникальны, workflows inactive, Sticky Notes присутствуют, `pinData` пуст;
+1. каталог точно совпадает со всеми 19 JSON; IDs и node IDs уникальны, workflows inactive, Sticky Notes присутствуют, `pinData` пуст;
 2. credential objects содержат только placeholder `id`/`name`, secret/token/private-key patterns и необъявленные contact fixtures отклоняются;
-3. четыре demo suites и supporting approval/mail/Telegram/CRM suites исполняют fixtures и dangerous-action contracts;
-4. все 18 исходных JSON реально импортируются по группам в пустой Docker volume закреплённого n8n; фактический export содержит только placeholder credential references;
-5. второй пустой volume получает очищенные portability staging copies: export содержит ровно 18 inactive workflow без credential references, а повторный business import сохраняет тот же ID set.
+3. пять demo suites и supporting approval/mail/Telegram/CRM suites исполняют fixtures и dangerous-action contracts;
+4. все 19 исходных JSON импортируются по группам в пустой Docker volume закреплённого n8n; фактический export содержит только placeholder credential references;
+5. второй пустой volume получает очищенные portability staging copies: export содержит ровно 19 inactive workflow без credential references, а повторный business import сохраняет тот же ID set.
 
 Temporary Docker volume удаляется даже при ошибке. Test использует `--pull=never`: другой или автоматически загруженный image не подменяет проверяемый pin.
 
@@ -77,7 +79,7 @@ Temporary Docker volume удаляется даже при ошибке. Test и
 |---|---|---|
 | JSON parse/schema, exact catalog, IDs, links, Sticky Notes, placeholders, secret/PII policy | static над реальными repository files | проверено автоматически |
 | Миграции SQLite, exact-source import, sanitized import, export ID sets и повторный import | реальный CLI в двух чистых Docker volumes локального pinned n8n container | проверено автоматически |
-| Code-node contracts и ожидаемые outputs четырёх demo | mock harness исполняет настоящий `jsCode`, но подменяет n8n context и external results | проверено автоматически как contract simulation |
+| Code-node contracts и ожидаемые outputs пяти demo | mock harness исполняет настоящий `jsCode`, но подменяет n8n context и external results | проверено автоматически как contract simulation |
 | Approval gates, draft/test defaults, отсутствие direct outbound nodes в business workflows | static graph + mock contract execution | проверено автоматически |
 | PostgreSQL/Compose linked import на production VPS | external integration | не проверено этой задачей; нужен VPS evidence |
 | Telegram, IMAP, SMTP, CRM, Generic LLM, Yandex и GigaChat с реальными credentials | external smoke | не проверено; выполняется только с user-provided credentials по соответствующим guides |
