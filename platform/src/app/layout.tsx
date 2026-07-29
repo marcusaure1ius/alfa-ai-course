@@ -1,17 +1,16 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Manrope } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 
 import "./globals.css";
 
-const manrope = Manrope({
+const geist = Geist({
   subsets: ["cyrillic", "latin"],
-  variable: "--font-manrope",
+  variable: "--font-geist",
 });
 
-const plexMono = IBM_Plex_Mono({
+const geistMono = Geist_Mono({
   subsets: ["cyrillic", "latin"],
-  variable: "--font-plex-mono",
-  weight: ["400", "500", "600"],
+  variable: "--font-geist-mono",
 });
 
 export const metadata: Metadata = {
@@ -26,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru" className={`${manrope.variable} ${plexMono.variable}`}>
+    <html lang="ru" className={`${geist.variable} ${geistMono.variable}`}>
       <body className="antialiased">{children}</body>
     </html>
   );

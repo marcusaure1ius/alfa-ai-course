@@ -115,6 +115,26 @@ npm run test:workflow
 Команда использует in-process Workflow runtime и локальный PostgreSQL. Она не
 создаёт Vercel project, Timeweb VPS, DNS или платные ресурсы.
 
+## Responsive shell
+
+`/admin` открывает первым раздел «Инфраструктура». На desktop используется
+сворачиваемая shadcn Sidebar, на mobile тот же navigation автоматически
+переходит в focus-trapped Sheet и закрывается после перехода. Поиск разделов
+доступен по `Cmd/Ctrl+K`.
+
+Для локальной проверки empty/fake/error состояний без provider API:
+
+```text
+/admin/infrastructure
+/admin/infrastructure?demo=list
+/admin/infrastructure?demo=error
+```
+
+Параметр `demo` игнорируется в production. `/student` использует отдельную
+оболочку без admin navigation, provider ID, IP, стоимости и operation data.
+Запрос ученика к `/admin/**` останавливается server-side Proxy policy с `403`;
+скрытие ссылок не используется как контроль доступа.
+
 ## Границы foundation
 
 - UI: Next.js App Router + TypeScript + Tailwind CSS + shadcn/ui.

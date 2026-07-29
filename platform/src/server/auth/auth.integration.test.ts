@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { NextRequest } from "next/server";
 
-import { GET as adminPage } from "@/app/admin/route";
 import { GET as adminApi } from "@/app/api/admin/access-check/route";
 import { GET as csrfEndpoint } from "@/app/api/auth/csrf/route";
 import { POST as loginEndpoint } from "@/app/api/auth/login/route";
@@ -33,6 +33,7 @@ import {
 import { FakeTimewebAdapter } from "../providers/timeweb/fake";
 import { createEnvironmentWorkflow } from "@/workflows/infrastructure/create";
 import { deleteEnvironmentWorkflow } from "@/workflows/infrastructure/delete";
+import { proxy as adminPagePolicy } from "@/proxy";
 import {
   createServerStep,
   reserveIpStep,
@@ -190,14 +191,23 @@ describe("database-backed authentication", () => {
     `;
     expect(roleRows[0]?.role_id).toBe("student");
 
-    for (const handler of [adminPage, adminApi]) {
-      const response = await handler(
-        new Request("http://localhost:3000/admin", {
+    const responses = [
+      await adminPagePolicy(
+        new NextRequest("http://localhost:3000/admin", {
           headers: {
             cookie: `${SESSION_COOKIE_NAME}=${studentLogin.token}`,
           },
         }),
-      );
+      ),
+      await adminApi(
+        new Request("http://localhost:3000/api/admin/access-check", {
+          headers: {
+            cookie: `${SESSION_COOKIE_NAME}=${studentLogin.token}`,
+          },
+        }),
+      ),
+    ];
+    for (const response of responses) {
       expect(response.status).toBe(403);
       expect(await response.json()).toEqual({ error: "Доступ запрещён." });
     }

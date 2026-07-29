@@ -5,9 +5,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: "Manrope", "Manrope Fallback", ui-sans-serif, system-ui, sans-serif;
-    --font-sans: "Manrope", "Manrope Fallback", ui-sans-serif, system-ui, sans-serif;
-    --font-mono: "IBM Plex Mono", "IBM Plex Mono Fallback", ui-monospace, monospace;
+    --font-heading: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+    --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
     --color-status-ready: var(--status-ready);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
@@ -124,7 +124,7 @@
     @apply border-border outline-ring/50;
     }
   body {
-    @apply min-w-0 bg-background text-foreground;
+    @apply min-w-0 overflow-x-hidden bg-background text-foreground;
     }
   html {
     @apply font-sans;
