@@ -1,0 +1,21 @@
+name: alfa-ai-course-platform-dev
+
+services:
+  postgres:
+    image: postgres:17.10-bookworm
+    environment:
+      POSTGRES_DB: course_platform
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: local-example-not-a-secret
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform -d course_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - platform_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  platform_postgres_data:
