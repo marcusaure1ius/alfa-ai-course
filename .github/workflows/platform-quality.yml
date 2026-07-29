@@ -82,6 +82,14 @@ jobs:
           AUTH_SECRET: ci-example-not-a-secret-change-before-production
           VERCEL_ENV: development
 
+      - name: Durable workflow tests
+        run: npm run test:workflow
+        env:
+          DATABASE_URL: postgresql://platform:ci-example-not-a-secret@127.0.0.1:5432/course_platform
+          APP_ORIGIN: http://localhost:3000
+          AUTH_SECRET: ci-example-not-a-secret-change-before-production
+          VERCEL_ENV: development
+
       - name: Production build
         run: npm run build
 

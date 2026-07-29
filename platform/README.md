@@ -94,6 +94,27 @@ Path-aware GitHub Actions workflow запускает PostgreSQL 17 service, м�
 unit/integration tests и остальные проверки только для изменений platform или
 её архитектурных контрактов.
 
+## Durable operations и fake Timeweb
+
+Create/delete выполняются функциями с директивами `use workflow`, а атомарные
+PostgreSQL transitions и provider-действия — отдельными `use step`. HTTP
+mutation сразу отвечает `202` и `operationId`; повтор того же
+`idempotencyKey` от того же admin возвращает исходную operation.
+
+Fake adapter не обращается в сеть и поддерживает сценарии `success`,
+`timeout_after_create`, `insufficient_funds`, `dns_failure`, `tls_failure` и
+`partial_cleanup`. Unknown outcome сначала сверяется с ownership records,
+поэтому retry не создаёт второй server. Диагностика проходит recursive
+redaction и bounded timeline.
+
+```bash
+cd platform
+npm run test:workflow
+```
+
+Команда использует in-process Workflow runtime и локальный PostgreSQL. Она не
+создаёт Vercel project, Timeweb VPS, DNS или платные ресурсы.
+
 ## Границы foundation
 
 - UI: Next.js App Router + TypeScript + Tailwind CSS + shadcn/ui.

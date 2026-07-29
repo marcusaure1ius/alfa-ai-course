@@ -12,6 +12,9 @@
 
 # testing
 /coverage
+/.workflow-data
+/.workflow-vitest
+/src/app/.well-known/workflow
 
 # next.js
 /.next/
@@ -40,3 +43,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/.swc

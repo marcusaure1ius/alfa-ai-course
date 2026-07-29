@@ -17,6 +17,18 @@ import {
 } from "./service";
 import { getDatabase, type DatabaseSql } from "../db/client";
 import { runMigrations } from "../db/migrate";
+import {
+  getOperationTimeline,
+  OperationConflictError,
+  reserveCreateOperation,
+  reserveDeleteOperation,
+} from "../operations/repository";
+import { createEnvironmentWorkflow } from "@/workflows/infrastructure/create";
+import { deleteEnvironmentWorkflow } from "@/workflows/infrastructure/delete";
+import {
+  createServerStep,
+  reserveIpStep,
+} from "@/workflows/infrastructure/steps";
 
 const databaseUrl =
   process.env.DATABASE_URL ??
@@ -274,5 +286,196 @@ describe("database-backed authentication", () => {
         SELECT count(*)::int AS count FROM audit_events
       `,
     ).toEqual([{ count: 1 }]);
+  });
+});
+
+describe("durable fake infrastructure lifecycle", () => {
+  it("deduplicates actor/key and blocks a second active environment", async () => {
+    const { adminLogin } = await provisionUsers();
+    const first = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Основная среда",
+      idempotencyKey: "create-same-key-0001",
+      scenario: "success",
+    });
+    const duplicate = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Основная среда",
+      idempotencyKey: "create-same-key-0001",
+      scenario: "success",
+    });
+    expect(duplicate.accepted.operationId).toBe(first.accepted.operationId);
+    expect(duplicate.created).toBe(false);
+    await expect(
+      reserveCreateOperation(sql, adminLogin.session, {
+        name: "Вторая среда",
+        idempotencyKey: "create-other-key-0002",
+        scenario: "success",
+      }),
+    ).rejects.toBeInstanceOf(OperationConflictError);
+  });
+
+  it("runs the successful fake create state machine and exposes a safe timeline", async () => {
+    const { adminLogin } = await provisionUsers();
+    const reserved = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Основная среда",
+      idempotencyKey: "create-success-key-01",
+      scenario: "success",
+    });
+    await expect(
+      createEnvironmentWorkflow({
+        operationId: reserved.accepted.operationId,
+        scenario: "success",
+      }),
+    ).resolves.toEqual({ status: "active" });
+
+    const resources = await sql<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM provider_resources
+      WHERE lifecycle_status = 'active'
+    `;
+    expect(resources[0]?.count).toBe(3);
+    const timeline = await getOperationTimeline(sql, reserved.accepted.operationId);
+    expect(timeline?.status).toBe("succeeded");
+    expect(timeline?.steps.map((step) => step.key)).toEqual([
+      "reserve_public_ip",
+      "create_server",
+      "configure_dns",
+      "verify_tls",
+      "complete",
+    ]);
+    expect(JSON.stringify(timeline)).not.toMatch(/token|private_key|raw_response/i);
+  });
+
+  it("reconciles timeout-after-create without creating a second server", async () => {
+    const { adminLogin } = await provisionUsers();
+    const reserved = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Основная среда",
+      idempotencyKey: "create-timeout-key-01",
+      scenario: "timeout_after_create",
+    });
+    const command = {
+      operationId: reserved.accepted.operationId,
+      scenario: "timeout_after_create" as const,
+    };
+    await reserveIpStep(command);
+    await expect(createServerStep(command)).rejects.toThrow("reconciliation");
+    await expect(createServerStep(command)).resolves.toBeUndefined();
+    const rows = await sql<{ count: number; attempts: number }[]>`
+      SELECT
+        count(provider_resources.id)::int AS count,
+        max(operation_steps.attempt_count)::int AS attempts
+      FROM provider_resources
+      JOIN operation_steps ON operation_steps.operation_id = ${command.operationId}
+        AND operation_steps.logical_key = 'create_server'
+      WHERE provider_resources.environment_id = (
+        SELECT environment_id FROM operations WHERE id = ${command.operationId}
+      )
+        AND provider_resources.resource_kind = 'server'
+      GROUP BY operation_steps.operation_id
+    `;
+    expect(rows[0]).toEqual({ count: 1, attempts: 2 });
+  });
+
+  it.each(["dns_failure", "tls_failure"] as const)(
+    "keeps the server and marks the environment degraded on %s",
+    async (scenario) => {
+      const { adminLogin } = await provisionUsers();
+      const reserved = await reserveCreateOperation(sql, adminLogin.session, {
+        name: "Основная среда",
+        idempotencyKey: `create-${scenario}-key`,
+        scenario,
+      });
+      await expect(
+        createEnvironmentWorkflow({
+          operationId: reserved.accepted.operationId,
+          scenario,
+        }),
+      ).resolves.toEqual({ status: "degraded" });
+      const rows = await sql<{ status: string; servers: number }[]>`
+        SELECT environments.status,
+          count(provider_resources.id) FILTER (
+            WHERE provider_resources.resource_kind = 'server'
+              AND provider_resources.lifecycle_status = 'active'
+          )::int AS servers
+        FROM environments
+        LEFT JOIN provider_resources ON provider_resources.environment_id = environments.id
+        WHERE environments.id = (
+          SELECT environment_id FROM operations WHERE id = ${reserved.accepted.operationId}
+        )
+        GROUP BY environments.status
+      `;
+      expect(rows[0]).toEqual({ status: "degraded", servers: 1 });
+    },
+  );
+
+  it("classifies insufficient funds as permanent without creating resources", async () => {
+    const { adminLogin } = await provisionUsers();
+    const reserved = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Основная среда",
+      idempotencyKey: "create-no-funds-key-01",
+      scenario: "insufficient_funds",
+    });
+    await expect(
+      createEnvironmentWorkflow({
+        operationId: reserved.accepted.operationId,
+        scenario: "insufficient_funds",
+      }),
+    ).rejects.toThrow("Недостаточно средств");
+    const rows = await sql<
+      { operation_status: string; environment_status: string; resources: number }[]
+    >`
+      SELECT operations.status AS operation_status,
+        environments.status AS environment_status,
+        count(provider_resources.id)::int AS resources
+      FROM operations
+      JOIN environments ON environments.id = operations.environment_id
+      LEFT JOIN provider_resources
+        ON provider_resources.environment_id = environments.id
+      WHERE operations.id = ${reserved.accepted.operationId}
+      GROUP BY operations.status, environments.status
+    `;
+    expect(rows[0]).toEqual({
+      operation_status: "failed",
+      environment_status: "degraded",
+      resources: 0,
+    });
+  });
+
+  it("preserves a billable IP as cleanup_required during partial delete", async () => {
+    const { adminLogin } = await provisionUsers();
+    const create = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Основная среда",
+      idempotencyKey: "create-before-delete-01",
+      scenario: "success",
+    });
+    await createEnvironmentWorkflow({
+      operationId: create.accepted.operationId,
+      scenario: "success",
+    });
+    const environment = await sql<{ id: string }[]>`
+      SELECT environment_id AS id FROM operations WHERE id = ${create.accepted.operationId}
+    `;
+    const deletion = await reserveDeleteOperation(sql, adminLogin.session, {
+      environmentId: environment[0]!.id,
+      confirmationName: "Основная среда",
+      idempotencyKey: "delete-partial-key-01",
+      scenario: "partial_cleanup",
+    });
+    await expect(
+      deleteEnvironmentWorkflow({
+        operationId: deletion.accepted.operationId,
+        scenario: "partial_cleanup",
+      }),
+    ).resolves.toEqual({ status: "cleanup_required" });
+    const rows = await sql<{ status: string; active_ips: number }[]>`
+      SELECT environments.status,
+        count(provider_resources.id) FILTER (
+          WHERE provider_resources.resource_kind = 'public_ip'
+            AND provider_resources.lifecycle_status = 'active'
+        )::int AS active_ips
+      FROM environments
+      LEFT JOIN provider_resources ON provider_resources.environment_id = environments.id
+      WHERE environments.id = ${environment[0]!.id}
+      GROUP BY environments.status
+    `;
+    expect(rows[0]).toEqual({ status: "cleanup_required", active_ips: 1 });
   });
 });

@@ -1,0 +1,36 @@
+import { describe, expect, it } from "vitest";
+
+import { redactBounded } from "./redaction";
+import { canTransitionEnvironment, classifyProviderError } from "./state";
+
+describe("operation safety primitives", () => {
+  it("allows only declared environment transitions", () => {
+    expect(canTransitionEnvironment("creating", "active")).toBe(true);
+    expect(canTransitionEnvironment("active", "creating")).toBe(false);
+    expect(canTransitionEnvironment("deleted", "active")).toBe(false);
+  });
+
+  it("classifies unknown outcomes separately from permanent failures", () => {
+    expect(classifyProviderError("TIMEOUT_AFTER_MUTATION")).toBe("unknown_outcome");
+    expect(classifyProviderError("RATE_LIMIT")).toBe("transient");
+    expect(classifyProviderError("INSUFFICIENT_FUNDS")).toBe("permanent");
+  });
+
+  it("recursively redacts and bounds provider diagnostics", () => {
+    const result = redactBounded({
+      authorization: "Bearer exposed",
+      nested: {
+        message: "token=exposed password:also-exposed",
+        safe: "provider unavailable",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("exposed");
+    expect(result).toEqual({
+      authorization: "[redacted]",
+      nested: {
+        message: "token=[redacted] password:[redacted]",
+        safe: "provider unavailable",
+      },
+    });
+  });
+});

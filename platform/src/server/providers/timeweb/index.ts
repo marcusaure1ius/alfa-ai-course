@@ -9,3 +9,4 @@ export {
   type TimewebResourceKind,
 } from "./contracts";
 export { readTimewebRuntimeGate, type TimewebRuntimeGate } from "./runtime";
+export { FakeProviderError, FakeTimewebAdapter } from "./fake";

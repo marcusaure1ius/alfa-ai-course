@@ -1,8 +1,10 @@
 import { fileURLToPath } from "node:url";
 
+import { workflow } from "@workflow/vitest";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  plugins: [workflow()],
   resolve: {
     alias: {
       "server-only": fileURLToPath(
@@ -13,10 +15,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
-    exclude: [
-      "src/**/*.integration.test.ts",
-      "src/**/*.workflow.test.ts",
-    ],
+    include: ["src/workflows/**/*.workflow.test.ts"],
+    fileParallelism: false,
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
   },
 });
