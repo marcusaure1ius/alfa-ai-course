@@ -165,3 +165,25 @@ adapter доступен только server-side; raw Timeweb response отбр
 
 Актуальная schema, точные endpoint и границы token permissions описаны в
 [`docs/timeweb-readonly-adapter.md`](../docs/timeweb-readonly-adapter.md).
+
+## Guarded Timeweb mutations
+
+Browser API принимает только параметры операции платформы: имя среды,
+`idempotencyKey`, подтверждение и fake-сценарий вне production. Provider URL,
+HTTP method, произвольный payload и Timeweb resource ID отклоняются.
+
+Каждый provider-step повторно сверяет в PostgreSQL:
+
+- активную admin session и re-auth не старше 10 минут;
+- operation, ожидаемый environment state и лимит одного VPS;
+- точное подтверждение удаления;
+- ownership и provider resource ID, записанные самой платформой.
+
+Production mutation adapter имеет только typed create/update/delete/reconcile
+методы с фиксированными Timeweb endpoint. Он остаётся недоступен, пока отдельно
+не включены production provider mode, mutation kill-switch и подтверждение
+capabilities. В текущей foundation реализации workflow использует только fake
+adapter и не совершает реальных provider mutation.
+
+Полный контракт, reconciliation и checklist production-подключения описаны в
+[`docs/timeweb-mutation-guard.md`](../docs/timeweb-mutation-guard.md).

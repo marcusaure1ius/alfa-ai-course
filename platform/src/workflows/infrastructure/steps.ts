@@ -3,6 +3,7 @@ import { FatalError, RetryableError } from "@workflow/core";
 import { getDatabase } from "@/server/db/client";
 import type { WorkflowCommand } from "@/server/operations/contracts";
 import {
+  authorizeMutationStep,
   beginStep,
   completeOperationStep,
   finishOperation,
@@ -10,6 +11,10 @@ import {
   operationEnvironmentId,
   transitionEnvironment,
 } from "@/server/operations/repository";
+import {
+  MUTATION_COMMAND_VERSION,
+  type MutationResourceKind,
+} from "@/server/operations/contracts";
 import { classifyProviderError } from "@/server/operations/state";
 import {
   FakeProviderError,
@@ -68,14 +73,30 @@ function requireStepClaim(step: {
   return step.executionToken;
 }
 
+async function guardMutation(
+  command: WorkflowCommand,
+  action: "create" | "delete",
+  resourceKind: MutationResourceKind,
+) {
+  return authorizeMutationStep(getDatabase(), {
+    version: MUTATION_COMMAND_VERSION,
+    operationId: command.operationId,
+    action,
+    resourceKind,
+  });
+}
+
 export async function reserveIpStep(command: WorkflowCommand): Promise<void> {
   "use step";
   const sql = getDatabase();
+  const authorization = await guardMutation(command, "create", "public_ip");
   const step = await beginStep(sql, command.operationId, "reserve_public_ip", 10);
   if (step.alreadyCompleted) return;
   const executionToken = requireStepClaim(step);
   try {
-    await (await adapter(command)).reservePublicIp();
+    if (authorization.resource.state !== "active") {
+      await (await adapter(command)).reservePublicIp();
+    }
     await finishStep(
       sql,
       command.operationId,
@@ -94,11 +115,14 @@ export async function reserveIpStep(command: WorkflowCommand): Promise<void> {
 export async function createServerStep(command: WorkflowCommand): Promise<void> {
   "use step";
   const sql = getDatabase();
+  const authorization = await guardMutation(command, "create", "server");
   const step = await beginStep(sql, command.operationId, "create_server", 20);
   if (step.alreadyCompleted) return;
   const executionToken = requireStepClaim(step);
   try {
-    await (await adapter(command)).createServer();
+    if (authorization.resource.state !== "active") {
+      await (await adapter(command)).createServer();
+    }
     await finishStep(
       sql,
       command.operationId,
@@ -120,11 +144,14 @@ export async function configureDnsStep(
 ): Promise<"ready" | "degraded"> {
   "use step";
   const sql = getDatabase();
+  const authorization = await guardMutation(command, "create", "dns_record");
   const step = await beginStep(sql, command.operationId, "configure_dns", 30);
   if (step.alreadyCompleted) return "ready";
   const executionToken = requireStepClaim(step);
   try {
-    await (await adapter(command)).configureDns();
+    if (authorization.resource.state !== "active") {
+      await (await adapter(command)).configureDns();
+    }
     await finishStep(
       sql,
       command.operationId,
@@ -210,12 +237,17 @@ export async function deleteResourceStep(
 ): Promise<"deleted" | "cleanup_required"> {
   "use step";
   const sql = getDatabase();
+  const authorization = await guardMutation(command, "delete", kind);
   const key = `delete_${kind}`;
   const step = await beginStep(sql, command.operationId, key, order);
   if (step.alreadyCompleted) return "deleted";
   const executionToken = requireStepClaim(step);
   try {
-    await (await adapter(command)).deleteKind(kind);
+    if (authorization.resource.state === "active") {
+      await (await adapter(command)).deleteOwnedResource(
+        authorization.resource.value,
+      );
+    }
     await finishStep(sql, command.operationId, key, executionToken, {
       status: "succeeded",
     });

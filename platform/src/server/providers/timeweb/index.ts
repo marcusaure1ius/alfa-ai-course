@@ -2,6 +2,7 @@ import "server-only";
 
 export {
   TIMEWEB_ADAPTER_VERSION,
+  TIMEWEB_MUTATION_ADAPTER_VERSION,
   TIMEWEB_READ_DTO_VERSION,
   type OwnedProviderResource,
   type ProviderConnectionResult,
@@ -9,13 +10,23 @@ export {
   type TimewebConnectionCheck,
   type TimewebAdapter,
   type TimewebAdapterVersion,
+  type TimewebCreateServerInput,
+  type TimewebMutationAdapter,
+  type TimewebMutationAdapterVersion,
   type TimewebProviderErrorCode,
   type TimewebReadAdapter,
   type TimewebReadDtoVersion,
   type TimewebResourceKind,
   type TimewebServerStatus,
+  type TimewebServerReconciliation,
+  type TimewebUpdateServerInput,
 } from "./contracts";
-export { readTimewebRuntimeGate, type TimewebRuntimeGate } from "./runtime";
+export {
+  readTimewebMutationRuntimeGate,
+  readTimewebRuntimeGate,
+  type TimewebMutationRuntimeGate,
+  type TimewebRuntimeGate,
+} from "./runtime";
 export { FakeProviderError, FakeTimewebAdapter } from "./fake";
 export { FakeTimewebReadAdapter } from "./read-only-fake";
 export {
@@ -26,3 +37,7 @@ export {
   checkTimewebConnection,
   createTimewebReadAdapter,
 } from "./read-service";
+export {
+  createProductionTimewebMutationAdapter,
+  TimewebMutationHttpAdapter,
+} from "./mutation";

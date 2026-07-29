@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { AuthSession } from "../auth/service";
+import { hashOpaqueToken } from "../auth/crypto";
 import { createDatabaseClient, type DatabaseSql } from "../db/client";
 import { runMigrations } from "../db/migrate";
 import {
@@ -43,6 +44,13 @@ beforeEach(async () => {
     expiresAt: new Date(Date.now() + 60_000),
     reauthenticatedAt: new Date(),
   };
+  await sql`
+    INSERT INTO auth_sessions (id, user_id, token_hash, expires_at)
+    VALUES (
+      ${actor.sessionId}, ${actor.userId},
+      ${hashOpaqueToken(`lease-session-${actor.sessionId}`)}, ${actor.expiresAt}
+    )
+  `;
 });
 
 afterAll(async () => {

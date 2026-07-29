@@ -3,10 +3,14 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import type { AuthSession } from "../auth/service";
+import { hasFreshReauthentication, hasPermission } from "../auth/rbac";
 import type { DatabaseSql } from "../db/client";
+import type { OwnedProviderResource } from "../providers/timeweb/contracts";
 import {
+  MUTATION_COMMAND_VERSION,
   OPERATIONS_DTO_VERSION,
   type FakeScenario,
+  type GuardedMutationCommand,
   type MutationAccepted,
   type TimelineStep,
 } from "./contracts";
@@ -29,11 +33,36 @@ export class StepLeaseLostError extends Error {
   }
 }
 
+export class MutationGuardError extends Error {
+  constructor(
+    public readonly code:
+      | "FORBIDDEN"
+      | "STALE_REAUTH"
+      | "INVALID_COMMAND"
+      | "INVALID_OPERATION"
+      | "INVALID_STATE"
+      | "ACTIVE_ENVIRONMENT_LIMIT"
+      | "WRONG_OWNERSHIP",
+  ) {
+    super(code);
+  }
+}
+
+function assertFreshAdmin(actor: AuthSession): void {
+  if (!hasPermission(actor.role, "infrastructure:manage")) {
+    throw new MutationGuardError("FORBIDDEN");
+  }
+  if (!hasFreshReauthentication(actor.reauthenticatedAt)) {
+    throw new MutationGuardError("STALE_REAUTH");
+  }
+}
+
 export async function reserveCreateOperation(
   sql: DatabaseSql,
   actor: AuthSession,
   input: { name: string; idempotencyKey: string; scenario: FakeScenario },
 ): Promise<{ accepted: MutationAccepted; created: boolean }> {
+  assertFreshAdmin(actor);
   const existing = await sql<{ id: string }[]>`
     SELECT id FROM operations
     WHERE requested_by_user_id = ${actor.userId}
@@ -58,11 +87,11 @@ export async function reserveCreateOperation(
       await transaction`
         INSERT INTO operations (
           id, environment_id, kind, status, requested_by_user_id,
-          idempotency_key, input_snapshot
+          requested_by_session_id, idempotency_key, input_snapshot
         )
         VALUES (
           ${operationId}, ${environmentId}, 'create_environment', 'queued',
-          ${actor.userId}, ${input.idempotencyKey},
+          ${actor.userId}, ${actor.sessionId}, ${input.idempotencyKey},
           ${transaction.json({ scenario: input.scenario })}
         )
       `;
@@ -112,6 +141,7 @@ export async function reserveDeleteOperation(
     scenario: FakeScenario;
   },
 ): Promise<{ accepted: MutationAccepted; created: boolean }> {
+  assertFreshAdmin(actor);
   const operationId = randomUUID();
   const reservation = await sql.begin(async (transaction) => {
       const lockKey = `${actor.userId}:${input.idempotencyKey}`;
@@ -139,14 +169,15 @@ export async function reserveDeleteOperation(
       await transaction`
         INSERT INTO operations (
           id, environment_id, kind, status, requested_by_user_id,
-          idempotency_key, input_snapshot
+          requested_by_session_id, idempotency_key, input_snapshot
         )
         VALUES (
           ${operationId}, ${input.environmentId}, 'delete_environment', 'queued',
-          ${actor.userId}, ${input.idempotencyKey},
+          ${actor.userId}, ${actor.sessionId}, ${input.idempotencyKey},
           ${transaction.json({
             scenario: input.scenario,
             confirmedName: input.confirmationName,
+            confirmed: true,
           })}
         )
       `;
@@ -172,6 +203,158 @@ export async function reserveDeleteOperation(
     },
     created: reservation.created,
   };
+}
+
+export type GuardedMutationAuthorization = Readonly<{
+  command: GuardedMutationCommand;
+  environmentId: string;
+  resource:
+    | Readonly<{ state: "absent" }>
+    | Readonly<{ state: "deleted"; value: OwnedProviderResource }>
+    | Readonly<{ state: "active"; value: OwnedProviderResource }>;
+}>;
+
+type GuardRow = {
+  operation_kind: string;
+  operation_status: string;
+  input_snapshot: Record<string, unknown>;
+  environment_id: string;
+  environment_name: string;
+  environment_status: EnvironmentStatus;
+  user_role: string;
+  user_status: string;
+  session_active: boolean;
+  reauth_fresh: boolean;
+};
+
+export async function authorizeMutationStep(
+  sql: DatabaseSql,
+  command: GuardedMutationCommand,
+): Promise<GuardedMutationAuthorization> {
+  const commandKeys = Object.keys(command);
+  if (
+    commandKeys.length !== 4 ||
+    !commandKeys.every((key) =>
+      ["version", "operationId", "action", "resourceKind"].includes(key),
+    ) ||
+    command.version !== MUTATION_COMMAND_VERSION ||
+    !["create", "delete"].includes(command.action) ||
+    !["server", "public_ip", "dns_record"].includes(command.resourceKind)
+  ) {
+    throw new MutationGuardError("INVALID_COMMAND");
+  }
+
+  return sql.begin(async (transaction) => {
+    await transaction`
+      SELECT pg_advisory_xact_lock(hashtextextended(${command.operationId}, 0))
+    `;
+    const rows = await transaction<GuardRow[]>`
+      SELECT
+        operations.kind AS operation_kind,
+        operations.status AS operation_status,
+        operations.input_snapshot,
+        environments.id AS environment_id,
+        environments.name AS environment_name,
+        environments.status AS environment_status,
+        users.role_id AS user_role,
+        users.status AS user_status,
+        (
+          auth_sessions.id IS NOT NULL
+          AND auth_sessions.revoked_at IS NULL
+          AND auth_sessions.expires_at > now()
+        ) AS session_active,
+        (
+          auth_sessions.reauthenticated_at <= now()
+          AND auth_sessions.reauthenticated_at >= now() - interval '10 minutes'
+        ) AS reauth_fresh
+      FROM operations
+      JOIN environments ON environments.id = operations.environment_id
+      JOIN users ON users.id = operations.requested_by_user_id
+      LEFT JOIN auth_sessions
+        ON auth_sessions.id = operations.requested_by_session_id
+        AND auth_sessions.user_id = operations.requested_by_user_id
+      WHERE operations.id = ${command.operationId}
+      FOR UPDATE OF operations, environments
+    `;
+    const row = rows[0];
+    if (!row) throw new MutationGuardError("INVALID_OPERATION");
+    if (
+      row.user_role !== "admin" ||
+      row.user_status !== "active" ||
+      !row.session_active
+    ) {
+      throw new MutationGuardError("FORBIDDEN");
+    }
+    if (!row.reauth_fresh) throw new MutationGuardError("STALE_REAUTH");
+    if (!["queued", "running"].includes(row.operation_status)) {
+      throw new MutationGuardError("INVALID_OPERATION");
+    }
+
+    const expectedOperation =
+      command.action === "create" ? "create_environment" : "delete_environment";
+    const expectedEnvironment = command.action === "create" ? "creating" : "deleting";
+    if (
+      row.operation_kind !== expectedOperation ||
+      row.environment_status !== expectedEnvironment
+    ) {
+      throw new MutationGuardError("INVALID_STATE");
+    }
+
+    if (command.action === "create") {
+      const live = await transaction<{ count: number }[]>`
+        SELECT count(*)::int AS count
+        FROM environments
+        WHERE status IN ('creating', 'active', 'degraded', 'deleting', 'cleanup_required')
+      `;
+      if (live[0]?.count !== 1) {
+        throw new MutationGuardError("ACTIVE_ENVIRONMENT_LIMIT");
+      }
+    } else if (
+      row.input_snapshot.confirmed !== true ||
+      row.input_snapshot.confirmedName !== row.environment_name
+    ) {
+      throw new MutationGuardError("INVALID_STATE");
+    }
+
+    const resources = await transaction<
+      {
+        provider_resource_id: string;
+        ownership: "platform" | "external";
+        lifecycle_status: string;
+      }[]
+    >`
+      SELECT provider_resource_id, ownership, lifecycle_status
+      FROM provider_resources
+      WHERE environment_id = ${row.environment_id}
+        AND provider IN ('fake-timeweb', 'timeweb')
+        AND resource_kind = ${command.resourceKind}
+      ORDER BY created_at DESC
+    `;
+    if (resources.some((resource) => resource.ownership !== "platform")) {
+      throw new MutationGuardError("WRONG_OWNERSHIP");
+    }
+    const active = resources.filter(
+      (resource) => resource.lifecycle_status !== "deleted",
+    );
+    if (active.length > 1) throw new MutationGuardError("INVALID_STATE");
+    const selected = active[0] ?? resources[0];
+    const value = selected
+      ? {
+          externalId: selected.provider_resource_id,
+          kind: command.resourceKind,
+          environmentId: row.environment_id,
+        }
+      : null;
+    return {
+      command,
+      environmentId: row.environment_id,
+      resource: !value
+        ? { state: "absent" as const }
+        : active[0]
+          ? { state: "active" as const, value }
+          : { state: "deleted" as const, value },
+    };
+  });
 }
 
 export async function attachWorkflowRun(

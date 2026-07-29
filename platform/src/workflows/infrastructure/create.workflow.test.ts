@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { getRun, start } from "@workflow/core/runtime";
 
 import { POST as createEndpoint } from "@/app/api/admin/infrastructure/environments/route";
+import { DELETE as deleteEndpoint } from "@/app/api/admin/infrastructure/environments/[id]/route";
 import type { AuthSession } from "@/server/auth/service";
 import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/server/auth/config";
 import { hashOpaqueToken } from "@/server/auth/crypto";
@@ -65,6 +66,57 @@ afterAll(async () => {
 });
 
 describe("Vercel Workflow orchestration", () => {
+  it("rejects generic provider proxy fields at the browser boundary", async () => {
+    const csrf = issueCsrfToken();
+    const headers = {
+      cookie: `${CSRF_COOKIE_NAME}=${csrf.nonce}; ${SESSION_COOKIE_NAME}=${sessionToken}`,
+      origin: "http://localhost:3000",
+      "content-type": "application/json",
+      "x-csrf-token": csrf.token,
+    };
+    const createResponse = await createEndpoint(
+      new Request("http://localhost:3000/api/admin/infrastructure/environments", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: "API среда",
+          idempotencyKey: "proxy-create-key-0001",
+          providerResourceId: "54321",
+          url: "https://attacker.invalid",
+          method: "DELETE",
+          payload: { arbitrary: true },
+        }),
+      }),
+    );
+    expect(createResponse.status).toBe(400);
+
+    const deleteResponse = await deleteEndpoint(
+      new Request(
+        "http://localhost:3000/api/admin/infrastructure/environments/11111111-1111-4111-8111-111111111111",
+        {
+          method: "DELETE",
+          headers,
+          body: JSON.stringify({
+            confirmationName: "API среда",
+            idempotencyKey: "proxy-delete-key-0001",
+            providerResourceId: "54321",
+          }),
+        },
+      ),
+      {
+        params: Promise.resolve({
+          id: "11111111-1111-4111-8111-111111111111",
+        }),
+      },
+    );
+    expect(deleteResponse.status).toBe(400);
+    expect(
+      await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM operations
+      `,
+    ).toEqual([{ count: 0 }]);
+  });
+
   it("returns 202 and one operation for repeated actor/idempotency requests", async () => {
     const csrf = issueCsrfToken();
     const request = () =>

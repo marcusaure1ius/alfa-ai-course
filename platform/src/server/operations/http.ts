@@ -11,6 +11,14 @@ const scenarios = new Set<FakeScenario>([
   "partial_cleanup",
 ]);
 
+export function hasOnlyInputKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+): boolean {
+  const allowedKeys = new Set(allowed);
+  return Object.keys(value).every((key) => allowedKeys.has(key));
+}
+
 export function fakeScenario(value: unknown): FakeScenario {
   if (
     process.env.VERCEL_ENV !== "production" &&

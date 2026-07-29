@@ -3,7 +3,11 @@ import { start } from "@workflow/core/runtime";
 import { requireFreshAdmin } from "@/server/auth/access";
 import { verifyCsrfRequest } from "@/server/auth/csrf";
 import { getDatabase } from "@/server/db/client";
-import { fakeScenario, operationError } from "@/server/operations/http";
+import {
+  fakeScenario,
+  hasOnlyInputKeys,
+  operationError,
+} from "@/server/operations/http";
 import {
   attachWorkflowRun,
   operationNeedsWorkflowStart,
@@ -22,6 +26,7 @@ export async function POST(request: Request): Promise<Response> {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (
     !body ||
+    !hasOnlyInputKeys(body, ["name", "idempotencyKey", "simulation"]) ||
     typeof body.name !== "string" ||
     body.name.trim().length < 2 ||
     body.name.length > 80 ||

@@ -119,25 +119,58 @@ export class FakeTimewebAdapter {
     }
   }
 
-  async deleteKind(kind: TimewebResourceKind): Promise<void> {
-    if (kind === "public_ip" && this.scenario === "partial_cleanup") {
+  async deleteOwnedResource(resource: OwnedProviderResource): Promise<void> {
+    if (
+      resource.environmentId !== this.environmentId ||
+      !["server", "public_ip", "dns_record"].includes(resource.kind)
+    ) {
+      throw new FakeProviderError(
+        "PARTIAL_CLEANUP",
+        "Ownership resource не подтверждён.",
+      );
+    }
+    if (resource.kind === "public_ip" && this.scenario === "partial_cleanup") {
       throw new FakeProviderError(
         "PARTIAL_CLEANUP",
         "Публичный IP остался активным и требует cleanup.",
       );
     }
-    await this.sql`
+    const changed = await this.sql<{ id: string }[]>`
       UPDATE provider_resources
       SET lifecycle_status = 'deleted', updated_at = now()
       WHERE environment_id = ${this.environmentId}
         AND provider = 'fake-timeweb'
-        AND resource_kind = ${kind}
+        AND resource_kind = ${resource.kind}
+        AND provider_resource_id = ${resource.externalId}
         AND ownership = 'platform'
+        AND lifecycle_status <> 'deleted'
+      RETURNING id
     `;
-    if (kind === "dns_record") {
+    if (!changed[0]) {
+      const alreadyDeleted = await this.sql<{ id: string }[]>`
+        SELECT id FROM provider_resources
+        WHERE environment_id = ${this.environmentId}
+          AND provider = 'fake-timeweb'
+          AND resource_kind = ${resource.kind}
+          AND provider_resource_id = ${resource.externalId}
+          AND ownership = 'platform'
+          AND lifecycle_status = 'deleted'
+      `;
+      if (!alreadyDeleted[0]) {
+        throw new FakeProviderError(
+          "PARTIAL_CLEANUP",
+          "Ownership resource не подтверждён.",
+        );
+      }
+    }
+    if (resource.kind === "dns_record") {
       await this.sql`
         UPDATE domain_allocations SET status = 'released', updated_at = now()
         WHERE environment_id = ${this.environmentId}
+          AND provider_resource_id IN (
+            SELECT id FROM provider_resources
+            WHERE provider_resource_id = ${resource.externalId}
+          )
       `;
     }
   }

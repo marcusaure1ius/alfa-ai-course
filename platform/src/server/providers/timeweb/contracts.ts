@@ -2,9 +2,12 @@ import "server-only";
 
 export const TIMEWEB_ADAPTER_VERSION = "v1" as const;
 export const TIMEWEB_READ_DTO_VERSION = "timeweb-read-v1" as const;
+export const TIMEWEB_MUTATION_ADAPTER_VERSION = "timeweb-mutation-v1" as const;
 
 export type TimewebAdapterVersion = typeof TIMEWEB_ADAPTER_VERSION;
 export type TimewebReadDtoVersion = typeof TIMEWEB_READ_DTO_VERSION;
+export type TimewebMutationAdapterVersion =
+  typeof TIMEWEB_MUTATION_ADAPTER_VERSION;
 
 export type TimewebResourceKind = "server" | "public_ip" | "dns_record";
 
@@ -127,6 +130,7 @@ export type TimewebConnectionCheck =
 
 export type TimewebProviderErrorCode =
   | "NOT_CONFIGURED"
+  | "NOT_FOUND"
   | "UNAUTHORIZED"
   | "FORBIDDEN"
   | "RATE_LIMITED"
@@ -137,6 +141,43 @@ export type TimewebProviderErrorCode =
 export interface TimewebReadAdapter {
   readonly version: TimewebReadDtoVersion;
   discover(): Promise<TimewebCatalogSnapshot>;
+}
+
+export type TimewebCreateServerInput = Readonly<{
+  environmentId: string;
+  name: string;
+  presetId: number;
+  operatingSystemId: number;
+}>;
+
+export type TimewebUpdateServerInput = Readonly<{
+  resource: OwnedProviderResource & Readonly<{ kind: "server" }>;
+  name: string;
+}>;
+
+export type TimewebServerReconciliation =
+  | Readonly<{ state: "absent" }>
+  | Readonly<{
+      state: "present";
+      resource: OwnedProviderResource & Readonly<{ kind: "server" }>;
+    }>;
+
+/**
+ * Production mutation contract. Every operation maps to a fixed Timeweb
+ * method/path/body; callers cannot supply an arbitrary URL, method or payload.
+ */
+export interface TimewebMutationAdapter {
+  readonly version: TimewebMutationAdapterVersion;
+  createServer(
+    input: TimewebCreateServerInput,
+  ): Promise<OwnedProviderResource & Readonly<{ kind: "server" }>>;
+  updateServer(input: TimewebUpdateServerInput): Promise<void>;
+  deleteServer(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<void>;
+  reconcileServer(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<TimewebServerReconciliation>;
 }
 
 /**
