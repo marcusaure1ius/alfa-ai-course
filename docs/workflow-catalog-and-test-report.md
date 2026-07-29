@@ -10,6 +10,8 @@
 
 Default distribution содержит только десять самостоятельных уроков. Core, Adapter и Diagnostics JSON остаются в репозитории как advanced-библиотека и не импортируются на beginner-стенд.
 
+Дополнительный workflow [`Advanced · Telegram: поддержка через группу`](../workflows/advanced/telegram-support-relay.json) хранится отдельно в `workflows/advanced` и не меняет lessons-only distribution. Он воспроизводит схему Telegram → закрытая группа → Google Sheets mapping → Reply оператора → Telegram из указанного пользователем видео. В нём есть прямые внешние отправки, поэтому он выключен, требует явного `sendEnabled=true`, private allowlist и отдельной [инструкции](workflows/telegram-support-relay.md).
+
 | ID | Название | Рабочих блоков | Code/Function | Sub-workflows |
 |---|---|---:|---:|---:|
 | `businessTelegramAssistantV1` | Урок 1 — Telegram: черновик | 5 | 0 | 0 |
@@ -44,6 +46,7 @@ Telegram Trigger, IMAP и webhook credentials добавляются тольк�
 ```bash
 ./tests/beginner_workflows_test.sh
 ./tests/polza_beginner_workflows_test.sh
+./tests/telegram_support_relay_test.sh
 ./tests/workflow_catalog_test.sh
 ./tests/secret_scan.sh
 ```
@@ -62,6 +65,7 @@ Telegram Trigger, IMAP и webhook credentials добавляются тольк�
 10. повторный import обновляет стабильные IDs без дублей;
 11. пять Polza-уроков собирают ожидаемые request bodies, разбирают success responses и показывают понятный fallback на mocked fixtures;
 12. image-to-image передаёт ровно один URL reference, Telegram paths не отвечают автоматически, а accounting path заканчивается ручной сверкой.
+13. advanced Telegram support relay имеет локальный preview, отбрасывает группы/ботов/неразрешённые chat ID и дважды проверяет send gate перед ответом пользователю.
 
 Clean import подтверждает совместимость структуры, но не является проверкой внешних аккаунтов. Yandex AI Studio, Polza.ai, Telegram, Gmail и Яндекс Почта требуют user-owned credentials и отдельного smoke-test.
 
