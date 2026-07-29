@@ -149,3 +149,19 @@ npm run test:workflow
 
 Решение по БД и окружениям зафиксировано в
 [`adr/0007-neon-postgres-for-course-platform.md`](../adr/0007-neon-postgres-for-course-platform.md).
+
+## Read-only Timeweb connection
+
+Раздел `/admin/timeweb` запускает только allowlisted read contract:
+
+- account status и баланс;
+- список серверов и безопасные status;
+- актуальные presets, OS, regions и availability zones.
+
+В development/preview результат всегда приходит из fake adapter. Production
+adapter доступен только server-side; raw Timeweb response отбрасывается до
+формирования DTO `timeweb-read-v1`. Неизвестный status возвращается как
+`unsupported/degraded`, а не ломает страницу.
+
+Актуальная schema, точные endpoint и границы token permissions описаны в
+[`docs/timeweb-readonly-adapter.md`](../docs/timeweb-readonly-adapter.md).

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 
 import { GET as adminApi } from "@/app/api/admin/access-check/route";
+import { POST as timewebConnectionEndpoint } from "@/app/api/admin/timeweb/connection-test/route";
 import { GET as csrfEndpoint } from "@/app/api/auth/csrf/route";
 import { POST as loginEndpoint } from "@/app/api/auth/login/route";
 import { POST as logoutEndpoint } from "@/app/api/auth/logout/route";
@@ -211,6 +212,38 @@ describe("database-backed authentication", () => {
       expect(response.status).toBe(403);
       expect(await response.json()).toEqual({ error: "Доступ запрещён." });
     }
+  });
+
+  it("keeps the Timeweb connection test admin-only and fake outside production", async () => {
+    const { adminLogin, studentLogin } = await provisionUsers();
+    const csrfResponse = csrfEndpoint();
+    const csrfBody = (await csrfResponse.json()) as { csrfToken: string };
+    const csrfCookiePair = csrfResponse.headers.get("set-cookie")?.split(";")[0] ?? "";
+
+    const requestFor = (token: string) =>
+      new Request("http://localhost:3000/api/admin/timeweb/connection-test", {
+        method: "POST",
+        headers: {
+          cookie: `${csrfCookiePair}; ${SESSION_COOKIE_NAME}=${token}`,
+          origin: "http://localhost:3000",
+          "x-csrf-token": csrfBody.csrfToken,
+        },
+      });
+
+    const denied = await timewebConnectionEndpoint(requestFor(studentLogin.token));
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toEqual({ error: "Доступ запрещён." });
+
+    const accepted = await timewebConnectionEndpoint(requestFor(adminLogin.token));
+    expect(accepted.status).toBe(200);
+    const body = await accepted.json();
+    expect(body).toMatchObject({
+      version: "timeweb-read-v1",
+      ok: true,
+      mode: "fake",
+      status: "fake",
+    });
+    expect(JSON.stringify(body)).not.toMatch(/authorization|credential|root_pass/i);
   });
 
   it("revokes every active session when an admin blocks a user", async () => {

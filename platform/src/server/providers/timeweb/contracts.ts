@@ -1,8 +1,10 @@
 import "server-only";
 
 export const TIMEWEB_ADAPTER_VERSION = "v1" as const;
+export const TIMEWEB_READ_DTO_VERSION = "timeweb-read-v1" as const;
 
 export type TimewebAdapterVersion = typeof TIMEWEB_ADAPTER_VERSION;
+export type TimewebReadDtoVersion = typeof TIMEWEB_READ_DTO_VERSION;
 
 export type TimewebResourceKind = "server" | "public_ip" | "dns_record";
 
@@ -17,6 +19,125 @@ export type ProviderConnectionResult = Readonly<{
   checkedAt: string;
   accountLabel?: string;
 }>;
+
+export type TimewebSupportedStatus =
+  | "on"
+  | "off"
+  | "installing"
+  | "reinstalling"
+  | "starting"
+  | "stopping"
+  | "rebooting"
+  | "shutting_down"
+  | "hard_rebooting"
+  | "hard_shutting_down"
+  | "blocked";
+
+export type TimewebServerStatus =
+  | Readonly<{ state: "supported"; value: TimewebSupportedStatus }>
+  | Readonly<{ state: "unsupported"; providerValue: string }>;
+
+export type TimewebReadCapabilities = Readonly<{
+  servers: true;
+  presets: true;
+  operatingSystems: true;
+  locations: true;
+  balance: true;
+  accountStatus: true;
+  tokenPermissions: Readonly<{
+    serviceScope: "manual-verification-required";
+    deleteWithoutConfirmation: "manual-verification-required";
+    actionLevelPermissions: "not-documented";
+  }>;
+}>;
+
+export type TimewebCatalogSnapshot = Readonly<{
+  version: TimewebReadDtoVersion;
+  source: "fake" | "timeweb";
+  checkedAt: string;
+  degraded: boolean;
+  account: Readonly<{
+    state: "ready" | "blocked";
+  }>;
+  balance: Readonly<{
+    amount: number;
+    currency: string;
+  }>;
+  servers: ReadonlyArray<
+    Readonly<{
+      id: string;
+      name: string;
+      region: string;
+      zone: string;
+      presetId: string | null;
+      status: TimewebServerStatus;
+    }>
+  >;
+  presets: ReadonlyArray<
+    Readonly<{
+      id: string;
+      region: string;
+      priceRoubles: number;
+      cpu: number;
+      ramMb: number;
+      diskMb: number;
+      diskType: string;
+    }>
+  >;
+  operatingSystems: ReadonlyArray<
+    Readonly<{
+      id: string;
+      family: string;
+      name: string;
+      version: string;
+    }>
+  >;
+  locations: ReadonlyArray<
+    Readonly<{
+      region: string;
+      countryCode: string;
+      zones: readonly string[];
+    }>
+  >;
+  capabilities: TimewebReadCapabilities;
+}>;
+
+export type TimewebConnectionCheck =
+  | Readonly<{
+      version: TimewebReadDtoVersion;
+      ok: true;
+      mode: "fake" | "timeweb";
+      status: "fake" | "ready" | "degraded";
+      checkedAt: string;
+      catalog: TimewebCatalogSnapshot;
+    }>
+  | Readonly<{
+      version: TimewebReadDtoVersion;
+      ok: false;
+      mode: "blocked" | "timeweb";
+      status: "unavailable";
+      checkedAt: string;
+      error: Readonly<{
+        code: TimewebProviderErrorCode;
+        message: string;
+        correlationId: string;
+        retryable: boolean;
+      }>;
+    }>;
+
+export type TimewebProviderErrorCode =
+  | "NOT_CONFIGURED"
+  | "UNAUTHORIZED"
+  | "FORBIDDEN"
+  | "RATE_LIMITED"
+  | "UPSTREAM_UNAVAILABLE"
+  | "TIMEOUT"
+  | "INVALID_RESPONSE";
+
+export interface TimewebReadAdapter {
+  readonly version: TimewebReadDtoVersion;
+  discover(): Promise<TimewebCatalogSnapshot>;
+}
 
 /**
  * Internal server contract only. It intentionally exposes concrete operations
