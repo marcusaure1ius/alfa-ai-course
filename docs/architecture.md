@@ -4,6 +4,35 @@
 
 Документ фиксирует целевую архитектуру и границы MVP после research-gate `T-0002` и `T-0003`. Baseline проверен 2026-07-13; перед release и update изменчивые факты перепроверяются по [version research](research/2026-07-13-platform-versions-and-license.md) и [provider capability matrix](research/provider-capabilities.md).
 
+## Два изолированных deployable
+
+С 2026-07-29 репозиторий является multi-product:
+
+1. root starter kit — описанный ниже Ubuntu/Docker Compose runtime;
+2. `platform/` — Course Control Plane на Vercel.
+
+Control plane не входит в Docker Compose starter kit и не запускается на учебном VPS. Vercel roots равны `platform/web/` и `platform/destroyer/`; deployable имеют собственные dependencies, build/tests, environment secrets и release lifecycle. Web использует Marketplace PostgreSQL, а destroyer изолирует token автоматического удаления. Root installer/runtime сохраняет прежний контракт и проверяется независимо.
+
+```mermaid
+flowchart LR
+  U["Admin / Student"] --> V["Vercel\nplatform/web"]
+  V --> DB["Marketplace PostgreSQL"]
+  V --> WF["Vercel Workflow"]
+  CR["Vercel Cron"] --> WF
+  WF --> TW["Timeweb create / DNS API"]
+  WF --> D["Vercel\nplatform/destroyer"]
+  D --> TD["Timeweb delete API"]
+  TW --> VPS["Один основной VPS"]
+  TD --> VPS
+  VPS --> C["Caddy"]
+  C --> N["n8n"]
+  N --> P["Private PostgreSQL"]
+```
+
+Платные create/delete операции запускаются как durable Vercel Workflow и не удерживают один HTTP request. Bootstrap выполняется через Timeweb `cloud-init`; исходящий SSH из Vercel не используется. Provisioner и destroyer Timeweb tokens находятся в production environments разных Vercel projects; signed cleanup contract не является произвольным provider proxy. Default hostname — `n8n.neurokurs.ru`, hard limit — один active/creating/degraded VPS.
+
+Подробные решения: [ADR-0005](../adr/0005-course-platform-control-plane.md) и [требования control plane](course-platform-requirements.md). Разделы ниже продолжают быть канонической архитектурой самого starter-kit runtime.
+
 ## Контекст системы
 
 ```mermaid

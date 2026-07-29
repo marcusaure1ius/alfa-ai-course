@@ -6,6 +6,14 @@
 
 **Формат:** открываемый пользователем комплект конфигурации, Bash-скриптов, импортируемых workflow, тестов и русскоязычной документации для официального self-hosted n8n Community Edition.
 
+## Multi-product граница репозитория
+
+С 2026-07-29 в этом же репозитории проектируется второй продукт — Course Control Plane в изолированном каталоге `platform/`. Он не изменяет описанный ниже MVP starter kit: root Compose, installer, scripts и workflow distribution остаются самостоятельно устанавливаемым продуктом.
+
+Control plane размещается на Vercel двумя изолированными deployable roots `platform/web/` и `platform/destroyer/`. Он автоматизирует для владельца курса один основной Timeweb VPS, DNS в зоне `neurokurs.ru`, установку exact starter-kit release и удаление инфраструктуры. Его продуктовые требования зафиксированы в [course platform requirements](course-platform-requirements.md), а repository/runtime boundaries — в [ADR-0005](../adr/0005-course-platform-control-plane.md).
+
+Следовательно, пункты ниже «собственный публичный SaaS» и «автоматическая покупка VPS» остаются вне **starter-kit MVP**, но больше не запрещают отдельную platform-реализацию в `platform/`. Platform имеет собственные auth/RBAC, Vercel deployment, secrets, CI, release gates и лицензионную проверку n8n.
+
 ## Проблема
 
 Участник ИИ-интенсива до курса мог пользоваться только чатом с ИИ и впервые открывает n8n. После обучения он не должен зависеть от преподавателя при запуске готовых сценариев и эксплуатации собственного n8n. Типичная инструкция требует знания визуальных workflow, Linux, DNS, Docker, TLS, backup и диагностики. Ошибка в любом звене превращает обучение в поддержку инфраструктуры.
