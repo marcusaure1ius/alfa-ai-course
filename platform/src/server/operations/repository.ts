@@ -23,6 +23,12 @@ export class OperationConflictError extends Error {
   }
 }
 
+export class StepLeaseLostError extends Error {
+  constructor() {
+    super("STEP_LEASE_LOST");
+  }
+}
+
 export async function reserveCreateOperation(
   sql: DatabaseSql,
   actor: AuthSession,
@@ -279,7 +285,7 @@ export async function finishStep(
     | { status: "succeeded" }
     | { status: "failed"; code: string; message: string; retryClass: RetryClass },
 ): Promise<void> {
-  await sql`
+  const rows = await sql<{ id: string }[]>`
     UPDATE operation_steps
     SET status = ${outcome.status},
         error_code = ${outcome.status === "failed" ? outcome.code : null},
@@ -294,7 +300,74 @@ export async function finishStep(
     WHERE operation_id = ${operationId}
       AND logical_key = ${key}
       AND execution_token = ${executionToken}
+    RETURNING id
   `;
+  if (!rows[0]) throw new StepLeaseLostError();
+}
+
+export async function completeOperationStep(
+  sql: DatabaseSql,
+  operationId: string,
+  key: string,
+  executionToken: string,
+  expected: EnvironmentStatus,
+  next: EnvironmentStatus,
+): Promise<void> {
+  if (!canTransitionEnvironment(expected, next)) {
+    throw new OperationConflictError("INVALID_STATE");
+  }
+  await sql.begin(async (transaction) => {
+    const step = await transaction<{ id: string }[]>`
+      UPDATE operation_steps
+      SET status = 'succeeded', error_code = NULL,
+          error_message_redacted = NULL, retry_class = 'none',
+          finished_at = now(), execution_token = NULL,
+          lease_expires_at = NULL, updated_at = now()
+      WHERE operation_id = ${operationId}
+        AND logical_key = ${key}
+        AND execution_token = ${executionToken}
+      RETURNING id
+    `;
+    if (!step[0]) throw new StepLeaseLostError();
+
+    const environment = await transaction<{ id: string }[]>`
+      UPDATE environments
+      SET status = ${next}, updated_at = now()
+      WHERE id = (
+        SELECT environment_id FROM operations WHERE id = ${operationId}
+      )
+        AND status = ${expected}
+      RETURNING id
+    `;
+    if (!environment[0]) throw new OperationConflictError("INVALID_STATE");
+
+    const operation = await transaction<
+      { requested_by_user_id: string; kind: string; environment_id: string }[]
+    >`
+      UPDATE operations
+      SET status = 'succeeded', error_code = NULL,
+          error_message_redacted = NULL, finished_at = now(),
+          state_version = state_version + 1, updated_at = now()
+      WHERE id = ${operationId} AND status IN ('queued', 'running')
+      RETURNING requested_by_user_id, kind, environment_id
+    `;
+    if (!operation[0]) throw new OperationConflictError("INVALID_STATE");
+
+    await transaction`
+      INSERT INTO audit_events (
+        id, actor_user_id, action, subject_type, subject_id, outcome, metadata
+      )
+      VALUES (
+        ${randomUUID()}, ${operation[0].requested_by_user_id},
+        ${`operation.${operation[0].kind}.finished`}, 'operation', ${operationId},
+        'success',
+        ${transaction.json({
+          environmentId: operation[0].environment_id,
+          code: "OK",
+        })}
+      )
+    `;
+  });
 }
 
 export async function transitionEnvironment(

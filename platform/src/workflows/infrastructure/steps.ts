@@ -4,6 +4,7 @@ import { getDatabase } from "@/server/db/client";
 import type { WorkflowCommand } from "@/server/operations/contracts";
 import {
   beginStep,
+  completeOperationStep,
   finishOperation,
   finishStep,
   operationEnvironmentId,
@@ -192,11 +193,14 @@ export async function completeCreateStep(command: WorkflowCommand): Promise<void
   const step = await beginStep(sql, command.operationId, "complete", 50);
   if (step.alreadyCompleted) return;
   const executionToken = requireStepClaim(step);
-  await transitionEnvironment(sql, command.operationId, "creating", "active");
-  await finishStep(sql, command.operationId, "complete", executionToken, {
-    status: "succeeded",
-  });
-  await finishOperation(sql, command.operationId, { status: "succeeded" });
+  await completeOperationStep(
+    sql,
+    command.operationId,
+    "complete",
+    executionToken,
+    "creating",
+    "active",
+  );
 }
 
 export async function deleteResourceStep(
@@ -240,9 +244,12 @@ export async function completeDeleteStep(command: WorkflowCommand): Promise<void
   const step = await beginStep(sql, command.operationId, "complete_delete", 50);
   if (step.alreadyCompleted) return;
   const executionToken = requireStepClaim(step);
-  await transitionEnvironment(sql, command.operationId, "deleting", "deleted");
-  await finishStep(sql, command.operationId, "complete_delete", executionToken, {
-    status: "succeeded",
-  });
-  await finishOperation(sql, command.operationId, { status: "succeeded" });
+  await completeOperationStep(
+    sql,
+    command.operationId,
+    "complete_delete",
+    executionToken,
+    "deleting",
+    "deleted",
+  );
 }
