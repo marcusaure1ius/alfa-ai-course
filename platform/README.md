@@ -187,3 +187,17 @@ adapter и не совершает реальных provider mutation.
 
 Полный контракт, reconciliation и checklist production-подключения описаны в
 [`docs/timeweb-mutation-guard.md`](../docs/timeweb-mutation-guard.md).
+
+## Vercel foundation
+
+`platform/vercel.json` объявляет один production-only Cron
+`/api/cron/reconcile`. Route скрыт вне production, требует
+`Authorization: Bearer <CRON_SECRET>` и работает только при
+`PLATFORM_PROVIDER=fake`. Он восстанавливает лишь operation без прикреплённого
+durable Workflow run; terminal operation и существующий run не перезапускаются.
+
+Root Directory `platform/`, раздельные Neon credentials, контролируемая
+migration, preview E2E, observability и rollback описаны в
+[`docs/vercel-foundation-runbook.md`](../docs/vercel-foundation-runbook.md).
+Наличие конфигурации в Git не является evidence связанного Vercel project или
+deployment.

@@ -379,6 +379,128 @@ export async function operationNeedsWorkflowStart(
   return rows[0]?.workflow_run_id == null;
 }
 
+export type WorkflowReconciliationCandidate = Readonly<{
+  operationId: string;
+  kind: "create_environment" | "delete_environment";
+  scenario: FakeScenario;
+  claimToken: string;
+}>;
+
+const fakeScenarios = new Set<FakeScenario>([
+  "success",
+  "timeout_after_create",
+  "insufficient_funds",
+  "dns_failure",
+  "tls_failure",
+  "partial_cleanup",
+]);
+
+/**
+ * Claims only operations for which no durable Workflow run was ever attached,
+ * or an earlier reconciliation claim expired. Terminal operations and valid
+ * Workflow run IDs are never restarted by Cron.
+ */
+export async function claimOrphanedWorkflowOperations(
+  sql: DatabaseSql,
+  limit: number,
+): Promise<WorkflowReconciliationCandidate[]> {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+    throw new Error("INVALID_RECONCILIATION_LIMIT");
+  }
+
+  return sql.begin(async (transaction) => {
+    const rows = await transaction<
+      {
+        id: string;
+        kind: string;
+        input_snapshot: Record<string, unknown>;
+      }[]
+    >`
+      SELECT id, kind, input_snapshot
+      FROM operations
+      WHERE status IN ('queued', 'running')
+        AND kind IN ('create_environment', 'delete_environment')
+        AND input_snapshot->>'scenario' IN (
+          'success',
+          'timeout_after_create',
+          'insufficient_funds',
+          'dns_failure',
+          'tls_failure',
+          'partial_cleanup'
+        )
+        AND (
+          workflow_run_id IS NULL
+          OR (
+            workflow_run_id LIKE 'reconcile:%'
+            AND updated_at < now() - interval '5 minutes'
+          )
+        )
+      ORDER BY created_at
+      FOR UPDATE SKIP LOCKED
+      LIMIT ${limit}
+    `;
+    const candidates: WorkflowReconciliationCandidate[] = [];
+    for (const row of rows) {
+      const scenario = row.input_snapshot.scenario;
+      if (
+        !["create_environment", "delete_environment"].includes(row.kind) ||
+        typeof scenario !== "string" ||
+        !fakeScenarios.has(scenario as FakeScenario)
+      ) {
+        continue;
+      }
+      const claimToken = `reconcile:${randomUUID()}`;
+      const claimed = await transaction<{ id: string }[]>`
+        UPDATE operations
+        SET workflow_run_id = ${claimToken}, updated_at = now()
+        WHERE id = ${row.id}
+        RETURNING id
+      `;
+      if (!claimed[0]) continue;
+      candidates.push({
+        operationId: row.id,
+        kind: row.kind as "create_environment" | "delete_environment",
+        scenario: scenario as FakeScenario,
+        claimToken,
+      });
+    }
+    return candidates;
+  });
+}
+
+export async function attachReconciledWorkflowRun(
+  sql: DatabaseSql,
+  operationId: string,
+  claimToken: string,
+  runId: string,
+): Promise<void> {
+  const attached = await sql<{ id: string }[]>`
+    UPDATE operations
+    SET workflow_run_id = ${runId}, updated_at = now()
+    WHERE id = ${operationId}
+      AND workflow_run_id = ${claimToken}
+      AND status IN ('queued', 'running')
+    RETURNING id
+  `;
+  if (!attached[0]) throw new Error("RECONCILIATION_CLAIM_LOST");
+}
+
+export async function releaseWorkflowReconciliationClaim(
+  sql: DatabaseSql,
+  operationId: string,
+  claimToken: string,
+): Promise<boolean> {
+  const released = await sql<{ id: string }[]>`
+    UPDATE operations
+    SET workflow_run_id = NULL, updated_at = now()
+    WHERE id = ${operationId}
+      AND workflow_run_id = ${claimToken}
+      AND status IN ('queued', 'running')
+    RETURNING id
+  `;
+  return Boolean(released[0]);
+}
+
 export async function operationEnvironmentId(
   sql: DatabaseSql,
   operationId: string,
