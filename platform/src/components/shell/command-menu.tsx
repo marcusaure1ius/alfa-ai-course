@@ -1,7 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Globe2, Search, Server, Settings2, Users } from "lucide-react";
+import {
+  Cable,
+  Globe2,
+  History,
+  ListChecks,
+  Search,
+  Server,
+  Settings2,
+  Users,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -17,20 +26,36 @@ import {
 
 const entries = [
   { href: "/admin/infrastructure", label: "Серверы", icon: Server },
+  { href: "/admin/operations", label: "Операции", icon: ListChecks },
   { href: "/admin/domains", label: "Домены и DNS", icon: Globe2 },
+  { href: "/admin/timeweb", label: "Подключение Timeweb", icon: Cable },
   { href: "/admin/students", label: "Ученики", icon: Users },
+  { href: "/admin/audit", label: "Аудит", icon: History },
   { href: "/admin/settings", label: "Настройки", icon: Settings2 },
 ] as const;
 
 export function CommandMenu() {
   const [open, setOpen] = React.useState(false);
   const router = useRouter();
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const returnFocusRef = React.useRef<HTMLElement | null>(null);
+
+  function rememberFocus() {
+    returnFocusRef.current =
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement !== document.body
+        ? document.activeElement
+        : triggerRef.current;
+  }
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
-        setOpen((value) => !value);
+        setOpen((value) => {
+          if (!value) rememberFocus();
+          return !value;
+        });
       }
     };
     document.addEventListener("keydown", onKeyDown);
@@ -45,10 +70,14 @@ export function CommandMenu() {
   return (
     <>
       <Button
+        ref={triggerRef}
         type="button"
         variant="outline"
         className="min-h-11 w-full justify-start gap-2 text-muted-foreground sm:w-64"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          rememberFocus();
+          setOpen(true);
+        }}
         aria-label="Открыть поиск и команды"
       >
         <Search aria-hidden="true" />
@@ -62,6 +91,10 @@ export function CommandMenu() {
         onOpenChange={setOpen}
         title="Поиск по платформе"
         description="Перейдите к нужному разделу панели управления."
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          (returnFocusRef.current ?? triggerRef.current)?.focus();
+        }}
       >
         <CommandInput placeholder="Введите название раздела…" />
         <CommandList>

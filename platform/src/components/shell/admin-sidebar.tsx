@@ -3,7 +3,9 @@
 import {
   Activity,
   Cable,
+  Globe2,
   History,
+  ListChecks,
   Server,
   Settings2,
   ShieldCheck,
@@ -22,18 +24,16 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
   SidebarRail,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { NavLink } from "./nav-link";
 
 const infrastructure = [
-  { href: "/admin/infrastructure", label: "Серверы" },
-  { href: "/admin/operations", label: "Операции" },
-  { href: "/admin/domains", label: "Домены и DNS" },
-  { href: "/admin/timeweb", label: "Подключение Timeweb" },
+  { href: "/admin/infrastructure", label: "Серверы", icon: Server },
+  { href: "/admin/operations", label: "Операции", icon: ListChecks },
+  { href: "/admin/domains", label: "Домены и DNS", icon: Globe2 },
+  { href: "/admin/timeweb", label: "Подключение Timeweb", icon: Cable },
 ] as const;
 
 export function AdminSidebar({ email }: { email: string }) {
@@ -59,25 +59,14 @@ export function AdminSidebar({ email }: { email: string }) {
       <SidebarSeparator />
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Управление</SidebarGroupLabel>
+          <SidebarGroupLabel>Инфраструктура</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  className="pointer-events-none font-medium"
-                  tooltip="Инфраструктура"
-                >
-                  <Server aria-hidden="true" />
-                  <span>Инфраструктура</span>
-                </SidebarMenuButton>
-                <SidebarMenuSub>
-                  {infrastructure.map((item) => (
-                    <SidebarMenuSubItem key={item.href}>
-                      <NavLink {...item} nested />
-                    </SidebarMenuSubItem>
-                  ))}
-                </SidebarMenuSub>
-              </SidebarMenuItem>
+              {infrastructure.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <NavLink {...item} />
+                </SidebarMenuItem>
+              ))}
               <SidebarMenuItem>
                 <NavLink href="/admin/students" label="Ученики" icon={Users} />
               </SidebarMenuItem>
