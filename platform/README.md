@@ -14,6 +14,7 @@ cd platform
 cp .env.example .env.local
 docker compose -f compose.dev.yml up -d
 npm ci
+npm run db:migrate
 npm run dev
 ```
 
@@ -23,6 +24,48 @@ npm run dev
 - приложение открывается на `http://localhost:3000`;
 - `PLATFORM_PROVIDER=fake`, поэтому Timeweb API не вызывается;
 - в `.env.local` нет production credentials.
+
+Миграции версионируются в `src/server/db/migrations/`. Повторный запуск
+`npm run db:migrate` безопасен: применённая миграция пропускается, а изменение
+её checksum после применения считается ошибкой.
+
+## Первый администратор
+
+После миграций создайте первого администратора один раз. Пароль не передаётся
+аргументом команды и не печатается:
+
+```bash
+cd platform
+read -s BOOTSTRAP_ADMIN_PASSWORD
+export BOOTSTRAP_ADMIN_PASSWORD
+npm run auth:bootstrap-admin -- --email admin@example.test
+unset BOOTSTRAP_ADMIN_PASSWORD
+```
+
+Ожидаемый результат: пользователь с ролью `admin` создан, а bootstrap
+необратимо закрыт в той же транзакции. Повторная команда завершается ошибкой.
+Для локального файла окружения используйте `chmod 600 .env.local`.
+
+Production admin не сможет завершить password-only вход: gate требует активный
+подтверждённый MFA factor и успешно пройденный challenge. TOTP/WebAuthn
+enrollment и challenge намеренно не имитируются, поэтому до их реализации
+production gate остаётся закрытым.
+
+## Auth и RBAC
+
+- `GET /api/auth/csrf` выдаёт подписанный CSRF token;
+- `POST /api/auth/login` создаёт opaque session; в PostgreSQL хранится только
+  SHA-256 token hash;
+- `POST /api/auth/logout` отзывает текущую session;
+- `POST /api/auth/sessions/revoke-all` отзывает все session пользователя;
+- `/admin` и `/api/admin/**` проверяют server-side permission
+  `admin:access`; ученик получает `403` без данных control plane.
+
+Пароли хешируются Argon2id. Session cookie имеет `HttpOnly`, `SameSite=Lax`,
+`Secure` в production и недельный срок. Изменение credentials и destructive
+operations должны дополнительно вызывать общий ten-minute fresh re-auth guard.
+Login rate limit хранится в PostgreSQL, а auth-события пишутся в append-only
+`audit_events` без паролей и session tokens.
 
 Остановить локальную базу:
 
@@ -41,8 +84,15 @@ npm run quality
 ```
 
 Команда последовательно запускает lint, typecheck, unit tests и production
-build. Те же команды выполняет path-aware GitHub Actions workflow только для
-изменений platform или её архитектурных контрактов.
+build. Интеграционные проверки с локальным PostgreSQL:
+
+```bash
+npm run test:integration
+```
+
+Path-aware GitHub Actions workflow запускает PostgreSQL 17 service, миграции,
+unit/integration tests и остальные проверки только для изменений platform или
+её архитектурных контрактов.
 
 ## Границы foundation
 

@@ -29,6 +29,20 @@ jobs:
   platform:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17.10-bookworm
+        env:
+          POSTGRES_DB: course_platform
+          POSTGRES_USER: platform
+          POSTGRES_PASSWORD: ci-example-not-a-secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U platform -d course_platform"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     defaults:
       run:
         working-directory: platform
@@ -54,6 +68,19 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+      - name: Database migrations
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: postgresql://platform:ci-example-not-a-secret@127.0.0.1:5432/course_platform
+
+      - name: Authentication integration tests
+        run: npm run test:integration
+        env:
+          DATABASE_URL: postgresql://platform:ci-example-not-a-secret@127.0.0.1:5432/course_platform
+          APP_ORIGIN: http://localhost:3000
+          AUTH_SECRET: ci-example-not-a-secret-change-before-production
+          VERCEL_ENV: development
 
       - name: Production build
         run: npm run build
