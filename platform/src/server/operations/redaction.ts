@@ -1,6 +1,7 @@
 import "server-only";
 
-const SENSITIVE_KEY = /token|secret|password|private.?key|authorization|cloud.?init/i;
+const SENSITIVE_KEY =
+  /token|secret|password|private.?key|api.?key|authorization|cloud.?init/i;
 const MAX_STRING = 500;
 
 export function redactBounded(value: unknown, depth = 0): unknown {
@@ -11,7 +12,7 @@ export function redactBounded(value: unknown, depth = 0): unknown {
     const redacted = value
       .replace(/(bearer\s+)[^\s]+/gi, "$1[redacted]")
       .replace(
-        /((?:token|secret|password|private[_ -]?key)\s*[=:]\s*)[^\s,;]+/gi,
+        /((?:token|secret|password|private[_ -]?key|api[_ -]?key)\s*[=:]\s*)[^\s,;]+/gi,
         "$1[redacted]",
       );
     return redacted.length > MAX_STRING

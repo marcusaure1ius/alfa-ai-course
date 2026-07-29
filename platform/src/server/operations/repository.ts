@@ -106,22 +106,21 @@ export async function reserveDeleteOperation(
     scenario: FakeScenario;
   },
 ): Promise<{ accepted: MutationAccepted; created: boolean }> {
-  const existing = await sql<{ id: string }[]>`
-    SELECT id FROM operations
-    WHERE requested_by_user_id = ${actor.userId}
-      AND idempotency_key = ${input.idempotencyKey}
-    LIMIT 1
-  `;
-  if (existing[0]) {
-    return {
-      accepted: { version: OPERATIONS_DTO_VERSION, operationId: existing[0].id },
-      created: false,
-    };
-  }
-
   const operationId = randomUUID();
-  try {
-    await sql.begin(async (transaction) => {
+  const reservation = await sql.begin(async (transaction) => {
+      const lockKey = `${actor.userId}:${input.idempotencyKey}`;
+      await transaction`
+        SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+      `;
+      const existing = await transaction<{ id: string }[]>`
+        SELECT id FROM operations
+        WHERE requested_by_user_id = ${actor.userId}
+          AND idempotency_key = ${input.idempotencyKey}
+        LIMIT 1
+      `;
+      if (existing[0]) {
+        return { operationId: existing[0].id, created: false };
+      }
       const rows = await transaction<{ id: string }[]>`
         UPDATE environments
         SET status = 'deleting', updated_at = now()
@@ -158,13 +157,14 @@ export async function reserveDeleteOperation(
           })}
         )
       `;
+      return { operationId, created: true };
     });
-  } catch (error) {
-    throw error;
-  }
   return {
-    accepted: { version: OPERATIONS_DTO_VERSION, operationId },
-    created: true,
+    accepted: {
+      version: OPERATIONS_DTO_VERSION,
+      operationId: reservation.operationId,
+    },
+    created: reservation.created,
   };
 }
 
@@ -206,7 +206,13 @@ export async function beginStep(
   operationId: string,
   key: string,
   order: number,
-): Promise<{ alreadyCompleted: boolean; attempts: number }> {
+): Promise<{
+  alreadyCompleted: boolean;
+  claimed: boolean;
+  attempts: number;
+  executionToken: string | null;
+}> {
+  const executionToken = randomUUID();
   return sql.begin(async (transaction) => {
     await transaction`
       UPDATE operations
@@ -214,27 +220,52 @@ export async function beginStep(
           state_version = state_version + 1, updated_at = now()
       WHERE id = ${operationId} AND status IN ('queued', 'running')
     `;
-    const rows = await transaction<{ status: string; attempt_count: number }[]>`
+    const rows = await transaction<
+      { status: string; attempt_count: number; execution_token: string }[]
+    >`
       INSERT INTO operation_steps (
-        id, operation_id, step_order, kind, logical_key, status, attempt_count
+        id, operation_id, step_order, kind, logical_key, status, attempt_count,
+        execution_token, lease_expires_at
       )
-      VALUES (${randomUUID()}, ${operationId}, ${order}, ${key}, ${key}, 'running', 1)
+      VALUES (
+        ${randomUUID()}, ${operationId}, ${order}, ${key}, ${key}, 'running', 1,
+        ${executionToken}, now() + interval '30 minutes'
+      )
       ON CONFLICT (operation_id, logical_key) DO UPDATE SET
-        status = CASE
-          WHEN operation_steps.status = 'succeeded' THEN 'succeeded'
-          ELSE 'running'
-        END,
-        attempt_count = CASE
-          WHEN operation_steps.status = 'succeeded' THEN operation_steps.attempt_count
-          ELSE operation_steps.attempt_count + 1
-        END,
+        status = 'running',
+        attempt_count = operation_steps.attempt_count + 1,
+        execution_token = ${executionToken},
+        lease_expires_at = now() + interval '30 minutes',
         started_at = COALESCE(operation_steps.started_at, now()),
         updated_at = now()
-      RETURNING status, attempt_count
+      WHERE operation_steps.status <> 'succeeded'
+        AND (
+          operation_steps.status <> 'running'
+          OR operation_steps.execution_token IS NULL
+          OR operation_steps.lease_expires_at <= now()
+        )
+      RETURNING status, attempt_count, execution_token
     `;
+    if (!rows[0]) {
+      const current = await transaction<
+        { status: string; attempt_count: number }[]
+      >`
+        SELECT status, attempt_count
+        FROM operation_steps
+        WHERE operation_id = ${operationId} AND logical_key = ${key}
+      `;
+      return {
+        alreadyCompleted: current[0]?.status === "succeeded",
+        claimed: false,
+        attempts: current[0]?.attempt_count ?? 0,
+        executionToken: null,
+      };
+    }
     return {
       alreadyCompleted: rows[0]?.status === "succeeded",
+      claimed: true,
       attempts: rows[0]?.attempt_count ?? 0,
+      executionToken: rows[0]?.execution_token ?? null,
     };
   });
 }
@@ -243,6 +274,7 @@ export async function finishStep(
   sql: DatabaseSql,
   operationId: string,
   key: string,
+  executionToken: string,
   outcome:
     | { status: "succeeded" }
     | { status: "failed"; code: string; message: string; retryClass: RetryClass },
@@ -256,8 +288,12 @@ export async function finishStep(
         },
         retry_class = ${outcome.status === "failed" ? outcome.retryClass : "none"},
         finished_at = CASE WHEN ${outcome.status} = 'succeeded' THEN now() ELSE finished_at END,
+        execution_token = NULL,
+        lease_expires_at = NULL,
         updated_at = now()
-    WHERE operation_id = ${operationId} AND logical_key = ${key}
+    WHERE operation_id = ${operationId}
+      AND logical_key = ${key}
+      AND execution_token = ${executionToken}
   `;
 }
 

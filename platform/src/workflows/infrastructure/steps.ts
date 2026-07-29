@@ -28,11 +28,12 @@ async function adapter(command: WorkflowCommand): Promise<FakeTimewebAdapter> {
 async function failProviderStep(
   command: WorkflowCommand,
   key: string,
+  executionToken: string,
   error: FakeProviderError,
 ): Promise<never> {
   const sql = getDatabase();
   const retryClass = classifyProviderError(error.code);
-  await finishStep(sql, command.operationId, key, {
+  await finishStep(sql, command.operationId, key, executionToken, {
     status: "failed",
     code: error.code,
     message: error.message,
@@ -54,17 +55,36 @@ async function failProviderStep(
   throw new RetryableError(error.message, { retryAfter: 50 });
 }
 
+function requireStepClaim(step: {
+  claimed: boolean;
+  executionToken: string | null;
+}): string {
+  if (!step.claimed || !step.executionToken) {
+    throw new RetryableError("Шаг уже выполняется другим worker.", {
+      retryAfter: 250,
+    });
+  }
+  return step.executionToken;
+}
+
 export async function reserveIpStep(command: WorkflowCommand): Promise<void> {
   "use step";
   const sql = getDatabase();
   const step = await beginStep(sql, command.operationId, "reserve_public_ip", 10);
   if (step.alreadyCompleted) return;
+  const executionToken = requireStepClaim(step);
   try {
     await (await adapter(command)).reservePublicIp();
-    await finishStep(sql, command.operationId, "reserve_public_ip", { status: "succeeded" });
+    await finishStep(
+      sql,
+      command.operationId,
+      "reserve_public_ip",
+      executionToken,
+      { status: "succeeded" },
+    );
   } catch (error) {
     if (error instanceof FakeProviderError) {
-      await failProviderStep(command, "reserve_public_ip", error);
+      await failProviderStep(command, "reserve_public_ip", executionToken, error);
     }
     throw error;
   }
@@ -75,12 +95,19 @@ export async function createServerStep(command: WorkflowCommand): Promise<void> 
   const sql = getDatabase();
   const step = await beginStep(sql, command.operationId, "create_server", 20);
   if (step.alreadyCompleted) return;
+  const executionToken = requireStepClaim(step);
   try {
     await (await adapter(command)).createServer();
-    await finishStep(sql, command.operationId, "create_server", { status: "succeeded" });
+    await finishStep(
+      sql,
+      command.operationId,
+      "create_server",
+      executionToken,
+      { status: "succeeded" },
+    );
   } catch (error) {
     if (error instanceof FakeProviderError) {
-      await failProviderStep(command, "create_server", error);
+      await failProviderStep(command, "create_server", executionToken, error);
     }
     throw error;
   }
@@ -94,13 +121,20 @@ export async function configureDnsStep(
   const sql = getDatabase();
   const step = await beginStep(sql, command.operationId, "configure_dns", 30);
   if (step.alreadyCompleted) return "ready";
+  const executionToken = requireStepClaim(step);
   try {
     await (await adapter(command)).configureDns();
-    await finishStep(sql, command.operationId, "configure_dns", { status: "succeeded" });
+    await finishStep(
+      sql,
+      command.operationId,
+      "configure_dns",
+      executionToken,
+      { status: "succeeded" },
+    );
     return "ready";
   } catch (error) {
     if (!(error instanceof FakeProviderError)) throw error;
-    await finishStep(sql, command.operationId, "configure_dns", {
+    await finishStep(sql, command.operationId, "configure_dns", executionToken, {
       status: "failed",
       code: error.code,
       message: error.message,
@@ -123,13 +157,20 @@ export async function verifyTlsStep(
   const sql = getDatabase();
   const step = await beginStep(sql, command.operationId, "verify_tls", 40);
   if (step.alreadyCompleted) return "ready";
+  const executionToken = requireStepClaim(step);
   try {
     await (await adapter(command)).verifyTls();
-    await finishStep(sql, command.operationId, "verify_tls", { status: "succeeded" });
+    await finishStep(
+      sql,
+      command.operationId,
+      "verify_tls",
+      executionToken,
+      { status: "succeeded" },
+    );
     return "ready";
   } catch (error) {
     if (!(error instanceof FakeProviderError)) throw error;
-    await finishStep(sql, command.operationId, "verify_tls", {
+    await finishStep(sql, command.operationId, "verify_tls", executionToken, {
       status: "failed",
       code: error.code,
       message: error.message,
@@ -150,8 +191,11 @@ export async function completeCreateStep(command: WorkflowCommand): Promise<void
   const sql = getDatabase();
   const step = await beginStep(sql, command.operationId, "complete", 50);
   if (step.alreadyCompleted) return;
+  const executionToken = requireStepClaim(step);
   await transitionEnvironment(sql, command.operationId, "creating", "active");
-  await finishStep(sql, command.operationId, "complete", { status: "succeeded" });
+  await finishStep(sql, command.operationId, "complete", executionToken, {
+    status: "succeeded",
+  });
   await finishOperation(sql, command.operationId, { status: "succeeded" });
 }
 
@@ -165,13 +209,16 @@ export async function deleteResourceStep(
   const key = `delete_${kind}`;
   const step = await beginStep(sql, command.operationId, key, order);
   if (step.alreadyCompleted) return "deleted";
+  const executionToken = requireStepClaim(step);
   try {
     await (await adapter(command)).deleteKind(kind);
-    await finishStep(sql, command.operationId, key, { status: "succeeded" });
+    await finishStep(sql, command.operationId, key, executionToken, {
+      status: "succeeded",
+    });
     return "deleted";
   } catch (error) {
     if (!(error instanceof FakeProviderError)) throw error;
-    await finishStep(sql, command.operationId, key, {
+    await finishStep(sql, command.operationId, key, executionToken, {
       status: "failed",
       code: error.code,
       message: error.message,
@@ -192,7 +239,10 @@ export async function completeDeleteStep(command: WorkflowCommand): Promise<void
   const sql = getDatabase();
   const step = await beginStep(sql, command.operationId, "complete_delete", 50);
   if (step.alreadyCompleted) return;
+  const executionToken = requireStepClaim(step);
   await transitionEnvironment(sql, command.operationId, "deleting", "deleted");
-  await finishStep(sql, command.operationId, "complete_delete", { status: "succeeded" });
+  await finishStep(sql, command.operationId, "complete_delete", executionToken, {
+    status: "succeeded",
+  });
   await finishOperation(sql, command.operationId, { status: "succeeded" });
 }

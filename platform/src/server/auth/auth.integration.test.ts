@@ -15,14 +15,22 @@ import {
   getSessionByToken,
   loginWithPassword,
 } from "./service";
-import { getDatabase, type DatabaseSql } from "../db/client";
+import {
+  createDatabaseClient,
+  getDatabase,
+  type DatabaseSql,
+} from "../db/client";
 import { runMigrations } from "../db/migrate";
 import {
+  beginStep,
+  finishStep,
   getOperationTimeline,
+  operationEnvironmentId,
   OperationConflictError,
   reserveCreateOperation,
   reserveDeleteOperation,
 } from "../operations/repository";
+import { FakeTimewebAdapter } from "../providers/timeweb/fake";
 import { createEnvironmentWorkflow } from "@/workflows/infrastructure/create";
 import { deleteEnvironmentWorkflow } from "@/workflows/infrastructure/delete";
 import {
@@ -372,6 +380,100 @@ describe("durable fake infrastructure lifecycle", () => {
       GROUP BY operation_steps.operation_id
     `;
     expect(rows[0]).toEqual({ count: 1, attempts: 2 });
+  });
+
+  it("allows only one concurrent worker to invoke the create provider step", async () => {
+    const { adminLogin } = await provisionUsers();
+    const reserved = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Основная среда",
+      idempotencyKey: "concurrent-step-key-01",
+      scenario: "success",
+    });
+    const command = {
+      operationId: reserved.accepted.operationId,
+      scenario: "success" as const,
+    };
+    await reserveIpStep(command);
+    const secondSql = createDatabaseClient(databaseUrl);
+    try {
+      const claims = await Promise.all([
+        beginStep(sql, command.operationId, "create_server", 20),
+        beginStep(secondSql, command.operationId, "create_server", 20),
+      ]);
+      expect(claims.filter((claim) => claim.claimed)).toHaveLength(1);
+      expect(claims.filter((claim) => !claim.claimed)).toHaveLength(1);
+      const environmentId = await operationEnvironmentId(sql, command.operationId);
+      await Promise.all(
+        claims.map(async (claim) => {
+          if (!claim.claimed || !claim.executionToken) return;
+          await new FakeTimewebAdapter(
+            sql,
+            command.operationId,
+            environmentId,
+            "success",
+          ).createServer();
+          await finishStep(
+            sql,
+            command.operationId,
+            "create_server",
+            claim.executionToken,
+            { status: "succeeded" },
+          );
+        }),
+      );
+      const rows = await secondSql<{ calls: number; servers: number }[]>`
+        SELECT
+          count(DISTINCT fake_provider_events.event_key) FILTER (
+            WHERE fake_provider_events.event_key LIKE 'create_server_call:%'
+          )::int AS calls,
+          count(DISTINCT provider_resources.id) FILTER (
+            WHERE provider_resources.resource_kind = 'server'
+          )::int AS servers
+        FROM operations
+        LEFT JOIN fake_provider_events
+          ON fake_provider_events.operation_id = operations.id
+        LEFT JOIN provider_resources
+          ON provider_resources.environment_id = operations.environment_id
+        WHERE operations.id = ${command.operationId}
+        GROUP BY operations.id
+      `;
+      expect(rows[0]).toEqual({ calls: 1, servers: 1 });
+    } finally {
+      await secondSql.end();
+    }
+  });
+
+  it("serializes concurrent delete replays to one actor/key result", async () => {
+    const { adminLogin } = await provisionUsers();
+    const create = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Основная среда",
+      idempotencyKey: "create-before-race-01",
+      scenario: "success",
+    });
+    await createEnvironmentWorkflow({
+      operationId: create.accepted.operationId,
+      scenario: "success",
+    });
+    const environment = await sql<{ id: string }[]>`
+      SELECT environment_id AS id FROM operations WHERE id = ${create.accepted.operationId}
+    `;
+    const input = {
+      environmentId: environment[0]!.id,
+      confirmationName: "Основная среда",
+      idempotencyKey: "delete-concurrent-key-01",
+      scenario: "success" as const,
+    };
+    const secondSql = createDatabaseClient(databaseUrl);
+    try {
+      const [first, second] = await Promise.all([
+        reserveDeleteOperation(sql, adminLogin.session, input),
+        reserveDeleteOperation(secondSql, adminLogin.session, input),
+      ]);
+      expect(first.accepted.operationId).toBe(second.accepted.operationId);
+      expect([first.created, second.created].sort()).toEqual([false, true]);
+    } finally {
+      await secondSql.end();
+    }
   });
 
   it.each(["dns_failure", "tls_failure"] as const)(

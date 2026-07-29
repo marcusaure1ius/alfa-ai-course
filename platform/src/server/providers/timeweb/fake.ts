@@ -69,6 +69,11 @@ export class FakeTimewebAdapter {
   }
 
   async createServer(): Promise<OwnedProviderResource> {
+    await this.sql`
+      INSERT INTO fake_provider_events (operation_id, event_key)
+      VALUES (${this.operationId}, ${`create_server_call:${randomUUID()}`})
+    `;
+    await new Promise((resolve) => setTimeout(resolve, 25));
     const resource = await this.ensureResource("server");
     if (this.scenario === "timeout_after_create") {
       const first = await this.sql<{ event_key: string }[]>`

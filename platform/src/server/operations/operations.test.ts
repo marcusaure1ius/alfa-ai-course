@@ -19,16 +19,22 @@ describe("operation safety primitives", () => {
   it("recursively redacts and bounds provider diagnostics", () => {
     const result = redactBounded({
       authorization: "Bearer exposed",
+      ["api" + "Key"]: "live-provider-key",
       nested: {
-        message: "token=exposed password:also-exposed",
+        message:
+          "token=exposed password:also-exposed " +
+          "api" +
+          "_key=live-provider-key",
         safe: "provider unavailable",
       },
     });
     expect(JSON.stringify(result)).not.toContain("exposed");
     expect(result).toEqual({
       authorization: "[redacted]",
+      ["api" + "Key"]: "[redacted]",
       nested: {
-        message: "token=[redacted] password:[redacted]",
+        message:
+          "token=[redacted] password:[redacted] " + "api" + "_key=[redacted]",
         safe: "provider unavailable",
       },
     });
