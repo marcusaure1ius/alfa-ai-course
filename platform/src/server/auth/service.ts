@@ -174,7 +174,6 @@ export async function loginWithPassword(
 
   if (!user || user.status !== "active" || !passwordMatches) {
     await appendAudit(sql, {
-      actorUserId: user?.id,
       action: "auth.login.failed",
       subjectType: "user",
       subjectId: user?.id,

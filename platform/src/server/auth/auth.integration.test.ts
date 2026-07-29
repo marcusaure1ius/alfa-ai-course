@@ -188,6 +188,12 @@ describe("database-backed authentication", () => {
     await blockUser(sql, adminLogin.session, studentId);
 
     expect(await getSessionByToken(sql, studentLogin.token)).toBeNull();
+    expect(
+      await loginWithPassword(sql, {
+        email: "student@example.test",
+        password: "another correct horse battery staple",
+      }),
+    ).toEqual({ ok: false, reason: "invalid_credentials" });
     const rows = await sql<{ status: string; active_sessions: number }[]>`
       SELECT
         users.status,
@@ -199,10 +205,29 @@ describe("database-backed authentication", () => {
       GROUP BY users.status
     `;
     expect(rows[0]).toMatchObject({ status: "blocked", active_sessions: 0 });
+
+    const auditRows = await sql<
+      {
+        actor_user_id: string | null;
+        subject_id: string;
+        metadata: { reason: string };
+      }[]
+    >`
+      SELECT actor_user_id, subject_id, metadata
+      FROM audit_events
+      WHERE action = 'auth.login.failed'
+      ORDER BY occurred_at DESC
+      LIMIT 1
+    `;
+    expect(auditRows[0]).toMatchObject({
+      actor_user_id: null,
+      subject_id: studentId,
+      metadata: { reason: "blocked" },
+    });
   });
 
   it("rate limits repeated invalid logins without storing supplied passwords", async () => {
-    await bootstrapAdmin(sql, {
+    const admin = await bootstrapAdmin(sql, {
       email: "admin@example.test",
       password: "correct horse battery staple",
     });
@@ -220,6 +245,20 @@ describe("database-backed authentication", () => {
       SELECT metadata FROM audit_events
     `;
     expect(JSON.stringify(auditRows)).not.toContain("definitely wrong password");
+
+    const failedLoginRows = await sql<
+      { actor_user_id: string | null; subject_id: string }[]
+    >`
+      SELECT actor_user_id, subject_id
+      FROM audit_events
+      WHERE action = 'auth.login.failed'
+      ORDER BY occurred_at ASC
+      LIMIT 1
+    `;
+    expect(failedLoginRows[0]).toEqual({
+      actor_user_id: null,
+      subject_id: admin.id,
+    });
   });
 
   it("keeps audit events append-only", async () => {
