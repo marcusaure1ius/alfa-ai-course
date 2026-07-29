@@ -10,7 +10,7 @@
 
 С 2026-07-29 в этом же репозитории проектируется второй продукт — Course Control Plane в изолированном каталоге `platform/`. Он не изменяет описанный ниже MVP starter kit: root Compose, installer, scripts и workflow distribution остаются самостоятельно устанавливаемым продуктом.
 
-Control plane размещается на Vercel двумя изолированными deployable roots `platform/web/` и `platform/destroyer/`. Он автоматизирует для владельца курса один основной Timeweb VPS, DNS в зоне `neurokurs.ru`, установку exact starter-kit release и удаление инфраструктуры. Его продуктовые требования зафиксированы в [course platform requirements](course-platform-requirements.md), а repository/runtime boundaries — в [ADR-0005](../adr/0005-course-platform-control-plane.md).
+Control plane размещается в одном Vercel project с deployable root `platform/`. Он автоматизирует для владельца курса один основной Timeweb VPS, DNS в зоне `neurokurs.ru`, установку exact starter-kit release и удаление инфраструктуры. Его продуктовые требования зафиксированы в [course platform requirements](course-platform-requirements.md), repository/runtime boundaries — в [ADR-0005](../adr/0005-course-platform-control-plane.md), а упрощение deployment — в [ADR-0006](../adr/0006-single-vercel-project-for-course-platform.md).
 
 Следовательно, пункты ниже «собственный публичный SaaS» и «автоматическая покупка VPS» остаются вне **starter-kit MVP**, но больше не запрещают отдельную platform-реализацию в `platform/`. Platform имеет собственные auth/RBAC, Vercel deployment, secrets, CI, release gates и лицензионную проверку n8n.
 

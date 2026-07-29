@@ -11,27 +11,25 @@
 1. root starter kit — описанный ниже Ubuntu/Docker Compose runtime;
 2. `platform/` — Course Control Plane на Vercel.
 
-Control plane не входит в Docker Compose starter kit и не запускается на учебном VPS. Vercel roots равны `platform/web/` и `platform/destroyer/`; deployable имеют собственные dependencies, build/tests, environment secrets и release lifecycle. Web использует Marketplace PostgreSQL, а destroyer изолирует token автоматического удаления. Root installer/runtime сохраняет прежний контракт и проверяется независимо.
+Control plane не входит в Docker Compose starter kit и не запускается на учебном VPS. Один Vercel project имеет Root Directory `platform/`, собственные dependencies, build/tests, environment secrets и release lifecycle. Он использует Marketplace PostgreSQL и единый server-only Timeweb adapter; root installer/runtime сохраняет прежний контракт и проверяется независимо.
 
 ```mermaid
 flowchart LR
-  U["Admin / Student"] --> V["Vercel\nplatform/web"]
+  U["Admin / Student"] --> V["Vercel\nplatform/"]
   V --> DB["Marketplace PostgreSQL"]
   V --> WF["Vercel Workflow"]
   CR["Vercel Cron"] --> WF
-  WF --> TW["Timeweb create / DNS API"]
-  WF --> D["Vercel\nplatform/destroyer"]
-  D --> TD["Timeweb delete API"]
+  WF --> A["Server-only Timeweb adapter\nallowlisted operations"]
+  A --> TW["Timeweb create / DNS / delete API"]
   TW --> VPS["Один основной VPS"]
-  TD --> VPS
   VPS --> C["Caddy"]
   C --> N["n8n"]
   N --> P["Private PostgreSQL"]
 ```
 
-Платные create/delete операции запускаются как durable Vercel Workflow и не удерживают один HTTP request. Bootstrap выполняется через Timeweb `cloud-init`; исходящий SSH из Vercel не используется. Provisioner и destroyer Timeweb tokens находятся в production environments разных Vercel projects; signed cleanup contract не является произвольным provider proxy. Default hostname — `n8n.neurokurs.ru`, hard limit — один active/creating/degraded VPS.
+Платные create/delete операции запускаются как durable Vercel Workflow и не удерживают один HTTP request. Bootstrap выполняется через Timeweb `cloud-init`; исходящий SSH из Vercel не используется. Один `TIMEWEB_API_TOKEN` находится только в production environment Vercel, не выдаётся preview/development и доступен только server-side typed adapter без произвольного provider proxy. Delete дополнительно требует RBAC, exact-name modal, свежую re-auth, audit, ownership и idempotency checks. Default hostname — `n8n.neurokurs.ru`, hard limit — один active/creating/degraded VPS.
 
-Подробные решения: [ADR-0005](../adr/0005-course-platform-control-plane.md) и [требования control plane](course-platform-requirements.md). Разделы ниже продолжают быть канонической архитектурой самого starter-kit runtime.
+Подробные решения: [ADR-0005](../adr/0005-course-platform-control-plane.md), superseding [ADR-0006](../adr/0006-single-vercel-project-for-course-platform.md) и [требования control plane](course-platform-requirements.md). Разделы ниже продолжают быть канонической архитектурой самого starter-kit runtime.
 
 ## Контекст системы
 

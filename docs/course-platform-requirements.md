@@ -1,7 +1,7 @@
 # Требования к платформе курса и управлению учебной инфраструктурой
 
 **Статус:** требования первого этапа
-**Задача:** `T-0048`
+**Задачи:** `T-0048`, упрощение deployment — `T-0059`
 **Дата проверки внешних источников:** 2026-07-29
 **Язык интерфейса первого этапа:** русский
 
@@ -50,7 +50,7 @@
 
 Решения владельца от 2026-07-29:
 
-- код платформы остаётся в текущем репозитории под `platform/`; Vercel deployable roots — `platform/web/` и `platform/destroyer/`;
+- код платформы остаётся в текущем репозитории; один Vercel project использует deployable root `platform/`;
 - Timeweb account, VPS, домен и расходы принадлежат владельцу курса;
 - базовая DNS zone — `neurokurs.ru`, default hostname основной среды — `n8n.neurokurs.ru`;
 - первый этап допускает не более одного активного n8n VPS;
@@ -217,16 +217,11 @@ Desktop: сворачиваемая панель шириной около 256 p
 
 ### 7.1. Подключение Timeweb
 
-`PROV-01` В первом этапе raw API tokens настраиваются только как encrypted production environment variables Vercel: `TIMEWEB_PROVISIONER_TOKEN` и `TIMEWEB_DESTROYER_TOKEN`. UI не принимает, не возвращает и не изменяет raw token.
+`PROV-01` В первом этапе один raw API token настраивается только как encrypted production environment variable Vercel `TIMEWEB_API_TOKEN`. UI не принимает, не возвращает и не изменяет raw token.
 
 `PROV-02` Admin запускает из UI read-only проверку настроенного token. Система получает account/capabilities и показывает только статус, дату проверки и доступные разрешения.
 
-`PROV-03` Используются два credentials и два Vercel runtime boundary:
-
-- `provisioner`: чтение, создание и изменение нужных сервисов без права удаления; доступен только Vercel project `platform/web`;
-- `destroyer`: минимальный token с правом удаления без Telegram-кода; доступен только Vercel project `platform/destroyer`.
-
-`platform/destroyer` не имеет UI и произвольного provider proxy. Он принимает только подписанную короткоживущую cleanup-команду, повторно проверяет confirmed operation и ownership в PostgreSQL и вызывает allowlisted delete endpoints.
+`PROV-03` Один `TIMEWEB_API_TOKEN` доступен только server-side Timeweb adapter в production deployment единственного Vercel project. Adapter предоставляет фиксированный typed allowlist необходимых read/create/update/delete/DNS операций и не принимает от browser произвольные provider URL, HTTP method, payload или resource ID. Реальная гранулярность token permissions и разрешение удаления без Telegram-кода проверяются по актуальным возможностям Timeweb перед production mutation.
 
 Если владелец не разрешает автоматическое удаление без Telegram-кода, платформа создаёт cleanup operation в состоянии `manual_confirmation_required`, а не обходит защиту.
 
@@ -358,7 +353,7 @@ stateDiagram-v2
 - текущую оценку расходов;
 - наличие/отсутствие подтверждённого backup.
 
-`DEL-02` Admin открывает destructive shadcn `AlertDialog`, вводит точное имя среды, отмечает подтверждение потери данных и проходит свежую re-auth. После этого cleanup выполняется полностью автоматически через destroyer token без дополнительного Telegram-кода; одной случайной кнопки недостаточно.
+`DEL-02` Admin открывает destructive shadcn `AlertDialog`, вводит точное имя среды, отмечает подтверждение потери данных и проходит свежую re-auth. После этого cleanup выполняется полностью автоматически через server-only Timeweb adapter без дополнительного Telegram-кода; одной случайной кнопки недостаточно.
 
 `DEL-03` Удаляются только ресурсы с сохранённым provider ID и ownership платформы. Поиск по похожему имени не является основанием удаления.
 
@@ -372,38 +367,35 @@ stateDiagram-v2
 
 ```mermaid
 flowchart LR
-  B["Browser\nAdmin / Student"] -->|HTTPS| W["Vercel project\nplatform/web"]
+  B["Browser\nAdmin / Student"] -->|HTTPS| W["Vercel project\nplatform/"]
   W --> DB["Marketplace PostgreSQL\nsource of truth"]
   W --> WF["Vercel Workflow\norchestration"]
-  WF --> TW["Timeweb Cloud API"]
-  WF --> DNS["Timeweb DNS API"]
-  WF -->|signed cleanup command| D["Vercel project\nplatform/destroyer"]
-  D -->|allowlisted delete| TW
+  WF --> A["Server-only Timeweb adapter\nallowlisted operations"]
+  A --> TW["Timeweb Cloud API"]
+  A --> DNS["Timeweb DNS API"]
   CR["Vercel Cron\nreconciliation"] --> WF
   TW --> VPS["Основной учебный VPS"]
   VPS --> C["Caddy :80/:443"]
   C --> N["n8n"]
   N --> PG["Private PostgreSQL"]
-  W --> PS["production env\nprovisioner token"]
-  D --> DS["isolated production env\ndestroyer token"]
+  W --> S["production env\nTIMEWEB_API_TOKEN"]
   W --> AUD["Append-only audit"]
 ```
 
 Начальный shape — изолированный deployable в текущем репозитории:
 
-- `platform/web/` — Vercel project root для Next.js, API, Workflow и Cron;
-- `platform/destroyer/` — отдельный минимальный Vercel project root для allowlisted cleanup;
+- `platform/` — единственный Vercel project root для Next.js, API, Workflow и Cron;
 - Next.js App Router для web UI, server components и versioned API;
 - Vercel Marketplace Postgres, например Neon, как единый source of truth; connection pooling и регион рядом с Functions обязательны;
 - Vercel Workflow с `use workflow`/`use step` для crash-safe orchestration и retries;
 - Vercel Cron с обязательным `CRON_SECRET` для периодического reconciliation;
-- server-only Timeweb adapter;
-- provisioner/destroyer tokens находятся в encrypted production environments разных Vercel projects;
+- server-only Timeweb adapter с фиксированным allowlist вместо generic provider proxy;
+- один `TIMEWEB_API_TOKEN` находится только в encrypted production environment; preview/development его не получают;
 - основной n8n VPS не запускает control plane и не получает Vercel secrets.
 
 Обычный Vercel Function не удерживает весь lifecycle в одном HTTP request: платные mutation стартуют durable Workflow и сразу возвращают `202`. Состояние не хранится в памяти Function. Workflow steps остаются идемпотентными на уровне PostgreSQL и ownership records, потому что provider mutation нельзя безопасно повторять только на основании автоматического retry.
 
-Web Workflow не получает destroyer token. Он отправляет в `platform/destroyer` подписанную короткоживущую cleanup-команду с operation/environment IDs. Destroyer повторно проверяет confirmed operation, ownership и допустимый state, затем вызывает только allowlisted Timeweb delete endpoints. Проекты используют разные Vercel environment variables и deployment permissions.
+Create и delete используют один adapter, но не общий произвольный proxy endpoint. Перед каждым delete server runtime повторно проверяет admin/RBAC, свежую re-auth, confirmed operation, ownership, допустимый state и idempotency key, а затем вызывает только конкретные allowlisted Timeweb methods. Provider resource ID берётся из PostgreSQL ownership record, а не из browser payload.
 
 ### 8.1. Внутренний API
 
@@ -425,7 +417,7 @@ GET    /api/student/environment
 
 Mutation принимает клиентский `idempotencyKey`, возвращает `operationId` и не возвращает provider secret. Ошибка имеет `code`, безопасное русское `message`, `correlationId` и необязательные `fieldErrors`. DTO версионируются; сырой Timeweb response не становится публичным контрактом.
 
-Destroyer имеет отдельный internal endpoint, отсутствующий в browser-facing namespace. Он принимает только exact versioned cleanup DTO, подпись, expiry/nonce и operation ID; replay и неподтверждённая operation отклоняются.
+Browser-facing namespace не содержит generic Timeweb endpoint. Cleanup service принимает только внутренний exact versioned command с operation/environment IDs; replay, неподтверждённая operation и чужой provider resource отклоняются до вызова adapter.
 
 ### 8.2. Модель данных
 
@@ -454,7 +446,7 @@ Destroyer имеет отдельный internal endpoint, отсутствую�
 
 ### 9.1. Секреты
 
-- Provider tokens хранятся только как encrypted production environment variables Vercel и не дублируются в PostgreSQL/Git.
+- Provider token хранится только как encrypted production environment variable Vercel и не дублируется в PostgreSQL/Git.
 - Token заменяется через Vercel project settings/CLI, после чего connection test обновляет только безопасную metadata.
 - Logs, audit, telemetry, errors и support export проходят recursive redaction и имеют ограничение размера.
 - Production database backup считается secret material и шифруется.
@@ -462,8 +454,10 @@ Destroyer имеет отдельный internal endpoint, отсутствую�
 
 ### 9.2. Снижение blast radius
 
-- Разные credentials для provisioning и deletion.
-- Destructive provider code и destroyer token изолированы в отдельном Vercel project `platform/destroyer`.
+- Один Timeweb token доступен только server-side adapter в production deployment; browser, preview и development его не получают.
+- Adapter имеет deny-by-default typed allowlist необходимых provider methods и не предоставляет generic proxy.
+- Каждая mutation проверяет RBAC, свежую re-auth, hard limit одного VPS, ownership и idempotency; delete дополнительно требует exact-name confirmation и audit.
+- Повышенный blast radius единого runtime осознанно принят владельцем для небольшой контролируемой аудитории. Это не равно изоляции отдельным deployable; условия возврата к ней заданы ADR-0006.
 - SSH password login на создаваемом VPS выключен; исходящий SSH из Vercel не входит в первый этап.
 - Firewall default-deny; 80/443 открыты публично, 22 — только trusted CIDR.
 - Docker socket не монтируется в n8n; PostgreSQL и n8n port не публикуются.
@@ -539,7 +533,7 @@ Timeweb тесты по умолчанию используют mock/fake adapte
 
 `AC-01` Admin входит, mobile и desktop shell показывают «Инфраструктура» первым разделом; student не видит admin navigation.
 
-`AC-02` Admin подключает ограниченный Timeweb token, видит успешную проверку и masked metadata; token отсутствует в network response после сохранения.
+`AC-02` Admin проверяет настроенный в Vercel production environment ограниченный Timeweb token и видит masked metadata; token отсутствует в browser traffic и PostgreSQL.
 
 `AC-03` Двойное нажатие create с одним idempotency key создаёт одну operation и не более одного VPS.
 
@@ -561,12 +555,12 @@ Timeweb тесты по умолчанию используют mock/fake adapte
 
 `AC-12` При active/creating/degraded основной среде второй create блокируется до provider call; ни конкурентный запрос, ни retry не создаёт второй VPS.
 
-`AC-13` Browser и `platform/web` не имеют `TIMEWEB_DESTROYER_TOKEN`. После подтверждения modal web Workflow отправляет подписанную cleanup-команду в `platform/destroyer`, который проверяет operation/ownership и автоматически удаляет allowlisted ресурсы без Telegram-кода.
+`AC-13` Browser, preview и development не имеют `TIMEWEB_API_TOKEN`. После подтверждения modal production Workflow повторно проверяет RBAC/re-auth/operation/ownership и через server-only allowlisted adapter автоматически удаляет только owned ресурсы без Telegram-кода.
 
 ## 12. Рекомендуемая декомпозиция реализации
 
-1. ADR: multi-product границы текущего репозитория, Vercel deployment и secret storage.
-2. Bootstrap `platform/web/` и `platform/destroyer/`: Next.js/shadcn web, minimal destroyer Function, Marketplace PostgreSQL, lint/test/CI без provider credentials.
+1. ADR: multi-product границы текущего репозитория, один Vercel deployment и secret storage.
+2. Bootstrap `platform/`: Next.js/shadcn web, server-only provider boundary, Marketplace PostgreSQL, lint/test/CI без provider credentials.
 3. Auth, bootstrap admin, `student`/`admin` RBAC и deny-by-default route policy.
 4. Application shell, responsive navigation и пустые состояния.
 5. Domain model, migrations, audit/redaction и idempotent Vercel Workflow runner.
@@ -578,18 +572,18 @@ Timeweb тесты по умолчанию используют mock/fake adapte
 11. Cost guardrails, Vercel Cron reconciliation, observability и production hardening.
 12. Student environment card и управление доступом к основной среде.
 
-Каждый пункт декомпозируется в Projects Control с зависимостями, acceptance criteria и отдельным review. `platform/web/` и `platform/destroyer/` имеют раздельные Vercel projects, package manifests, tests и secrets. Изменение platform не меняет root Compose/scripts/workflow distribution; изменение starter kit release не разворачивает platform автоматически. Общие изменения документации или release-контракта проходят обе группы проверок.
+Каждый пункт декомпозируется в Projects Control с зависимостями, acceptance criteria и отдельным review. `platform/` имеет отдельные от root starter kit package manifest, tests, Vercel deployment и secrets. Изменение platform не меняет root Compose/scripts/workflow distribution; изменение starter kit release не разворачивает platform автоматически. Общие изменения документации или release-контракта проходят обе группы проверок.
 
 ## 13. Зафиксированные решения и оставшиеся gates
 
 | Вопрос | Решение владельца | Последствие |
 |---|---|---|
-| Где размещён control plane? | Vercel: `platform/web` и изолированный `platform/destroyer`, Workflow, Cron и Marketplace Postgres | Длительные операции нельзя держать в одном HTTP request; destroyer token не должен быть доступен web runtime |
+| Где размещён control plane? | Один Vercel project с Root Directory `platform/`, Workflow, Cron и Marketplace Postgres | Длительные операции нельзя держать в одном HTTP request; Timeweb token доступен только server-side production adapter |
 | Где находится код? | Текущий репозиторий, изолированный root `platform/` | Нужны отдельные CI, release, secrets и regression gates starter kit |
 | Кто владеет VPS и оплачивает его? | Владелец курса/школа | До выдачи ученикам нужен license gate n8n и политика срока доступа |
 | Какая базовая DNS zone? | `neurokurs.ru`, default `n8n.neurokurs.ru` | Zone должна обслуживаться через доступный Timeweb DNS API |
 | Сколько VPS? | Один активный основной n8n VPS | Database constraint и preflight блокируют второй |
-| Как удалять? | Полностью автоматически после destructive modal/re-auth | Нужен отдельный destroyer token с удалением без Telegram-кода |
+| Как удалять? | Полностью автоматически после destructive modal/re-auth | Единый server-side adapter проверяет ownership и вызывает только allowlisted delete methods; token должен разрешать удаление без Telegram-кода |
 | Что получает ученик после курса? | Сохранённый доступ на срок, определяемый владельцем, либо инструкция самостоятельного запуска | Передача VPS/billing не входит в первый этап |
 | Нужен ли обязательный backup перед delete? | В 1-м этапе явно предупреждать, но не обещать backup; добавить отдельным этапом | Текущий scope не содержит managed backup |
 | Можно ли автоматически создать owner n8n? | Нет, пока не подтверждён официальный безопасный интерфейс для pinned версии | Нельзя использовать undocumented database mutation |
@@ -607,7 +601,7 @@ Timeweb тесты по умолчанию используют mock/fake adapte
 До первого реального create/delete должны быть выполнены все условия:
 
 1. DNS zone `neurokurs.ru` подтверждена в Timeweb account и read-only test проходит;
-2. provisioner/destroyer tokens созданы с минимальными permissions и добавлены только в Vercel production environment;
+2. один Timeweb token создан с минимально доступными service permissions, его фактические capabilities проверены, а secret добавлен только в Vercel production environment;
 3. владелец установил денежный hard limit для smoke, а platform hard limit `1 VPS` включён;
 4. disposable cleanup plan и ownership assertions прошли на fake adapter;
 5. production admin использует MFA и свежую re-auth для destructive action;
@@ -634,7 +628,7 @@ Timeweb тесты по умолчанию используют mock/fake adapte
 
 Исправления после прохода:
 
-- provider credentials разделены на provisioner/destroyer;
+- первоначально provider credentials были разделены; решением владельца в ADR-0006 схема упрощена до одного production-only token с allowlisted server adapter;
 - запрещены raw secrets в cloud-init, UI, audit и logs;
 - добавлены уникальные SSH keys, stable worker egress и ограничение порта 22;
 - зафиксированы ownership-based cleanup и reconciliation после timeout;
