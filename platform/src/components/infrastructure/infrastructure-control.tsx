@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
+  ArrowLeft,
   Check,
   HardDrive,
   Loader2,
@@ -13,6 +14,7 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react";
+import Link from "next/link";
 
 import {
   AlertDialog,
@@ -311,13 +313,13 @@ export function InfrastructureControl() {
         error?: { message?: string };
       };
       if (!response.ok) {
-        throw new Error(body.error?.message ?? "Не удалось создать сервер.");
+        throw new Error(body.error?.message ?? "Не удалось создать среду.");
       }
-      setMessage("Сервер поставлен в очередь на создание.");
+      setMessage("Среда поставлена в очередь на создание.");
       await refresh();
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "Не удалось создать сервер.",
+        error instanceof Error ? error.message : "Не удалось создать среду.",
       );
     } finally {
       setPending(false);
@@ -336,8 +338,16 @@ export function InfrastructureControl() {
     <main className="page-container space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-display text-page-title">Инструменты</h1>
-          <p className="mt-2 text-sm text-muted-foreground">n8n</p>
+          <Button asChild variant="ghost" className="-ml-3 mb-4">
+            <Link href="/admin/infrastructure">
+              <ArrowLeft aria-hidden="true" />
+              Инструменты
+            </Link>
+          </Button>
+          <h1 className="font-display text-page-title">Настройка n8n</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Технические параметры и стоимость среды
+          </p>
         </div>
         <Button variant="outline" onClick={() => void refresh(selection)}>
           <RefreshCw aria-hidden="true" />
@@ -354,7 +364,7 @@ export function InfrastructureControl() {
                   Premium NVMe
                 </p>
                 <h2 className="mt-2 text-xl font-semibold">
-                  Конфигурация сервера
+                  Конфигурация среды
                 </h2>
                 <p className="mt-1 text-sm text-slate-400">
                   Цены обновлены{" "}
@@ -562,7 +572,7 @@ export function InfrastructureControl() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Проверить и создать</CardTitle>
+          <CardTitle>Проверить и создать среду</CardTitle>
           <CardDescription>
             Сейчас платформа создаёт сам сервер с Ubuntu и публичным IP.
             Установка n8n пока запускается отдельно после создания.
@@ -570,12 +580,12 @@ export function InfrastructureControl() {
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
           <label className="grid gap-1.5 text-sm">
-            Имя сервера
+            Название среды
             <Input
               value={name}
               onChange={(event) => setName(event.target.value)}
               maxLength={80}
-              aria-label="Имя сервера"
+              aria-label="Название среды"
             />
           </label>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -597,12 +607,12 @@ export function InfrastructureControl() {
               ) : (
                 <Plus aria-hidden="true" />
               )}
-              Создать сервер
+              Создать среду
             </Button>
           </div>
           {activeEnvironment ? (
             <p className="text-sm text-muted-foreground lg:col-span-2">
-              Сначала удалите активный сервер: сейчас доступен один сервер.
+              Сначала удалите активную среду: сейчас доступна одна среда.
             </p>
           ) : null}
         </CardContent>
