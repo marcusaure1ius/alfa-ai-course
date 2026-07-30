@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Нейрокурс — личный кабинет",
+  title: "Нейрокурс — пространство курса",
   description:
-    "Кабинеты ученика и администратора образовательной платформы Нейрокурс.",
+    "Материалы, пояснения и учебные инструменты курса — в одном пространстве.",
 };
 
 export default function RootLayout({

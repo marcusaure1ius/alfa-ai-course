@@ -69,6 +69,7 @@ export function LoginForm({ inverse = false }: { inverse?: boolean }) {
     <form
       className={inverse ? "grid gap-5 text-white" : "grid gap-5"}
       onSubmit={submit}
+      aria-busy={pending}
     >
       <label className="grid gap-2 text-sm font-medium">
         Email
@@ -78,6 +79,7 @@ export function LoginForm({ inverse = false }: { inverse?: boolean }) {
           placeholder="name@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          disabled={pending}
           required
         />
       </label>
@@ -89,6 +91,7 @@ export function LoginForm({ inverse = false }: { inverse?: boolean }) {
           placeholder="Введите пароль"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
+          disabled={pending}
           minLength={12}
           required
         />
@@ -123,6 +126,7 @@ export function LoginForm({ inverse = false }: { inverse?: boolean }) {
               onChange={(event) =>
                 setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))
               }
+              disabled={pending}
               pattern="[0-9]{6}"
               placeholder="000000"
               required
@@ -131,7 +135,11 @@ export function LoginForm({ inverse = false }: { inverse?: boolean }) {
         </div>
       ) : null}
       {error ? (
-        <Alert variant="destructive" aria-live="polite">
+        <Alert
+          variant="destructive"
+          className={inverse ? "border-white/40 bg-white" : undefined}
+          aria-live="polite"
+        >
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}

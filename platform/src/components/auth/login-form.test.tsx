@@ -104,4 +104,31 @@ describe("LoginForm", () => {
     );
     expect(refresh).toHaveBeenCalledOnce();
   });
+
+  it("exposes a real loading state while authentication is pending", async () => {
+    let resolveLogin!: (response: Response) => void;
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ csrfToken: "csrf.one" }))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveLogin = resolve;
+          }),
+      );
+    vi.stubGlobal("fetch", request);
+
+    render(<LoginForm inverse />);
+    fillCredentials();
+    fireEvent.click(screen.getByRole("button", { name: "Войти" }));
+
+    const form = screen.getByRole("button", { name: "Проверяем…" }).closest("form");
+    expect(form?.getAttribute("aria-busy")).toBe("true");
+    expect((screen.getByLabelText("Email") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Пароль") as HTMLInputElement).disabled).toBe(true);
+
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    resolveLogin(jsonResponse({ user: { role: "student" } }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/student"));
+  });
 });
