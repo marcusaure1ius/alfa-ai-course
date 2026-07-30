@@ -137,22 +137,65 @@ server-side окружении. Второй фактор, если он тре�
 
 ## 5. Роли и доступ
 
-### 5.1. Роли
+### 5.1. Actors и jobs-to-be-done
 
-| Возможность | Student | Admin |
-|---|---:|---:|
-| Войти/выйти, изменить собственный пароль | Да | Да |
-| Открыть свою стартовую страницу | Да | Да |
-| Видеть основную учебную среду и публичный URL | Да | Да |
-| Видеть IP, provider ID, операции и стоимость | Нет | Да |
-| Создавать/устанавливать/удалять сервер | Нет | Да |
-| Проверять Timeweb connection и менять инфраструктурные профили | Нет | Да |
-| Читать аудит инфраструктуры | Нет | Да |
-| Управлять доступом учеников к ссылке на среду | Нет | Да |
+| Actor | Job to be done | Успешный результат |
+|---|---|---|
+| Guest | Понять, что находится в закрытом пространстве, и войти по выданным данным | Видит один краткий смысл и одну форму входа без выбора роли |
+| Student | Вернуться к следующему учебному действию, прочитать материал, выполнить задание или открыть назначенный инструмент | Продолжает с сохранённого места и не сталкивается с provider/VPS деталями |
+| Admin | Поддерживать актуальную программу, управлять учениками и инструментами, замечать требующие внимания состояния | Публикует контент, выдаёт доступ и управляет средами из одной task-first области |
+
+Guest не является отдельной ролью в базе: это пользователь без валидной сессии.
+Student читает только опубликованный и доступный ему контент. Admin получает
+полный курс-уровень, но инфраструктурные mutations дополнительно требуют
+существующих re-auth, ownership и audit checks.
+
+### 5.2. Route map
+
+| Surface | Route | Назначение |
+|---|---|---|
+| Entry | `/` → `/login` | Auth-aware точка входа; без сессии открывает единую explanatory/login surface |
+| Login | `/login` | Wordmark, слоган, краткое объяснение и одна auth-форма |
+| Student home | `/student` | Текущее место, «Продолжить», ближайшее задание |
+| Program | `/student/program` | Опубликованные разделы и материалы |
+| Material | `/student/materials/:slug` | Text-first статья или практическое задание |
+| Tools | `/student/tools` | Назначенные учебные инструменты |
+| Tool | `/student/tools/:slug` | Описание, состояние доступа и безопасный launch |
+| Help | `/student/help` | Поддержка и частые вопросы |
+| Admin students | `/admin/students` | Ученики и доступ |
+| Admin program | `/admin/program` | Структура и порядок курса |
+| Admin materials | `/admin/materials` | Draft/published материалы и редактор |
+| Admin tools | `/admin/tools` | Каталог инструментов и назначения |
+| Admin tool instances | `/admin/tools/:slug/instances` | Learning environments выбранного инструмента |
+| Admin instance | `/admin/tools/:slug/instances/:id` | Состояние и инфраструктура конкретной среды |
+| Admin operations | `/admin/operations` | Длительные операции |
+| Admin history | `/admin/audit` | Аудит действий |
+| Admin settings | `/admin/settings` | Настройки курса и платформы |
+
+Legacy `/admin/infrastructure/**` допускается как временный redirect во время
+миграции, но не остаётся пользовательским названием или конечной IA.
+
+### 5.3. Роли
+
+| Возможность | Guest | Student | Admin |
+|---|---:|---:|---:|
+| Видеть entry и отправлять login | Да | Да | Да |
+| Читать опубликованные доступные материалы | Нет | Да | Да |
+| Сохранять своё последнее место и completion | Нет | Да | Да |
+| Открывать помощь | Нет | Да | Да |
+| Видеть и запускать назначенные инструменты | Нет | Да | Да |
+| Видеть чужой прогресс и доступ | Нет | Нет | Да |
+| Создавать и публиковать материалы | Нет | Нет | Да |
+| Управлять программой и порядком | Нет | Нет | Да |
+| Назначать инструменты и среды ученикам | Нет | Нет | Да |
+| Видеть IP, provider ID, операции и стоимость | Нет | Нет | Да |
+| Создавать/устанавливать/удалять cloud resource | Нет | Нет | Да |
+| Проверять provider connection и профили | Нет | Нет | Да |
+| Читать административный аудит | Нет | Нет | Да |
 
 Отсутствие пункта в UI не является контролем доступа. Каждая server action, server component query и API route выполняет проверку сессии, роли и принадлежности ресурса. Запрос ученика к `/admin/**` возвращает `403`, не раскрывая существование чужих ресурсов.
 
-### 5.2. Авторизация
+### 5.4. Авторизация
 
 - Первый admin создаётся одноразовой bootstrap-командой или одноразовым setup flow, который после использования необратимо закрывается.
 - Пароли хешируются Argon2id либо механизмом выбранного проверенного auth provider с эквивалентной защитой.
@@ -446,6 +489,28 @@ Create и delete используют один adapter, но не общий п�
 Минимальный namespace:
 
 ```text
+GET    /api/student/course
+GET    /api/student/program
+GET    /api/student/materials/:slug
+PUT    /api/student/materials/:slug/progress
+GET    /api/student/tools
+GET    /api/student/tools/:slug
+GET    /api/student/help
+
+GET    /api/admin/students
+POST   /api/admin/students
+PATCH  /api/admin/students/:id/access
+GET    /api/admin/program
+PUT    /api/admin/program/order
+GET    /api/admin/materials
+POST   /api/admin/materials
+PATCH  /api/admin/materials/:id
+POST   /api/admin/materials/:id/publish
+POST   /api/admin/materials/:id/unpublish
+GET    /api/admin/tools
+PATCH  /api/admin/tools/:id
+PUT    /api/admin/tools/:id/access/:studentId
+
 GET    /api/admin/infrastructure/environments
 POST   /api/admin/infrastructure/environments/preview
 POST   /api/admin/infrastructure/environments
@@ -456,10 +521,15 @@ GET    /api/admin/infrastructure/operations/:id
 POST   /api/admin/infrastructure/operations/:id/retry
 POST   /api/admin/infrastructure/provider-connections/test
 GET    /api/admin/infrastructure/provider-connections/timeweb
-GET    /api/student/environment
 ```
 
 Mutation принимает клиентский `idempotencyKey`, возвращает `operationId` и не возвращает provider secret. Ошибка имеет `code`, безопасное русское `message`, `correlationId` и необязательные `fieldErrors`. DTO версионируются; сырой Timeweb response не становится публичным контрактом.
+
+Student DTO никогда не содержит draft-материалы, provider IDs, IP, тариф,
+стоимость, raw health payload или чужой progress. Progress mutation принимает
+только material ID/slug, позицию и completion текущего пользователя. Publish и
+tool assignment проверяют admin role; unpublish немедленно убирает материал из
+student program, сохраняя audit и progress для возможной повторной публикации.
 
 Browser-facing namespace не содержит generic Timeweb endpoint. Cleanup service принимает только внутренний exact versioned command с operation/environment IDs; replay, неподтверждённая operation и чужой provider resource отклоняются до вызова adapter.
 
@@ -612,20 +682,38 @@ navigation.
 
 `AC-13` Browser, preview и development не имеют `TIMEWEB_API_TOKEN`. После подтверждения modal production Workflow повторно проверяет RBAC/re-auth/operation/ownership и через server-only allowlisted adapter автоматически удаляет только owned ресурсы без Telegram-кода.
 
+`AC-14` Guest видит только entry/login. Прямой запрос к student/admin route
+перенаправляется или возвращает `401`, не раскрывая закрытый контент.
+
+`AC-15` Admin создаёт draft-материал, добавляет его в программу и публикует.
+До публикации student не видит материал; после публикации он появляется в
+заданном разделе; после unpublish снова скрывается без потери audit.
+
+`AC-16` Student открывает опубликованный материал, сохраняет последнее место и
+completion, затем «Продолжить» возвращает его к следующему доступному действию.
+Student не может читать draft, изменять чужой progress или вызывать admin API.
+
+`AC-17` Admin назначает n8n-инструмент ученику. Student видит только учебное
+название, описание, состояние доступа и launch URL; provider, VPS, IP, тариф и
+стоимость отсутствуют в browser DTO и UI.
+
 ## 12. Рекомендуемая декомпозиция реализации
 
 1. ADR: multi-product границы текущего репозитория, один Vercel deployment и secret storage.
 2. Bootstrap `platform/`: Next.js/shadcn web, server-only provider boundary, Marketplace PostgreSQL, lint/test/CI без provider credentials.
 3. Auth, bootstrap admin, `student`/`admin` RBAC и deny-by-default route policy.
-4. Application shell, responsive navigation и пустые состояния.
-5. Domain model, migrations, audit/redaction и idempotent Vercel Workflow runner.
-6. Timeweb read-only adapter: connection test, capabilities, images, presets, zones, balance.
-7. Срез 1A: preview/create/reconcile/delete VPS и IP с fake adapter, затем disposable provider smoke.
-8. DNS ownership и managed subdomain.
-9. Versioned bootstrap profile, cloud-init и callback/health observation.
-10. Срез 1B: end-to-end n8n/DNS/TLS state machine.
-11. Cost guardrails, Vercel Cron reconciliation, observability и production hardening.
-12. Student environment card и управление доступом к основной среде.
+4. Application shell и route-aware navigation для guest/student/admin.
+5. Course/content schema, program ordering, draft/publish и student read APIs.
+6. Student home/program/material/progress/help flows и их locked/empty/error states.
+7. Tool catalog, assignment и provider-free student DTO.
+8. Admin students/program/materials/tools workflows.
+9. Infrastructure domain model, audit/redaction и idempotent Vercel Workflow runner.
+10. Timeweb read-only adapter: connection test, capabilities, images, presets, zones, balance.
+11. Срез 1A: preview/create/reconcile/delete VPS и IP с fake adapter, затем disposable provider smoke.
+12. DNS ownership и managed subdomain.
+13. Versioned bootstrap profile, cloud-init и callback/health observation.
+14. Срез 1B: end-to-end n8n/DNS/TLS state machine.
+15. Cost guardrails, Vercel Cron reconciliation, observability и production hardening.
 
 Каждый пункт декомпозируется в Projects Control с зависимостями, acceptance criteria и отдельным review. `platform/` имеет отдельные от root starter kit package manifest, tests, Vercel deployment и secrets. Изменение platform не меняет root Compose/scripts/workflow distribution; изменение starter kit release не разворачивает platform автоматически. Общие изменения документации или release-контракта проходят обе группы проверок.
 
