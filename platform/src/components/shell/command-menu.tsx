@@ -5,9 +5,9 @@ import {
   History,
   ListChecks,
   Search,
-  Server,
   Settings2,
   Users,
+  Wrench,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -23,10 +23,10 @@ import {
 } from "@/components/ui/command";
 
 const entries = [
-  { href: "/admin/infrastructure", label: "Серверы", icon: Server },
+  { href: "/admin/infrastructure", label: "Инструменты", icon: Wrench },
   { href: "/admin/operations", label: "Операции", icon: ListChecks },
   { href: "/admin/students", label: "Ученики", icon: Users },
-  { href: "/admin/audit", label: "Аудит", icon: History },
+  { href: "/admin/audit", label: "История", icon: History },
   { href: "/admin/settings", label: "Настройки", icon: Settings2 },
 ] as const;
 
@@ -73,7 +73,7 @@ export function CommandMenu() {
         ref={triggerRef}
         type="button"
         variant="outline"
-        className="min-h-11 w-full justify-start gap-2 text-muted-foreground sm:w-64"
+        className="h-10 w-full justify-start gap-2 text-muted-foreground sm:w-64"
         onClick={() => {
           rememberFocus();
           setOpen(true);

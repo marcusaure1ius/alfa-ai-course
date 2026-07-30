@@ -41,7 +41,7 @@ describe("AdminSidebar collapsed navigation", () => {
     );
 
     const destinations = [
-      ["Серверы", "/admin/infrastructure"],
+      ["Инструменты", "/admin/infrastructure"],
       ["Операции", "/admin/operations"],
     ] as const;
 

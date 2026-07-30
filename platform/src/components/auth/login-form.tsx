@@ -1,14 +1,14 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Loader2, LogIn } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function LoginForm() {
+export function LoginForm({ inverse = false }: { inverse?: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -66,12 +66,16 @@ export function LoginForm() {
   }
 
   return (
-    <form className="grid gap-4" onSubmit={submit}>
+    <form
+      className={inverse ? "grid gap-5 text-white" : "grid gap-5"}
+      onSubmit={submit}
+    >
       <label className="grid gap-2 text-sm font-medium">
         Email
         <Input
           type="email"
           autoComplete="username"
+          placeholder="name@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           required
@@ -82,6 +86,7 @@ export function LoginForm() {
         <Input
           type="password"
           autoComplete="current-password"
+          placeholder="Введите пароль"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           minLength={12}
@@ -89,10 +94,22 @@ export function LoginForm() {
         />
       </label>
       {mfaRequired ? (
-        <div className="grid gap-3 rounded-lg border bg-muted/50 p-4">
+        <div
+          className={
+            inverse
+              ? "grid gap-3 rounded-lg border border-white/35 bg-white/10 p-4"
+              : "grid gap-3 rounded-lg border bg-muted/50 p-4"
+          }
+        >
           <div>
             <p className="text-sm font-medium">Подтвердите вход</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            <p
+              className={
+                inverse
+                  ? "mt-1 text-xs leading-5 text-white/75"
+                  : "mt-1 text-xs leading-5 text-muted-foreground"
+              }
+            >
               Введите шестизначный код из приложения-аутентификатора.
             </p>
           </div>
@@ -121,10 +138,10 @@ export function LoginForm() {
       <Button
         type="submit"
         size="lg"
-        className="mt-1 w-full"
+        className="mt-2 w-full"
         disabled={pending || (mfaRequired && mfaCode.length !== 6)}
       >
-        {pending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <LogIn aria-hidden="true" />}
+        {pending ? <Loader2 aria-hidden="true" className="animate-spin" /> : null}
         {pending ? "Проверяем…" : mfaRequired ? "Подтвердить вход" : "Войти"}
       </Button>
     </form>

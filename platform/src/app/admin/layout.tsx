@@ -9,9 +9,9 @@ export default async function AdminLayout({
   const session = await requireAdminPage();
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="bg-background">
       <AdminSidebar email={session.email} />
-      <SidebarInset className="min-w-0">
+      <SidebarInset className="min-w-0 bg-background">
         <AdminHeader />
         {children}
       </SidebarInset>

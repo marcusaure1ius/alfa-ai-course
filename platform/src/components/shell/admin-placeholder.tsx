@@ -1,12 +1,5 @@
 import type { LucideIcon } from "lucide-react";
 
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
 export function AdminPlaceholder({
   title,
   description,
@@ -17,22 +10,18 @@ export function AdminPlaceholder({
   icon: LucideIcon;
 }) {
   return (
-    <section className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
-      <p className="font-mono text-[0.68rem] uppercase tracking-[0.15em] text-primary">
-        Панель управления
-      </p>
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-        {title}
-      </h1>
-      <Card className="mt-6 max-w-2xl border-dashed">
-        <CardHeader>
-          <span className="mb-3 flex size-10 items-center justify-center rounded-md bg-secondary">
-            <Icon aria-hidden="true" className="size-5 text-primary" />
+    <section className="page-container flex-1">
+      <h1 className="font-display text-page-title">{title}</h1>
+      <div className="surface-panel mt-8 flex min-h-64 max-w-3xl items-center justify-center p-6 sm:p-10">
+        <div className="max-w-md text-center">
+          <span className="mx-auto flex size-12 items-center justify-center rounded-xl bg-secondary">
+            <Icon aria-hidden="true" className="size-5" />
           </span>
-          <CardTitle>Раздел подготовлен в навигации</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-      </Card>
+          <p className="mt-5 text-base leading-6 text-muted-foreground">
+            {description}
+          </p>
+        </div>
+      </div>
     </section>
   );
 }
