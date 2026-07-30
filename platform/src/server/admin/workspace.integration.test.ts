@@ -113,7 +113,8 @@ describe("admin workspace read models", () => {
     expect(students).toEqual([
       expect.objectContaining({
         email: "student-workspace@example.test",
-        courseTitle: "Рабочий курс",
+        courseTitles: ["Рабочий курс"],
+        courseIds: [courseId],
         publishedMaterials: 1,
       }),
     ]);
@@ -121,5 +122,34 @@ describe("admin workspace read models", () => {
       "published",
       "draft",
     ]);
+  });
+
+  it("returns one student with every active course membership", async () => {
+    const secondCourseId = randomUUID();
+    await sql`
+      INSERT INTO courses (
+        id, slug, title, status, created_by_user_id, updated_by_user_id,
+        published_by_user_id, published_at
+      )
+      VALUES (
+        ${secondCourseId}, 'second-course', 'Второй курс', 'published',
+        ${adminId}, ${adminId}, ${adminId}, now()
+      )
+    `;
+    await sql`
+      INSERT INTO course_memberships (
+        course_id, user_id, status, granted_by_user_id, granted_at
+      )
+      VALUES
+        (${courseId}, ${studentId}, 'active', ${adminId}, now() - interval '1 minute'),
+        (${secondCourseId}, ${studentId}, 'active', ${adminId}, now())
+    `;
+
+    const students = await getAdminStudents(sql);
+    expect(students).toHaveLength(1);
+    expect(students[0]).toMatchObject({
+      courseIds: [courseId, secondCourseId],
+      courseTitles: ["Рабочий курс", "Второй курс"],
+    });
   });
 });

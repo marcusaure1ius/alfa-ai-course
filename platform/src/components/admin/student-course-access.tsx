@@ -19,11 +19,11 @@ async function csrfToken(): Promise<string> {
 
 export function StudentCourseAccess({
   studentId,
-  currentCourseId,
+  currentCourseIds,
   courses,
 }: {
   studentId: string;
-  currentCourseId: string | null;
+  currentCourseIds: string[];
   courses: AdminCourseOption[];
 }) {
   const router = useRouter();
@@ -58,7 +58,7 @@ export function StudentCourseAccess({
       <div className="overflow-hidden rounded-xl border bg-card">
         {courses.length > 0 ? (
           courses.map((course, index) => {
-            const active = course.id === currentCourseId;
+            const active = currentCourseIds.includes(course.id);
             return (
               <div
                 key={course.id}

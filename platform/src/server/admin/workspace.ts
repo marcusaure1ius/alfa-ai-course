@@ -155,8 +155,8 @@ export type AdminStudentListItem = {
   email: string;
   status: "active" | "blocked";
   createdAt: string;
-  courseTitle: string | null;
-  courseId: string | null;
+  courseTitles: string[];
+  courseIds: string[];
   completedMaterials: number;
   publishedMaterials: number;
 };
@@ -170,15 +170,36 @@ export async function getAdminStudents(
       email: string;
       status: "active" | "blocked";
       created_at: Date;
-      course_title: string | null;
-      course_id: string | null;
+      course_titles: string[];
+      course_ids: string[];
       completed_materials: number;
       published_materials: number;
     }>
   >`
     SELECT
       users.id, users.email, users.status, users.created_at,
-      course.title AS course_title, course.id AS course_id,
+      (
+        SELECT coalesce(
+          array_agg(member_course.title ORDER BY membership_for_user.granted_at),
+          ARRAY[]::text[]
+        )
+        FROM course_memberships AS membership_for_user
+        JOIN courses AS member_course
+          ON member_course.id = membership_for_user.course_id
+        WHERE membership_for_user.user_id = users.id
+          AND membership_for_user.status = 'active'
+      ) AS course_titles,
+      (
+        SELECT coalesce(
+          array_agg(member_course.id ORDER BY membership_for_user.granted_at),
+          ARRAY[]::uuid[]
+        )
+        FROM course_memberships AS membership_for_user
+        JOIN courses AS member_course
+          ON member_course.id = membership_for_user.course_id
+        WHERE membership_for_user.user_id = users.id
+          AND membership_for_user.status = 'active'
+      ) AS course_ids,
       count(progress.material_id) FILTER (WHERE progress.completed_at IS NOT NULL)::int
         AS completed_materials,
       count(DISTINCT material.id)::int AS published_materials
@@ -191,7 +212,7 @@ export async function getAdminStudents(
     LEFT JOIN material_progress AS progress
       ON progress.material_id = material.id AND progress.user_id = users.id
     WHERE users.role_id = 'student'
-    GROUP BY users.id, course.id, course.title
+    GROUP BY users.id
     ORDER BY users.created_at DESC
   `;
   return rows.map((row) => ({
@@ -199,8 +220,8 @@ export async function getAdminStudents(
     email: row.email,
     status: row.status,
     createdAt: row.created_at.toISOString(),
-    courseTitle: row.course_title,
-    courseId: row.course_id,
+    courseTitles: row.course_titles,
+    courseIds: row.course_ids,
     completedMaterials: row.completed_materials,
     publishedMaterials: row.published_materials,
   }));

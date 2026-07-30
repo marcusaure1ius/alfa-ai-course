@@ -58,8 +58,10 @@ export default async function StudentsPage() {
                     ) : null}
                   </TableCell>
                   <TableCell>
-                    {student.courseTitle ? (
-                      <span className="text-sm">{student.courseTitle}</span>
+                    {student.courseTitles.length > 0 ? (
+                      <span className="text-sm">
+                        {student.courseTitles.join(", ")}
+                      </span>
                     ) : (
                       <Badge variant="outline">Нет курса</Badge>
                     )}

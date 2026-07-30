@@ -40,7 +40,9 @@ export default async function StudentDetailPage({
               {student.status === "active" ? "Активен" : "Заблокирован"}
             </Badge>
             <span className="text-sm text-muted-foreground">
-              {student.courseTitle ?? "Курс не назначен"}
+              {student.courseTitles.length > 0
+                ? student.courseTitles.join(", ")
+                : "Курс не назначен"}
             </span>
           </div>
         </div>
@@ -59,7 +61,7 @@ export default async function StudentDetailPage({
         <div className="mt-4">
           <StudentCourseAccess
             studentId={student.id}
-            currentCourseId={student.courseId}
+            currentCourseIds={student.courseIds}
             courses={courses}
           />
         </div>
