@@ -9,13 +9,20 @@ type MarkdownBlock =
   | { kind: "list"; ordered: boolean; items: string[] }
   | { kind: "code"; text: string };
 
-function headingId(text: string, index: number): string {
+function headingId(
+  text: string,
+  index: number,
+  occurrences: Map<string, number>,
+): string {
   const value = text
     .toLocaleLowerCase("ru")
     .replace(/[^\p{L}\p{N}\s-]/gu, "")
     .trim()
     .replace(/\s+/g, "-");
-  return value || `section-${index + 1}`;
+  const base = value || `section-${index + 1}`;
+  const occurrence = (occurrences.get(base) ?? 0) + 1;
+  occurrences.set(base, occurrence);
+  return occurrence === 1 ? base : `${base}-${occurrence}`;
 }
 
 export function parseCourseMarkdown(source: string): {
@@ -24,6 +31,7 @@ export function parseCourseMarkdown(source: string): {
 } {
   const lines = source.split("\n");
   const blocks: MarkdownBlock[] = [];
+  const headingOccurrences = new Map<string, number>();
   let index = 0;
   while (index < lines.length) {
     const line = lines[index] ?? "";
@@ -50,7 +58,7 @@ export function parseCourseMarkdown(source: string): {
         kind: "heading",
         level,
         text,
-        id: headingId(text, blocks.length),
+        id: headingId(text, blocks.length, headingOccurrences),
       });
       index += 1;
       continue;

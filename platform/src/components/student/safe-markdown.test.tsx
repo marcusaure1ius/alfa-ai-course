@@ -22,6 +22,18 @@ describe("SafeMarkdown", () => {
     ).toBeTruthy();
   });
 
+  it("adds stable suffixes to repeated heading anchors", () => {
+    const parsed = parseCourseMarkdown(
+      "## Практика\n\nПервый шаг.\n\n## Практика\n\nВторой шаг.\n\n## Практика",
+    );
+
+    expect(parsed.toc).toEqual([
+      { id: "практика", label: "Практика", level: 2 },
+      { id: "практика-2", label: "Практика", level: 2 },
+      { id: "практика-3", label: "Практика", level: 2 },
+    ]);
+  });
+
   it("does not turn an unsupported link protocol into an anchor", () => {
     const { container } = render(
       <SafeMarkdown source="[опасная ссылка](javascript:alert(1))" />,
