@@ -2611,7 +2611,11 @@
       setView(initialView, false);
 
       window.addEventListener("hashchange", () => {
-        setView(window.location.hash.replace("#", ""), false);
+        const requestedView = window.location.hash.replace("#", "");
+
+        if (allowedViews.has(requestedView)) {
+          setView(requestedView, false);
+        }
       });
 
       const passwordInput = document.querySelector("#password");
