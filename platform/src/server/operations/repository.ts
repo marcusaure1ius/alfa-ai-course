@@ -6,6 +6,7 @@ import type { AuthSession } from "../auth/service";
 import { hasFreshReauthentication, hasPermission } from "../auth/rbac";
 import type { DatabaseSql } from "../db/client";
 import type { OwnedProviderResource } from "../providers/timeweb/contracts";
+import type { TimewebProvisioningPlan } from "../providers/timeweb/provisioning";
 import {
   MUTATION_COMMAND_VERSION,
   OPERATIONS_DTO_VERSION,
@@ -60,7 +61,12 @@ function assertFreshAdmin(actor: AuthSession): void {
 export async function reserveCreateOperation(
   sql: DatabaseSql,
   actor: AuthSession,
-  input: { name: string; idempotencyKey: string; scenario: FakeScenario },
+  input: {
+    name: string;
+    idempotencyKey: string;
+    scenario: FakeScenario;
+    providerPlan?: TimewebProvisioningPlan;
+  },
 ): Promise<{ accepted: MutationAccepted; created: boolean }> {
   assertFreshAdmin(actor);
   const existing = await sql<{ id: string }[]>`
@@ -92,7 +98,10 @@ export async function reserveCreateOperation(
         VALUES (
           ${operationId}, ${environmentId}, 'create_environment', 'queued',
           ${actor.userId}, ${actor.sessionId}, ${input.idempotencyKey},
-          ${transaction.json({ scenario: input.scenario })}
+          ${transaction.json({
+            scenario: input.scenario,
+            ...(input.providerPlan ? { providerPlan: input.providerPlan } : {}),
+          })}
         )
       `;
       await transaction`

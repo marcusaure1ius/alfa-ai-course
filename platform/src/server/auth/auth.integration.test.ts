@@ -8,6 +8,7 @@ import { POST as loginEndpoint } from "@/app/api/auth/login/route";
 import { POST as logoutEndpoint } from "@/app/api/auth/logout/route";
 import { SESSION_COOKIE_NAME } from "./config";
 import { hashOpaqueToken } from "./crypto";
+import { createTotpCode } from "./mfa";
 import {
   blockUser,
   bootstrapAdmin,
@@ -179,6 +180,44 @@ describe("database-backed authentication", () => {
     );
     expect(logoutResponse.status).toBe(200);
     expect(await getSessionByToken(sql, token ?? null)).toBeNull();
+  });
+
+  it("requires and verifies an encrypted TOTP challenge for production admin", async () => {
+    const previousEnvironment = process.env.VERCEL_ENV;
+    const previousKey = process.env.AUTH_FACTOR_ENCRYPTION_KEY;
+    const factorEncryptionKey = Buffer.alloc(32, 11).toString("base64url");
+    const totpSecret = "JBSWY3DPEHPK3PXP";
+    process.env.VERCEL_ENV = "production";
+    process.env.AUTH_FACTOR_ENCRYPTION_KEY = factorEncryptionKey;
+    try {
+      await bootstrapAdmin(sql, {
+        email: "admin@example.test",
+        password: "correct horse battery staple",
+        totpSecret,
+        factorEncryptionKey,
+      });
+      await expect(
+        loginWithPassword(sql, {
+          email: "admin@example.test",
+          password: "correct horse battery staple",
+        }),
+      ).resolves.toEqual({ ok: false, reason: "mfa_required" });
+      const accepted = await loginWithPassword(sql, {
+        email: "admin@example.test",
+        password: "correct horse battery staple",
+        mfaCode: createTotpCode(totpSecret),
+      });
+      expect(accepted.ok).toBe(true);
+      const factors = await sql<{ secret_ciphertext: string }[]>`
+        SELECT secret_ciphertext FROM auth_factors
+      `;
+      expect(factors[0]?.secret_ciphertext).not.toContain(totpSecret);
+    } finally {
+      if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = previousEnvironment;
+      if (previousKey === undefined) delete process.env.AUTH_FACTOR_ENCRYPTION_KEY;
+      else process.env.AUTH_FACTOR_ENCRYPTION_KEY = previousKey;
+    }
   });
 
   it("denies student privilege escalation and direct admin requests with 403", async () => {

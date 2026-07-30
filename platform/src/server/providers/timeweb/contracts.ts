@@ -47,6 +47,7 @@ export type TimewebReadCapabilities = Readonly<{
   locations: true;
   balance: true;
   accountStatus: true;
+  floatingIps: true;
   tokenPermissions: Readonly<{
     serviceScope: "manual-verification-required";
     deleteWithoutConfirmation: "manual-verification-required";
@@ -102,6 +103,15 @@ export type TimewebCatalogSnapshot = Readonly<{
       zones: readonly string[];
     }>
   >;
+  floatingIps: ReadonlyArray<
+    Readonly<{
+      id: string;
+      address: string;
+      zone: string;
+      resourceType: string | null;
+      resourceId: string | null;
+    }>
+  >;
   capabilities: TimewebReadCapabilities;
 }>;
 
@@ -148,7 +158,20 @@ export type TimewebCreateServerInput = Readonly<{
   name: string;
   presetId: number;
   operatingSystemId: number;
+  availabilityZone: string;
+  publicIpAddress: string;
 }>;
+
+export type TimewebCreatePublicIpInput = Readonly<{
+  environmentId: string;
+  availabilityZone: string;
+}>;
+
+export type TimewebPublicIpResource = OwnedProviderResource &
+  Readonly<{
+    kind: "public_ip";
+    address: string;
+  }>;
 
 export type TimewebUpdateServerInput = Readonly<{
   resource: OwnedProviderResource & Readonly<{ kind: "server" }>;
@@ -162,12 +185,20 @@ export type TimewebServerReconciliation =
       resource: OwnedProviderResource & Readonly<{ kind: "server" }>;
     }>;
 
+export type TimewebPublicIpReconciliation =
+  | Readonly<{ state: "absent" }>
+  | Readonly<{
+      state: "present";
+      resource: TimewebPublicIpResource;
+    }>;
+
 /**
  * Production mutation contract. Every operation maps to a fixed Timeweb
  * method/path/body; callers cannot supply an arbitrary URL, method or payload.
  */
 export interface TimewebMutationAdapter {
   readonly version: TimewebMutationAdapterVersion;
+  createPublicIp(input: TimewebCreatePublicIpInput): Promise<TimewebPublicIpResource>;
   createServer(
     input: TimewebCreateServerInput,
   ): Promise<OwnedProviderResource & Readonly<{ kind: "server" }>>;
@@ -178,6 +209,20 @@ export interface TimewebMutationAdapter {
   reconcileServer(
     resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
   ): Promise<TimewebServerReconciliation>;
+  findServerByEnvironmentId(
+    environmentId: string,
+  ): Promise<(OwnedProviderResource & Readonly<{ kind: "server" }>) | null>;
+  deletePublicIp(
+    resource: OwnedProviderResource & Readonly<{ kind: "public_ip" }>,
+  ): Promise<void>;
+  reconcilePublicIp(
+    resource: TimewebPublicIpResource,
+  ): Promise<TimewebPublicIpReconciliation>;
+  findNewPublicIp(
+    environmentId: string,
+    availabilityZone: string,
+    excludedIds: readonly string[],
+  ): Promise<TimewebPublicIpResource | null>;
 }
 
 /**

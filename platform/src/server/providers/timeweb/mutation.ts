@@ -3,8 +3,11 @@ import "server-only";
 import {
   TIMEWEB_MUTATION_ADAPTER_VERSION,
   type OwnedProviderResource,
+  type TimewebCreatePublicIpInput,
   type TimewebCreateServerInput,
   type TimewebMutationAdapter,
+  type TimewebPublicIpReconciliation,
+  type TimewebPublicIpResource,
   type TimewebServerReconciliation,
   type TimewebUpdateServerInput,
 } from "./contracts";
@@ -13,8 +16,15 @@ import { readTimewebMutationRuntimeGate } from "./runtime";
 
 const API_ORIGIN = "https://api.timeweb.cloud";
 const SERVER_COLLECTION_PATH = "/api/v1/servers";
+const PUBLIC_IP_COLLECTION_PATH = "/api/v1/floating-ips";
 const SERVER_ID = /^[1-9][0-9]{0,18}$/;
-const ENVIRONMENT_ID = /^[0-9a-f-]{36}$/i;
+const PUBLIC_IP_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ENVIRONMENT_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const AVAILABILITY_ZONE = /^[a-z0-9][a-z0-9-]{1,31}$/;
+const IPV4 =
+  /^(?:(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$/;
 type FetchLike = typeof fetch;
 type ServerEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -41,6 +51,30 @@ function positiveInteger(value: number, label: string): number {
   return value;
 }
 
+function validZone(value: string): string {
+  const zone = value.trim().toLowerCase();
+  if (!AVAILABILITY_ZONE.test(zone)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Availability zone не прошла локальную проверку.",
+      false,
+    );
+  }
+  return zone;
+}
+
+function validIpv4(value: string): string {
+  const address = value.trim();
+  if (!IPV4.test(address)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Public IPv4 не прошёл локальную проверку.",
+      false,
+    );
+  }
+  return address;
+}
+
 function ownedServer(
   resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
 ): OwnedProviderResource & Readonly<{ kind: "server" }> {
@@ -52,6 +86,23 @@ function ownedServer(
     throw new TimewebProviderError(
       "INVALID_RESPONSE",
       "Provider resource не прошёл ownership-проверку.",
+      false,
+    );
+  }
+  return resource;
+}
+
+function ownedPublicIp(
+  resource: OwnedProviderResource & Readonly<{ kind: "public_ip" }>,
+): OwnedProviderResource & Readonly<{ kind: "public_ip" }> {
+  if (
+    resource.kind !== "public_ip" ||
+    !PUBLIC_IP_ID.test(resource.externalId) ||
+    !ENVIRONMENT_ID.test(resource.environmentId)
+  ) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Provider public IP не прошёл ownership-проверку.",
       false,
     );
   }
@@ -123,6 +174,62 @@ function responseServerId(payload: unknown): string {
   return value;
 }
 
+function responsePublicIp(payload: unknown, environmentId: string): TimewebPublicIpResource {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb не вернул созданный публичный IP.",
+      false,
+    );
+  }
+  const ip = (payload as Record<string, unknown>).ip;
+  if (!ip || typeof ip !== "object" || Array.isArray(ip)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb не вернул созданный публичный IP.",
+      false,
+    );
+  }
+  const values = ip as Record<string, unknown>;
+  const id = typeof values.id === "string" ? values.id : "";
+  const address = typeof values.ip === "string" ? values.ip : "";
+  if (!PUBLIC_IP_ID.test(id)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb не вернул идентификатор публичного IP.",
+      false,
+    );
+  }
+  return {
+    externalId: id,
+    kind: "public_ip",
+    environmentId,
+    address: validIpv4(address),
+  };
+}
+
+function objectArray(payload: unknown, key: string): Record<string, unknown>[] {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb вернул коллекцию неизвестного формата.",
+      false,
+    );
+  }
+  const values = (payload as Record<string, unknown>)[key];
+  if (!Array.isArray(values)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb вернул коллекцию неизвестного формата.",
+      false,
+    );
+  }
+  return values.filter(
+    (value): value is Record<string, unknown> =>
+      Boolean(value) && typeof value === "object" && !Array.isArray(value),
+  );
+}
+
 export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
   readonly version = TIMEWEB_MUTATION_ADAPTER_VERSION;
   readonly #token: string;
@@ -145,7 +252,7 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
   private async request(
     method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
-    body?: Readonly<Record<string, string | number>>,
+    body?: Readonly<Record<string, unknown>>,
   ): Promise<Response> {
     try {
       const response = await this.fetchImpl(`${API_ORIGIN}${path}`, {
@@ -178,6 +285,26 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
     }
   }
 
+  async createPublicIp(
+    input: TimewebCreatePublicIpInput,
+  ): Promise<TimewebPublicIpResource> {
+    if (!ENVIRONMENT_ID.test(input.environmentId)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Environment не прошёл локальную проверку.",
+        false,
+      );
+    }
+    const response = await this.request("POST", PUBLIC_IP_COLLECTION_PATH, {
+      availability_zone: validZone(input.availabilityZone),
+      is_ddos_guard: false,
+    });
+    return responsePublicIp(
+      await response.json().catch(() => null),
+      input.environmentId,
+    );
+  }
+
   async createServer(
     input: TimewebCreateServerInput,
   ): Promise<OwnedProviderResource & Readonly<{ kind: "server" }>> {
@@ -190,8 +317,11 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
     }
     const response = await this.request("POST", SERVER_COLLECTION_PATH, {
       name: validName(input.name),
+      comment: `course-platform:${input.environmentId}`,
       preset_id: positiveInteger(input.presetId, "Preset"),
       os_id: positiveInteger(input.operatingSystemId, "Operating system"),
+      availability_zone: validZone(input.availabilityZone),
+      network: { floating_ip: validIpv4(input.publicIpAddress) },
     });
     const payload = await response.json().catch(() => null);
     return {
@@ -214,10 +344,20 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
     resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
   ): Promise<void> {
     const verified = ownedServer(resource);
-    await this.request(
-      "DELETE",
-      `${SERVER_COLLECTION_PATH}/${verified.externalId}`,
-    );
+    try {
+      await this.request(
+        "DELETE",
+        `${SERVER_COLLECTION_PATH}/${verified.externalId}`,
+      );
+    } catch (error) {
+      if (
+        error instanceof TimewebProviderError &&
+        error.code === "NOT_FOUND"
+      ) {
+        return;
+      }
+      throw error;
+    }
   }
 
   async reconcileServer(
@@ -239,6 +379,119 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
       }
       throw error;
     }
+  }
+
+  async findServerByEnvironmentId(
+    environmentId: string,
+  ): Promise<(OwnedProviderResource & Readonly<{ kind: "server" }>) | null> {
+    if (!ENVIRONMENT_ID.test(environmentId)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Environment не прошёл локальную проверку.",
+        false,
+      );
+    }
+    const response = await this.request("GET", SERVER_COLLECTION_PATH);
+    const marker = `course-platform:${environmentId}`;
+    const matches = objectArray(
+      await response.json().catch(() => null),
+      "servers",
+    ).filter((server) => server.comment === marker);
+    if (matches.length > 1) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Timeweb вернул несколько owned server с одним environment marker.",
+        false,
+      );
+    }
+    if (!matches[0]) return null;
+    const id = matches[0].id;
+    const externalId =
+      typeof id === "number" && Number.isSafeInteger(id) ? String(id) : id;
+    if (typeof externalId !== "string" || !SERVER_ID.test(externalId)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Timeweb вернул некорректный owned server ID.",
+        false,
+      );
+    }
+    return { externalId, kind: "server", environmentId };
+  }
+
+  async deletePublicIp(
+    resource: OwnedProviderResource & Readonly<{ kind: "public_ip" }>,
+  ): Promise<void> {
+    const verified = ownedPublicIp(resource);
+    try {
+      await this.request(
+        "DELETE",
+        `${PUBLIC_IP_COLLECTION_PATH}/${verified.externalId}`,
+      );
+    } catch (error) {
+      if (
+        error instanceof TimewebProviderError &&
+        error.code === "NOT_FOUND"
+      ) {
+        return;
+      }
+      throw error;
+    }
+  }
+
+  async reconcilePublicIp(
+    resource: TimewebPublicIpResource,
+  ): Promise<TimewebPublicIpReconciliation> {
+    const verified = ownedPublicIp(resource);
+    try {
+      const response = await this.request(
+        "GET",
+        `${PUBLIC_IP_COLLECTION_PATH}/${verified.externalId}`,
+      );
+      const current = responsePublicIp(
+        await response.json().catch(() => null),
+        verified.environmentId,
+      );
+      return { state: "present", resource: current };
+    } catch (error) {
+      if (
+        error instanceof TimewebProviderError &&
+        error.code === "NOT_FOUND"
+      ) {
+        return { state: "absent" };
+      }
+      throw error;
+    }
+  }
+
+  async findNewPublicIp(
+    environmentId: string,
+    availabilityZone: string,
+    excludedIds: readonly string[],
+  ): Promise<TimewebPublicIpResource | null> {
+    if (!ENVIRONMENT_ID.test(environmentId)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Environment не прошёл локальную проверку.",
+        false,
+      );
+    }
+    const excluded = new Set(
+      excludedIds.filter((id) => PUBLIC_IP_ID.test(id)),
+    );
+    const zone = validZone(availabilityZone);
+    const response = await this.request("GET", PUBLIC_IP_COLLECTION_PATH);
+    const candidates = objectArray(
+      await response.json().catch(() => null),
+      "ips",
+    ).filter(
+      (ip) =>
+        typeof ip.id === "string" &&
+        !excluded.has(ip.id) &&
+        ip.availability_zone === zone &&
+        ip.resource_id == null,
+    );
+    if (candidates.length !== 1) return null;
+    return responsePublicIp({ ip: candidates[0] }, environmentId);
   }
 }
 

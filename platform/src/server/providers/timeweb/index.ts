@@ -11,9 +11,12 @@ export {
   type TimewebAdapter,
   type TimewebAdapterVersion,
   type TimewebCreateServerInput,
+  type TimewebCreatePublicIpInput,
   type TimewebMutationAdapter,
   type TimewebMutationAdapterVersion,
   type TimewebProviderErrorCode,
+  type TimewebPublicIpResource,
+  type TimewebPublicIpReconciliation,
   type TimewebReadAdapter,
   type TimewebReadDtoVersion,
   type TimewebResourceKind,
@@ -41,3 +44,8 @@ export {
   createProductionTimewebMutationAdapter,
   TimewebMutationHttpAdapter,
 } from "./mutation";
+export {
+  getTimewebProvisioningPreview,
+  type TimewebProvisioningPlan,
+  type TimewebProvisioningPreview,
+} from "./provisioning";

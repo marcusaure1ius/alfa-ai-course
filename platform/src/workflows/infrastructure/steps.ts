@@ -8,7 +8,6 @@ import {
   completeOperationStep,
   finishOperation,
   finishStep,
-  operationEnvironmentId,
   transitionEnvironment,
 } from "@/server/operations/repository";
 import {
@@ -17,25 +16,25 @@ import {
 } from "@/server/operations/contracts";
 import { classifyProviderError } from "@/server/operations/state";
 import {
-  FakeProviderError,
-  FakeTimewebAdapter,
-} from "@/server/providers/timeweb/fake";
+  createInfrastructureLifecycleAdapter,
+  isProductionTimewebWorkflow,
+  lifecycleProviderError,
+} from "@/server/providers/timeweb/lifecycle";
 
-async function adapter(command: WorkflowCommand): Promise<FakeTimewebAdapter> {
-  const sql = getDatabase();
-  return new FakeTimewebAdapter(
-    sql,
-    command.operationId,
-    await operationEnvironmentId(sql, command.operationId),
-    command.scenario,
-  );
+async function adapter(command: WorkflowCommand) {
+  return createInfrastructureLifecycleAdapter(command);
+}
+
+export async function providerSliceStep(): Promise<"production-1a" | "fake-foundation"> {
+  "use step";
+  return isProductionTimewebWorkflow() ? "production-1a" : "fake-foundation";
 }
 
 async function failProviderStep(
   command: WorkflowCommand,
   key: string,
   executionToken: string,
-  error: FakeProviderError,
+  error: Readonly<{ code: string; message: string }>,
 ): Promise<never> {
   const sql = getDatabase();
   const retryClass = classifyProviderError(error.code);
@@ -105,8 +104,14 @@ export async function reserveIpStep(command: WorkflowCommand): Promise<void> {
       { status: "succeeded" },
     );
   } catch (error) {
-    if (error instanceof FakeProviderError) {
-      await failProviderStep(command, "reserve_public_ip", executionToken, error);
+    const providerError = lifecycleProviderError(error);
+    if (providerError) {
+      await failProviderStep(
+        command,
+        "reserve_public_ip",
+        executionToken,
+        providerError,
+      );
     }
     throw error;
   }
@@ -131,13 +136,57 @@ export async function createServerStep(command: WorkflowCommand): Promise<void> 
       { status: "succeeded" },
     );
   } catch (error) {
-    if (error instanceof FakeProviderError) {
-      await failProviderStep(command, "create_server", executionToken, error);
+    const providerError = lifecycleProviderError(error);
+    if (providerError) {
+      await failProviderStep(
+        command,
+        "create_server",
+        executionToken,
+        providerError,
+      );
     }
     throw error;
   }
 }
 createServerStep.maxRetries = 2;
+
+export async function reconcileServerStep(
+  command: WorkflowCommand,
+): Promise<void> {
+  "use step";
+  const sql = getDatabase();
+  await guardMutation(command, "create", "server");
+  const step = await beginStep(
+    sql,
+    command.operationId,
+    "reconcile_server",
+    30,
+  );
+  if (step.alreadyCompleted) return;
+  const executionToken = requireStepClaim(step);
+  try {
+    await (await adapter(command)).reconcileServer();
+    await finishStep(
+      sql,
+      command.operationId,
+      "reconcile_server",
+      executionToken,
+      { status: "succeeded" },
+    );
+  } catch (error) {
+    const providerError = lifecycleProviderError(error);
+    if (providerError) {
+      await failProviderStep(
+        command,
+        "reconcile_server",
+        executionToken,
+        providerError,
+      );
+    }
+    throw error;
+  }
+}
+reconcileServerStep.maxRetries = 8;
 
 export async function configureDnsStep(
   command: WorkflowCommand,
@@ -161,18 +210,19 @@ export async function configureDnsStep(
     );
     return "ready";
   } catch (error) {
-    if (!(error instanceof FakeProviderError)) throw error;
+    const providerError = lifecycleProviderError(error);
+    if (!providerError) throw error;
     await finishStep(sql, command.operationId, "configure_dns", executionToken, {
       status: "failed",
-      code: error.code,
-      message: error.message,
+      code: providerError.code,
+      message: providerError.message,
       retryClass: "permanent",
     });
     await transitionEnvironment(sql, command.operationId, "creating", "degraded");
     await finishOperation(sql, command.operationId, {
       status: "failed",
-      code: error.code,
-      message: error.message,
+      code: providerError.code,
+      message: providerError.message,
     });
     return "degraded";
   }
@@ -197,18 +247,19 @@ export async function verifyTlsStep(
     );
     return "ready";
   } catch (error) {
-    if (!(error instanceof FakeProviderError)) throw error;
+    const providerError = lifecycleProviderError(error);
+    if (!providerError) throw error;
     await finishStep(sql, command.operationId, "verify_tls", executionToken, {
       status: "failed",
-      code: error.code,
-      message: error.message,
+      code: providerError.code,
+      message: providerError.message,
       retryClass: "permanent",
     });
     await transitionEnvironment(sql, command.operationId, "creating", "degraded");
     await finishOperation(sql, command.operationId, {
       status: "failed",
-      code: error.code,
-      message: error.message,
+      code: providerError.code,
+      message: providerError.message,
     });
     return "degraded";
   }
@@ -253,18 +304,23 @@ export async function deleteResourceStep(
     });
     return "deleted";
   } catch (error) {
-    if (!(error instanceof FakeProviderError)) throw error;
+    const providerError = lifecycleProviderError(error);
+    if (!providerError) throw error;
+    const retryClass = classifyProviderError(providerError.code);
     await finishStep(sql, command.operationId, key, executionToken, {
       status: "failed",
-      code: error.code,
-      message: error.message,
-      retryClass: "permanent",
+      code: providerError.code,
+      message: providerError.message,
+      retryClass,
     });
+    if (retryClass !== "permanent") {
+      throw new RetryableError(providerError.message, { retryAfter: 500 });
+    }
     await transitionEnvironment(sql, command.operationId, "deleting", "cleanup_required");
     await finishOperation(sql, command.operationId, {
       status: "failed",
-      code: error.code,
-      message: error.message,
+      code: providerError.code,
+      message: providerError.message,
     });
     return "cleanup_required";
   }

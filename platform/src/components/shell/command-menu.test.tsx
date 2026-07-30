@@ -57,4 +57,10 @@ describe("CommandMenu focus", () => {
 
     await waitFor(() => expect(document.activeElement).toBe(previous));
   });
+
+  it("ignores extension-generated keydown events without a key", () => {
+    render(<CommandMenu />);
+    expect(() => fireEvent.keyDown(document, {})).not.toThrow();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
 });

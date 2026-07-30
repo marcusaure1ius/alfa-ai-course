@@ -19,6 +19,7 @@ const READ_ENDPOINTS = {
   presets: "/api/v1/presets/servers",
   operatingSystems: "/api/v1/os/servers",
   locations: "/api/v2/locations",
+  floatingIps: "/api/v1/floating-ips",
 } as const;
 const SUPPORTED_STATUSES = new Set<TimewebSupportedStatus>([
   "on",
@@ -221,7 +222,15 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
   }
 
   async discover(): Promise<TimewebCatalogSnapshot> {
-    const [accountPayload, balancePayload, serversPayload, presetsPayload, osPayload, locationsPayload] =
+    const [
+      accountPayload,
+      balancePayload,
+      serversPayload,
+      presetsPayload,
+      osPayload,
+      locationsPayload,
+      floatingIpsPayload,
+    ] =
       await Promise.all([
         this.get(READ_ENDPOINTS.account),
         this.get(READ_ENDPOINTS.balance),
@@ -229,6 +238,7 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
         this.get(READ_ENDPOINTS.presets),
         this.get(READ_ENDPOINTS.operatingSystems),
         this.get(READ_ENDPOINTS.locations),
+        this.get(READ_ENDPOINTS.floatingIps),
       ]);
 
     const account = record(record(accountPayload).status);
@@ -273,6 +283,18 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
         zones: array(location.availability_zones).map(providerValue),
       };
     });
+    const floatingIps = array(record(floatingIpsPayload).ips).map((value) => {
+      const ip = record(value);
+      return {
+        id: identifier(ip.id),
+        address: string(ip.ip),
+        zone: providerValue(ip.availability_zone),
+        resourceType:
+          ip.resource_type == null ? null : providerValue(ip.resource_type),
+        resourceId:
+          ip.resource_id == null ? null : identifier(ip.resource_id),
+      };
+    });
     const degraded = servers.some((server) => server.status.state === "unsupported");
 
     return {
@@ -291,6 +313,7 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
       presets,
       operatingSystems,
       locations,
+      floatingIps,
       capabilities: {
         servers: true,
         presets: true,
@@ -298,6 +321,7 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
         locations: true,
         balance: true,
         accountStatus: true,
+        floatingIps: true,
         tokenPermissions: {
           serviceScope: "manual-verification-required",
           deleteWithoutConfirmation: "manual-verification-required",

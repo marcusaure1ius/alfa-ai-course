@@ -136,7 +136,7 @@ describe("Vercel Workflow orchestration", () => {
       });
     const first = await createEndpoint(request());
     const second = await createEndpoint(request());
-    expect(first.status).toBe(202);
+    expect(first.status, await first.clone().text()).toBe(202);
     expect(second.status).toBe(202);
     const firstBody = (await first.json()) as { operationId: string };
     const secondBody = (await second.json()) as { operationId: string };

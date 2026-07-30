@@ -1,6 +1,7 @@
 import "server-only";
 
 import { safeEqual } from "../auth/crypto";
+import { readTimewebMutationRuntimeGate } from "../providers/timeweb/runtime";
 
 type ServerEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -13,22 +14,24 @@ export type CronAuthorization =
         | "CRON_NOT_PRODUCTION"
         | "CRON_UNAUTHORIZED"
         | "CRON_NOT_CONFIGURED"
-        | "PROVIDER_NOT_FAKE";
+        | "PROVIDER_GATE_CLOSED";
     }>;
 
 /**
- * T-0055 runs reconciliation only in the production Cron environment and only
- * against the fake provider. Real provider reconciliation has a separate gate.
+ * Production Cron uses the same fail-closed provider gates as Workflow.
  */
-export function authorizeFakeReconciliationCron(
+export function authorizeReconciliationCron(
   request: Request,
   environment: ServerEnvironment = process.env,
 ): CronAuthorization {
   if (environment.VERCEL_ENV !== "production") {
     return { ok: false, status: 404, code: "CRON_NOT_PRODUCTION" };
   }
-  if (environment.PLATFORM_PROVIDER !== "fake") {
-    return { ok: false, status: 503, code: "PROVIDER_NOT_FAKE" };
+  if (
+    environment.PLATFORM_PROVIDER !== "fake" &&
+    readTimewebMutationRuntimeGate(environment).mode !== "timeweb"
+  ) {
+    return { ok: false, status: 503, code: "PROVIDER_GATE_CLOSED" };
   }
   const secret = environment.CRON_SECRET;
   if (!secret || secret.length < 32) {

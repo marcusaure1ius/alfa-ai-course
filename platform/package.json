@@ -13,6 +13,7 @@
     "start": "next start",
     "db:migrate": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/migrate.ts",
     "auth:bootstrap-admin": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/bootstrap-admin.ts",
+    "auth:enroll-admin-totp": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/enroll-admin-totp.ts",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

@@ -13,6 +13,7 @@ import {
   verifyPassword,
 } from "./crypto";
 import { hasPermission, requiresProductionMfa, type Role } from "./rbac";
+import { sealTotpSecret, verifyTotpCode } from "./mfa";
 
 const LOGIN_WINDOW_MINUTES = 15;
 const LOGIN_MAX_ATTEMPTS = 5;
@@ -148,7 +149,7 @@ async function findUserByEmail(sql: DatabaseSql, email: string): Promise<UserRow
 
 export async function loginWithPassword(
   sql: DatabaseSql,
-  input: { email: string; password: string },
+  input: { email: string; password: string; mfaCode?: string },
   context: RequestContext = {},
 ): Promise<LoginResult> {
   const email = normalizeEmail(input.email);
@@ -185,7 +186,40 @@ export async function loginWithPassword(
     return { ok: false, reason: "invalid_credentials" };
   }
 
-  if (requiresProductionMfa(user.role_id, process.env.VERCEL_ENV, user.has_verified_factor)) {
+  let challengeSatisfied = process.env.VERCEL_ENV !== "production";
+  if (
+    user.role_id === "admin" &&
+    process.env.VERCEL_ENV === "production" &&
+    user.has_verified_factor &&
+    input.mfaCode &&
+    process.env.AUTH_FACTOR_ENCRYPTION_KEY
+  ) {
+    const factors = await sql<{ secret_ciphertext: string }[]>`
+      SELECT secret_ciphertext
+      FROM auth_factors
+      WHERE user_id = ${user.id}
+        AND factor_type = 'totp'
+        AND verified_at IS NOT NULL
+        AND disabled_at IS NULL
+        AND secret_ciphertext IS NOT NULL
+    `;
+    challengeSatisfied = factors.some((factor) =>
+      verifyTotpCode(
+        factor.secret_ciphertext,
+        input.mfaCode!,
+        process.env.AUTH_FACTOR_ENCRYPTION_KEY!,
+      ),
+    );
+  }
+
+  if (
+    requiresProductionMfa(
+      user.role_id,
+      process.env.VERCEL_ENV,
+      user.has_verified_factor,
+      challengeSatisfied,
+    )
+  ) {
     await appendAudit(sql, {
       actorUserId: user.id,
       action: "auth.login.mfa_required",
@@ -338,9 +372,134 @@ export async function revokeAllUserSessions(
   return rows.length;
 }
 
+export async function reauthenticateSession(
+  sql: DatabaseSql,
+  session: AuthSession,
+  input: { password: string; mfaCode?: string },
+): Promise<boolean> {
+  const bucketKey = privacyHash(`reauth:${session.sessionId}`);
+  const attempts = await sql<{ attempt_count: number; blocked_until: Date | null }[]>`
+    INSERT INTO auth_rate_limits (
+      bucket_key, action, window_started_at, attempt_count, blocked_until
+    )
+    VALUES (${bucketKey}, 'reauth', now(), 1, null)
+    ON CONFLICT (bucket_key) DO UPDATE SET
+      window_started_at = CASE
+        WHEN auth_rate_limits.window_started_at <= now() - interval '15 minutes'
+          OR auth_rate_limits.blocked_until <= now()
+        THEN now()
+        ELSE auth_rate_limits.window_started_at
+      END,
+      attempt_count = CASE
+        WHEN auth_rate_limits.window_started_at <= now() - interval '15 minutes'
+          OR auth_rate_limits.blocked_until <= now()
+        THEN 1
+        ELSE auth_rate_limits.attempt_count + 1
+      END,
+      blocked_until = CASE
+        WHEN auth_rate_limits.window_started_at > now() - interval '15 minutes'
+          AND auth_rate_limits.attempt_count + 1 > 5
+        THEN now() + interval '15 minutes'
+        ELSE null
+      END,
+      updated_at = now()
+    RETURNING attempt_count, blocked_until
+  `;
+  if (
+    attempts[0]?.blocked_until &&
+    attempts[0].blocked_until.getTime() > Date.now()
+  ) {
+    await appendAudit(sql, {
+      actorUserId: session.userId,
+      action: "auth.reauthenticate.rate_limited",
+      subjectType: "auth_session",
+      subjectId: session.sessionId,
+      outcome: "denied",
+    });
+    return false;
+  }
+  const users = await sql<
+    {
+      password_hash: string;
+      role_id: Role;
+      has_verified_factor: boolean;
+    }[]
+  >`
+    SELECT
+      users.password_hash,
+      users.role_id,
+      EXISTS (
+        SELECT 1 FROM auth_factors
+        WHERE auth_factors.user_id = users.id
+          AND auth_factors.factor_type = 'totp'
+          AND auth_factors.verified_at IS NOT NULL
+          AND auth_factors.disabled_at IS NULL
+      ) AS has_verified_factor
+    FROM users
+    WHERE users.id = ${session.userId} AND users.status = 'active'
+  `;
+  const user = users[0];
+  let challengeSatisfied = process.env.VERCEL_ENV !== "production";
+  if (
+    user?.has_verified_factor &&
+    input.mfaCode &&
+    process.env.AUTH_FACTOR_ENCRYPTION_KEY
+  ) {
+    const factors = await sql<{ secret_ciphertext: string }[]>`
+      SELECT secret_ciphertext FROM auth_factors
+      WHERE user_id = ${session.userId}
+        AND factor_type = 'totp'
+        AND verified_at IS NOT NULL
+        AND disabled_at IS NULL
+        AND secret_ciphertext IS NOT NULL
+    `;
+    challengeSatisfied = factors.some((factor) =>
+      verifyTotpCode(
+        factor.secret_ciphertext,
+        input.mfaCode!,
+        process.env.AUTH_FACTOR_ENCRYPTION_KEY!,
+      ),
+    );
+  }
+  const accepted = Boolean(
+    user &&
+      (await verifyPassword(user.password_hash, input.password)) &&
+      !requiresProductionMfa(
+        user.role_id,
+        process.env.VERCEL_ENV,
+        user.has_verified_factor,
+        challengeSatisfied,
+      ),
+  );
+  if (accepted) {
+    await sql`
+      UPDATE auth_sessions
+      SET reauthenticated_at = now(), last_seen_at = now()
+      WHERE id = ${session.sessionId}
+        AND user_id = ${session.userId}
+        AND revoked_at IS NULL
+        AND expires_at > now()
+    `;
+    await sql`DELETE FROM auth_rate_limits WHERE bucket_key = ${bucketKey}`;
+  }
+  await appendAudit(sql, {
+    actorUserId: session.userId,
+    action: "auth.reauthenticate",
+    subjectType: "auth_session",
+    subjectId: session.sessionId,
+    outcome: accepted ? "success" : "denied",
+  });
+  return accepted;
+}
+
 export async function bootstrapAdmin(
   sql: DatabaseSql,
-  input: { email: string; password: string },
+  input: {
+    email: string;
+    password: string;
+    totpSecret?: string;
+    factorEncryptionKey?: string;
+  },
 ): Promise<{ id: string; email: string }> {
   const email = normalizeEmail(input.email);
   const passwordHash = await hashPassword(input.password);
@@ -361,6 +520,17 @@ export async function bootstrapAdmin(
       INSERT INTO users (id, email, password_hash, role_id)
       VALUES (${userId}, ${email}, ${passwordHash}, 'admin')
     `;
+    if (input.totpSecret && input.factorEncryptionKey) {
+      await transaction`
+        INSERT INTO auth_factors (
+          id, user_id, factor_type, label, secret_ciphertext, verified_at
+        )
+        VALUES (
+          ${randomUUID()}, ${userId}, 'totp', 'Authenticator',
+          ${sealTotpSecret(input.totpSecret, input.factorEncryptionKey)}, now()
+        )
+      `;
+    }
     await transaction`
       UPDATE auth_bootstrap_state
       SET closed_at = now(), closed_by_user_id = ${userId}
@@ -381,6 +551,59 @@ export async function bootstrapAdmin(
       )
     `;
     return { id: userId, email };
+  });
+}
+
+export async function enrollAdminTotp(
+  sql: DatabaseSql,
+  input: {
+    email: string;
+    totpSecret: string;
+    factorEncryptionKey: string;
+  },
+): Promise<void> {
+  await sql.begin(async (transaction) => {
+    const users = await transaction<{ id: string }[]>`
+      SELECT id
+      FROM users
+      WHERE email = ${normalizeEmail(input.email)}
+        AND role_id = 'admin'
+        AND status = 'active'
+      FOR UPDATE
+    `;
+    const user = users[0];
+    if (!user) throw new Error("Активный administrator не найден.");
+    const existing = await transaction<{ present: boolean }[]>`
+      SELECT EXISTS (
+        SELECT 1 FROM auth_factors
+        WHERE user_id = ${user.id}
+          AND factor_type = 'totp'
+          AND verified_at IS NOT NULL
+          AND disabled_at IS NULL
+      ) AS present
+    `;
+    if (existing[0]?.present) {
+      throw new Error("У administrator уже есть verified TOTP factor.");
+    }
+    await transaction`
+      INSERT INTO auth_factors (
+        id, user_id, factor_type, label, secret_ciphertext, verified_at
+      )
+      VALUES (
+        ${randomUUID()}, ${user.id}, 'totp', 'Authenticator',
+        ${sealTotpSecret(input.totpSecret, input.factorEncryptionKey)}, now()
+      )
+    `;
+    await transaction`
+      INSERT INTO audit_events (
+        id, actor_user_id, action, subject_type, subject_id, outcome, metadata
+      )
+      VALUES (
+        ${randomUUID()}, ${user.id}, 'auth.factor.totp.enrolled',
+        'user', ${user.id}, 'success',
+        ${transaction.json({ factorType: "totp" })}
+      )
+    `;
   });
 }
 

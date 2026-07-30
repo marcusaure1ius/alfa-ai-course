@@ -12,11 +12,28 @@ const resource = {
   kind: "server" as const,
   environmentId,
 };
+const publicIpResource = {
+  externalId: "11111111-2222-4333-8444-555555555555",
+  kind: "public_ip" as const,
+  environmentId,
+  address: "203.0.113.10",
+};
 
 describe("TimewebMutationHttpAdapter", () => {
   it("maps typed create/update/delete/reconcile calls to fixed endpoints", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            ip: {
+              id: publicIpResource.externalId,
+              ip: publicIpResource.address,
+            },
+          },
+          { status: 201 },
+        ),
+      )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ server: { id: 54321 } }), {
           status: 201,
@@ -29,6 +46,15 @@ describe("TimewebMutationHttpAdapter", () => {
         new Response(JSON.stringify({ server: { id: 54321 } }), {
           status: 200,
         }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          ip: {
+            id: publicIpResource.externalId,
+            ip: publicIpResource.address,
+          },
+        }),
       );
     const adapter = new TimewebMutationHttpAdapter(
       "synthetic-test-token",
@@ -36,11 +62,19 @@ describe("TimewebMutationHttpAdapter", () => {
     );
 
     await expect(
+      adapter.createPublicIp({
+        environmentId,
+        availabilityZone: "spb-3",
+      }),
+    ).resolves.toEqual(publicIpResource);
+    await expect(
       adapter.createServer({
         environmentId,
         name: "Основная среда",
         presetId: 101,
         operatingSystemId: 202,
+        availabilityZone: "spb-3",
+        publicIpAddress: publicIpResource.address,
       }),
     ).resolves.toEqual(resource);
     await adapter.updateServer({ resource, name: "Переименованная среда" });
@@ -48,6 +82,13 @@ describe("TimewebMutationHttpAdapter", () => {
     await expect(adapter.reconcileServer(resource)).resolves.toEqual({
       state: "present",
       resource,
+    });
+    await adapter.deletePublicIp(publicIpResource);
+    await expect(
+      adapter.reconcilePublicIp(publicIpResource),
+    ).resolves.toEqual({
+      state: "present",
+      resource: publicIpResource,
     });
 
     expect(
@@ -58,12 +99,23 @@ describe("TimewebMutationHttpAdapter", () => {
       })),
     ).toEqual([
       {
+        url: "https://api.timeweb.cloud/api/v1/floating-ips",
+        method: "POST",
+        body: JSON.stringify({
+          availability_zone: "spb-3",
+          is_ddos_guard: false,
+        }),
+      },
+      {
         url: "https://api.timeweb.cloud/api/v1/servers",
         method: "POST",
         body: JSON.stringify({
           name: "Основная среда",
+          comment: `course-platform:${environmentId}`,
           preset_id: 101,
           os_id: 202,
+          availability_zone: "spb-3",
+          network: { floating_ip: "203.0.113.10" },
         }),
       },
       {
@@ -81,6 +133,16 @@ describe("TimewebMutationHttpAdapter", () => {
         method: "GET",
         body: undefined,
       },
+      {
+        url: `https://api.timeweb.cloud/api/v1/floating-ips/${publicIpResource.externalId}`,
+        method: "DELETE",
+        body: undefined,
+      },
+      {
+        url: `https://api.timeweb.cloud/api/v1/floating-ips/${publicIpResource.externalId}`,
+        method: "GET",
+        body: undefined,
+      },
     ]);
   });
 
@@ -92,6 +154,12 @@ describe("TimewebMutationHttpAdapter", () => {
     );
     await expect(
       adapter.deleteServer({ ...resource, externalId: "../account/status" }),
+    ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    await expect(
+      adapter.deletePublicIp({
+        ...publicIpResource,
+        externalId: "../account/status",
+      }),
     ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
     expect(fetchImpl).not.toHaveBeenCalled();
   });

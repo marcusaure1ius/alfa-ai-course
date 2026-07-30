@@ -1,0 +1,110 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { getTimewebProvisioningPreview } from "./provisioning";
+
+function providerPayload(url: string): unknown {
+  if (url.endsWith("/account/status")) return { status: { is_blocked: false } };
+  if (url.endsWith("/account/finances")) {
+    return { finances: { balance: 2_000, currency: "RUB" } };
+  }
+  if (url.endsWith("/api/v1/servers")) return { servers: [] };
+  if (url.endsWith("/presets/servers")) {
+    return {
+      server_presets: [
+        {
+          id: 42,
+          location: "ru-1",
+          price: 700,
+          cpu: 2,
+          ram: 2048,
+          disk: 30720,
+          disk_type: "nvme",
+        },
+        {
+          id: 99,
+          location: "ru-1",
+          price: 1_100,
+          cpu: 4,
+          ram: 4096,
+          disk: 51200,
+          disk_type: "nvme",
+        },
+      ],
+    };
+  }
+  if (url.endsWith("/os/servers")) {
+    return {
+      servers_os: [
+        { id: 24, family: "ubuntu", name: "Ubuntu", version: "24.04 LTS" },
+      ],
+    };
+  }
+  if (url.endsWith("/api/v2/locations")) {
+    return {
+      locations: [
+        {
+          location: "ru-1",
+          location_code: "RU",
+          availability_zones: ["spb-3"],
+        },
+      ],
+    };
+  }
+  if (url.endsWith("/floating-ips")) return { ips: [] };
+  throw new Error(`Unexpected URL ${url}`);
+}
+
+const productionEnvironment = {
+  VERCEL_ENV: "production",
+  PLATFORM_PROVIDER: "timeweb",
+  TIMEWEB_API_TOKEN: "synthetic-test-token",
+  TIMEWEB_MUTATIONS_ENABLED: "true",
+  TIMEWEB_CAPABILITIES_VERIFIED: "true",
+  TIMEWEB_SMOKE_BUDGET_RUB: "1000",
+};
+
+describe("getTimewebProvisioningPreview", () => {
+  it("selects current Ubuntu 24.04, the cheapest compatible preset and live price", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) =>
+      Response.json(providerPayload(String(input))),
+    );
+    const preview = await getTimewebProvisioningPreview(
+      productionEnvironment,
+      fetchImpl,
+    );
+
+    expect(preview).toEqual({
+      ok: true,
+      mode: "timeweb",
+      plan: expect.objectContaining({
+        presetId: 42,
+        operatingSystemId: 24,
+        operatingSystemLabel: "Ubuntu 24.04 LTS x86_64",
+        availabilityZone: "spb-3",
+        monthlyServerRoubles: 700,
+        cpu: 2,
+        ramMb: 2048,
+        diskMb: 30720,
+        diskType: "nvme",
+        monthlyPublicIpRoubles: 180,
+        monthlyTotalRoubles: 880,
+        balanceRoubles: 2_000,
+      }),
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(7);
+  });
+
+  it("fails closed when the owner-approved budget is below provider pricing", async () => {
+    const preview = await getTimewebProvisioningPreview(
+      { ...productionEnvironment, TIMEWEB_SMOKE_BUDGET_RUB: "800" },
+      vi.fn<typeof fetch>(async (input) =>
+        Response.json(providerPayload(String(input))),
+      ),
+    );
+    expect(preview).toEqual({
+      ok: false,
+      code: "BUDGET_EXCEEDED",
+      message: "Актуальная месячная оценка превышает smoke budget.",
+    });
+  });
+});

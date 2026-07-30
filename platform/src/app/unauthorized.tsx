@@ -22,9 +22,9 @@ export default function UnauthorizedPage() {
         </CardHeader>
         <CardContent>
           <Button asChild className="min-h-11 w-full">
-            <Link href="/">
+            <Link href="/login">
               <LogIn aria-hidden="true" />
-              На стартовую страницу
+              Перейти ко входу
             </Link>
           </Button>
         </CardContent>

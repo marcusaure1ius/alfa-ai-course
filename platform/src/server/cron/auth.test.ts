@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { authorizeFakeReconciliationCron } from "./auth";
+import { authorizeReconciliationCron } from "./auth";
 
 const secret = "synthetic-cron-secret-with-at-least-32-characters";
 
@@ -10,10 +10,10 @@ function request(value?: string): Request {
   });
 }
 
-describe("authorizeFakeReconciliationCron", () => {
+describe("authorizeReconciliationCron", () => {
   it("hides the route outside production without reading a valid credential", () => {
     expect(
-      authorizeFakeReconciliationCron(request(`Bearer ${secret}`), {
+      authorizeReconciliationCron(request(`Bearer ${secret}`), {
         VERCEL_ENV: "preview",
         PLATFORM_PROVIDER: "fake",
         CRON_SECRET: secret,
@@ -25,9 +25,9 @@ describe("authorizeFakeReconciliationCron", () => {
     });
   });
 
-  it("fails closed when the fake-provider or secret gates are missing", () => {
+  it("fails closed when the provider or secret gates are missing", () => {
     expect(
-      authorizeFakeReconciliationCron(request(`Bearer ${secret}`), {
+      authorizeReconciliationCron(request(`Bearer ${secret}`), {
         VERCEL_ENV: "production",
         PLATFORM_PROVIDER: "timeweb",
         CRON_SECRET: secret,
@@ -35,10 +35,10 @@ describe("authorizeFakeReconciliationCron", () => {
     ).toEqual({
       ok: false,
       status: 503,
-      code: "PROVIDER_NOT_FAKE",
+      code: "PROVIDER_GATE_CLOSED",
     });
     expect(
-      authorizeFakeReconciliationCron(request(), {
+      authorizeReconciliationCron(request(), {
         VERCEL_ENV: "production",
         PLATFORM_PROVIDER: "fake",
       }),
@@ -56,17 +56,30 @@ describe("authorizeFakeReconciliationCron", () => {
       CRON_SECRET: secret,
     };
     expect(
-      authorizeFakeReconciliationCron(request("Bearer wrong"), environment),
+      authorizeReconciliationCron(request("Bearer wrong"), environment),
     ).toEqual({
       ok: false,
       status: 401,
       code: "CRON_UNAUTHORIZED",
     });
     expect(
-      authorizeFakeReconciliationCron(
+      authorizeReconciliationCron(
         request(`Bearer ${secret}`),
         environment,
       ),
+    ).toEqual({ ok: true });
+  });
+
+  it("allows a fully gated production Timeweb reconciliation", () => {
+    expect(
+      authorizeReconciliationCron(request(`Bearer ${secret}`), {
+        VERCEL_ENV: "production",
+        PLATFORM_PROVIDER: "timeweb",
+        TIMEWEB_API_TOKEN: "synthetic-test-token",
+        TIMEWEB_MUTATIONS_ENABLED: "true",
+        TIMEWEB_CAPABILITIES_VERIFIED: "true",
+        CRON_SECRET: secret,
+      }),
     ).toEqual({ ok: true });
   });
 });

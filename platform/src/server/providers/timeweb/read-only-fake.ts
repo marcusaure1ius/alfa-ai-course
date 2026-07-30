@@ -17,19 +17,10 @@ export class FakeTimewebReadAdapter implements TimewebReadAdapter {
       degraded: false,
       account: { state: "ready" },
       balance: { amount: 2_500, currency: "RUB" },
-      servers: [
-        {
-          id: "fake-server-primary",
-          name: "Учебная среда",
-          region: "ru-1",
-          zone: "spb-3",
-          presetId: "fake-preset-small",
-          status: { state: "supported", value: "on" },
-        },
-      ],
+      servers: [],
       presets: [
         {
-          id: "fake-preset-small",
+          id: "101",
           region: "ru-1",
           priceRoubles: 990,
           cpu: 2,
@@ -40,7 +31,7 @@ export class FakeTimewebReadAdapter implements TimewebReadAdapter {
       ],
       operatingSystems: [
         {
-          id: "fake-ubuntu-24-04",
+          id: "202",
           family: "ubuntu",
           name: "Ubuntu",
           version: "24.04",
@@ -53,6 +44,7 @@ export class FakeTimewebReadAdapter implements TimewebReadAdapter {
           zones: ["spb-3", "spb-4"],
         },
       ],
+      floatingIps: [],
       capabilities: {
         servers: true,
         presets: true,
@@ -60,6 +52,7 @@ export class FakeTimewebReadAdapter implements TimewebReadAdapter {
         locations: true,
         balance: true,
         accountStatus: true,
+        floatingIps: true,
         tokenPermissions: {
           serviceScope: "manual-verification-required",
           deleteWithoutConfirmation: "manual-verification-required",

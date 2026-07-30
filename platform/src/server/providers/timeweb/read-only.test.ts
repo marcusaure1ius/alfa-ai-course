@@ -62,6 +62,20 @@ function successfulPayload(url: string): unknown {
       ],
     };
   }
+  if (url.endsWith("/api/v1/floating-ips")) {
+    return {
+      ips: [
+        {
+          id: "11111111-2222-4333-8444-555555555555",
+          ip: "203.0.113.10",
+          availability_zone: "spb-3",
+          resource_type: "server",
+          resource_id: 101,
+          ptr: "secret.example",
+        },
+      ],
+    };
+  }
   throw new Error(`Unexpected test URL: ${url}`);
 }
 
@@ -81,7 +95,7 @@ describe("TimewebReadOnlyAdapter", () => {
     );
     const snapshot = await adapter.discover();
 
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(
       fetchMock.mock.calls.map(([url, init]) => ({
         url,
@@ -96,6 +110,7 @@ describe("TimewebReadOnlyAdapter", () => {
         "/api/v1/presets/servers",
         "/api/v1/os/servers",
         "/api/v2/locations",
+        "/api/v1/floating-ips",
       ].map((path) => ({
         url: `https://api.timeweb.cloud${path}`,
         method: "GET",
@@ -112,6 +127,15 @@ describe("TimewebReadOnlyAdapter", () => {
           id: "101",
           presetId: "202",
           status: { state: "supported", value: "on" },
+        },
+      ],
+      floatingIps: [
+        {
+          id: "11111111-2222-4333-8444-555555555555",
+          address: "203.0.113.10",
+          zone: "spb-3",
+          resourceType: "server",
+          resourceId: "101",
         },
       ],
     });

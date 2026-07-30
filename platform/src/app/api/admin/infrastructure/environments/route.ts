@@ -1,6 +1,6 @@
 import { start } from "@workflow/core/runtime";
 
-import { requireFreshAdmin } from "@/server/auth/access";
+import { requireAdmin, requireFreshAdmin } from "@/server/auth/access";
 import { verifyCsrfRequest } from "@/server/auth/csrf";
 import { getDatabase } from "@/server/db/client";
 import {
@@ -15,8 +15,68 @@ import {
   reserveCreateOperation,
 } from "@/server/operations/repository";
 import { createEnvironmentWorkflow } from "@/workflows/infrastructure/create";
+import { getTimewebProvisioningPreview } from "@/server/providers/timeweb/provisioning";
+import { readTimewebMutationRuntimeGate } from "@/server/providers/timeweb";
 
 export const runtime = "nodejs";
+
+export async function GET(request: Request): Promise<Response> {
+  const access = await requireAdmin(request);
+  if (!access.ok) return access.response;
+  const rows = await getDatabase()<
+    {
+      id: string;
+      name: string;
+      status: string;
+      updated_at: Date;
+      public_ip: string | null;
+      monthly_roubles: number;
+    }[]
+  >`
+    SELECT
+      environments.id,
+      environments.name,
+      environments.status,
+      environments.updated_at,
+      (
+        SELECT provider_resources.public_metadata->>'address'
+        FROM provider_resources
+        WHERE provider_resources.environment_id = environments.id
+          AND provider_resources.resource_kind = 'public_ip'
+          AND provider_resources.lifecycle_status <> 'deleted'
+        ORDER BY provider_resources.created_at DESC
+        LIMIT 1
+      ) AS public_ip,
+      COALESCE((
+        SELECT sum(
+          CASE
+            WHEN jsonb_typeof(provider_resources.public_metadata->'monthlyRoubles') = 'number'
+            THEN (provider_resources.public_metadata->>'monthlyRoubles')::numeric
+            ELSE 0
+          END
+        )
+        FROM provider_resources
+        WHERE provider_resources.environment_id = environments.id
+          AND provider_resources.lifecycle_status <> 'deleted'
+      ), 0)::float8 AS monthly_roubles
+    FROM environments
+    ORDER BY environments.created_at DESC
+  `;
+  return Response.json(
+    {
+      version: "infrastructure-v1",
+      environments: rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        status: row.status,
+        updatedAt: row.updated_at.toISOString(),
+        publicIp: row.public_ip,
+        monthlyRoubles: row.monthly_roubles,
+      })),
+    },
+    { headers: { "cache-control": "no-store" } },
+  );
+}
 
 export async function POST(request: Request): Promise<Response> {
   if (!verifyCsrfRequest(request)) return operationError(403, "CSRF", "Запрос отклонён.");
@@ -38,10 +98,30 @@ export async function POST(request: Request): Promise<Response> {
   }
   const scenario = fakeScenario(body.simulation);
   try {
+    const mutationGate = readTimewebMutationRuntimeGate();
+    const preview =
+      mutationGate.mode === "timeweb"
+        ? await getTimewebProvisioningPreview()
+        : null;
+    if (preview && !preview.ok) {
+      return operationError(409, preview.code, preview.message);
+    }
+    if (
+      process.env.VERCEL_ENV === "production" &&
+      process.env.PLATFORM_PROVIDER === "timeweb" &&
+      mutationGate.mode !== "timeweb"
+    ) {
+      return operationError(
+        409,
+        "MUTATION_GATE_CLOSED",
+        "Production Timeweb mutation gates закрыты.",
+      );
+    }
     const reserved = await reserveCreateOperation(getDatabase(), access.session, {
       name: body.name.trim(),
       idempotencyKey: body.idempotencyKey,
       scenario,
+      ...(preview?.ok ? { providerPlan: preview.plan } : {}),
     });
     if (
       reserved.created ||

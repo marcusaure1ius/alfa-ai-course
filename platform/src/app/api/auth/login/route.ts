@@ -6,7 +6,7 @@ import { getDatabase } from "@/server/db/client";
 
 export const runtime = "nodejs";
 
-type LoginBody = { email?: unknown; password?: unknown };
+type LoginBody = { email?: unknown; password?: unknown; mfaCode?: unknown };
 
 export async function POST(request: Request): Promise<Response> {
   if (!verifyCsrfRequest(request)) {
@@ -25,6 +25,7 @@ export async function POST(request: Request): Promise<Response> {
   if (
     typeof body.email !== "string" ||
     typeof body.password !== "string" ||
+    (body.mfaCode !== undefined && typeof body.mfaCode !== "string") ||
     body.email.length > 320
   ) {
     return Response.json({ error: "Некорректный запрос." }, { status: 400 });
@@ -32,7 +33,11 @@ export async function POST(request: Request): Promise<Response> {
 
   const result = await loginWithPassword(
     getDatabase(),
-    { email: body.email, password: body.password },
+    {
+      email: body.email,
+      password: body.password,
+      ...(typeof body.mfaCode === "string" ? { mfaCode: body.mfaCode } : {}),
+    },
     requestContext(request),
   );
   if (!result.ok) {

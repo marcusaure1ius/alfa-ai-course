@@ -1,11 +1,11 @@
-import { authorizeFakeReconciliationCron } from "@/server/cron/auth";
+import { authorizeReconciliationCron } from "@/server/cron/auth";
 import { reconcileOrphanedFakeWorkflows } from "@/server/cron/reconcile";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function GET(request: Request): Promise<Response> {
-  const authorization = authorizeFakeReconciliationCron(request);
+  const authorization = authorizeReconciliationCron(request);
   if (!authorization.ok) {
     return Response.json(
       {

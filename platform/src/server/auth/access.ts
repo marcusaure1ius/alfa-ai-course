@@ -54,5 +54,26 @@ export async function requireFreshAdmin(request: Request): Promise<AccessResult>
       ),
     };
   }
+  if (process.env.VERCEL_ENV === "production") {
+    const factors = await getDatabase()<{ present: boolean }[]>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM auth_factors
+        WHERE user_id = ${result.session.userId}
+          AND factor_type IN ('totp', 'webauthn')
+          AND verified_at IS NOT NULL
+          AND disabled_at IS NULL
+      ) AS present
+    `;
+    if (!factors[0]?.present) {
+      return {
+        ok: false,
+        response: Response.json(
+          { error: "Для production mutation требуется подтверждённый MFA." },
+          { status: 403, headers: { "cache-control": "no-store" } },
+        ),
+      };
+    }
+  }
   return result;
 }

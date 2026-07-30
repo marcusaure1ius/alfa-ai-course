@@ -50,7 +50,11 @@ export function CommandMenu() {
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
+      if (
+        typeof event.key === "string" &&
+        event.key.toLowerCase() === "k" &&
+        (event.metaKey || event.ctrlKey)
+      ) {
         event.preventDefault();
         setOpen((value) => {
           if (!value) rememberFocus();
