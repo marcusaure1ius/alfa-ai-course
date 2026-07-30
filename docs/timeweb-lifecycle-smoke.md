@@ -31,8 +31,10 @@ history, передаются только дочернему process и сра�
 
 ```bash
 cd platform
-read -rsp 'TOTP secret: ' ADMIN_TOTP_SECRET && echo
-read -rsp 'Текущий TOTP code: ' ADMIN_TOTP_CODE && echo
+printf 'TOTP secret: '
+IFS= read -rs ADMIN_TOTP_SECRET && printf '\n'
+printf 'Текущий TOTP code: '
+IFS= read -rs ADMIN_TOTP_CODE && printf '\n'
 export ADMIN_TOTP_SECRET ADMIN_TOTP_CODE
 npm run auth:enroll-admin-totp -- --email admin@example.test
 unset ADMIN_TOTP_SECRET ADMIN_TOTP_CODE

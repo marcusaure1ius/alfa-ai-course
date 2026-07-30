@@ -36,7 +36,8 @@ npm run dev
 
 ```bash
 cd platform
-read -rsp 'Пароль administrator: ' BOOTSTRAP_ADMIN_PASSWORD && echo
+printf 'Пароль administrator: '
+IFS= read -rs BOOTSTRAP_ADMIN_PASSWORD && printf '\n'
 export BOOTSTRAP_ADMIN_PASSWORD
 npm run auth:bootstrap-admin -- --email admin@example.test
 unset BOOTSTRAP_ADMIN_PASSWORD
