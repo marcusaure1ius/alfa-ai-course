@@ -34,6 +34,19 @@ describe("SafeMarkdown", () => {
     ]);
   });
 
+  it("avoids collisions with naturally suffixed headings", () => {
+    const parsed = parseCourseMarkdown(
+      "## Практика\n\n## Практика-2\n\n## Практика\n\n## Практика-2",
+    );
+
+    expect(parsed.toc.map((item) => item.id)).toEqual([
+      "практика",
+      "практика-2",
+      "практика-3",
+      "практика-2-2",
+    ]);
+  });
+
   it("does not turn an unsupported link protocol into an anchor", () => {
     const { container } = render(
       <SafeMarkdown source="[опасная ссылка](javascript:alert(1))" />,
