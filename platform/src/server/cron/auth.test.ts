@@ -76,10 +76,6 @@ describe("authorizeReconciliationCron", () => {
         VERCEL_ENV: "production",
         PLATFORM_PROVIDER: "timeweb",
         TIMEWEB_API_TOKEN: "synthetic-test-token",
-        TIMEWEB_MUTATIONS_ENABLED: "true",
-        TIMEWEB_CAPABILITIES_VERIFIED: "true",
-        TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT: "true",
-        TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME: "true",
         CRON_SECRET: secret,
       }),
     ).toEqual({ ok: true });

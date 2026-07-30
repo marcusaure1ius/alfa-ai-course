@@ -21,16 +21,11 @@ import {
 } from "@/workflows/infrastructure/steps";
 
 describe("production Timeweb lifecycle gate", () => {
-  it("fails closed instead of selecting fake after a production gate closes", () => {
+  it("fails closed instead of selecting fake when the provider credential disappears", () => {
     expect(() =>
       isProductionTimewebWorkflow({
         VERCEL_ENV: "production",
         PLATFORM_PROVIDER: "timeweb",
-        TIMEWEB_API_TOKEN: "synthetic-test-token",
-        TIMEWEB_MUTATIONS_ENABLED: "false",
-        TIMEWEB_CAPABILITIES_VERIFIED: "true",
-        TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT: "true",
-        TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME: "true",
       }),
     ).toThrowError(
       expect.objectContaining<Partial<LifecycleProviderError>>({

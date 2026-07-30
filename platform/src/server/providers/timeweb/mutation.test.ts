@@ -772,8 +772,6 @@ describe("createProductionTimewebMutationAdapter", () => {
             VERCEL_ENV: vercelEnvironment,
             PLATFORM_PROVIDER: "timeweb",
             TIMEWEB_API_TOKEN: "synthetic-test-token",
-            TIMEWEB_MUTATIONS_ENABLED: "true",
-            TIMEWEB_CAPABILITIES_VERIFIED: "true",
           },
           fetchImpl,
         ),

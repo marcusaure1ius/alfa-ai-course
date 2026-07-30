@@ -14,9 +14,8 @@
    стоимость `floating_ip`; если активного ценового источника нет, smoke
    fail-closed и платная mutation запрещена. Баланс и `monthly_fee` сохраняются
    только как телеметрия; решение о допустимости списания принимает Timeweb.
-2. Подготовлены существующие disposable `TIMEWEB_SMOKE_PROJECT_ID` и
-   `TIMEWEB_SMOKE_SSH_KEY_ID`; создание дополнительных project/key в smoke не
-   выполняется, root password отключён.
+2. В Timeweb существуют project и SSH key. Adapter получает их из Public API и
+   сохраняет выбранные ID только в provider plan; root password отключён.
 3. Read-only connection показывает готовый account, актуальный баланс, Ubuntu
    24.04, preset, регион и availability zone.
 4. В Timeweb account нет другого VPS; platform database не содержит live среды.
@@ -25,7 +24,7 @@
    automatic delete без Telegram-кода.
 7. Token и `AUTH_FACTOR_ENCRYPTION_KEY` находятся только в Vercel Production;
    Preview и Development не содержат их.
-8. Kill-switches включаются только на время подтверждённого smoke.
+8. Во время smoke нет параллельных внешних VPS/IP/DNS mutation.
 
 Для уже созданного administrator TOTP добавляется одноразовой CLI-командой.
 Secret и первый текущий code вводятся скрытыми prompts, не попадают в shell
@@ -51,23 +50,13 @@ Production environment:
 ```text
 PLATFORM_PROVIDER=timeweb
 TIMEWEB_API_TOKEN=<encrypted Vercel Production secret>
-TIMEWEB_MUTATIONS_ENABLED=true
-TIMEWEB_CAPABILITIES_VERIFIED=true
-TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true
-TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME=true
-TIMEWEB_SMOKE_REGION=<необязательный live region>
-TIMEWEB_SMOKE_PROJECT_ID=<ID disposable проекта>
-TIMEWEB_SMOKE_SSH_KEY_ID=<ID существующего SSH-ключа>
 AUTH_FACTOR_ENCRYPTION_KEY=<32 random bytes, base64url>
 ```
 
-`TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true` — явная аттестация владельца, что во
-время smoke в этом тестовом аккаунте никто другой не создаёт floating IP или
-VPS. `TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME=true` отдельно подтверждает, что
-никто другой не меняет A/CNAME для `n8n.neurokurs.ru`. Без этих attestations
-production mutation gate закрыт: recovery определяет новый IP/record как
-единственную разницу относительно hashed baseline и не может безопасно работать
-при параллельных внешних мутациях.
+Отсутствие параллельных внешних mutation остаётся операционным предусловием
+disposable smoke: recovery определяет новый IP/record как единственную разницу
+относительно hashed baseline и не может безопасно работать при конкурирующих
+изменениях.
 
 ## Create / reconcile / delete
 
@@ -90,7 +79,7 @@ production mutation gate закрыт: recovery определяет новый 
 7. Read-only catalog обязан показать ноль VPS и отсутствие созданного IP.
 
 При остаточном ресурсе среда должна стать `cleanup_required`; интерфейс
-показывает IP и месячную оценку, kill-switch не отключается до cleanup.
+показывает IP и месячную оценку; provider credential сохраняется до cleanup.
 
 ## Evidence без секретов
 

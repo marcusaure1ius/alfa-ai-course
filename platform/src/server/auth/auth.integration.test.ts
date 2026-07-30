@@ -921,21 +921,10 @@ describe("durable fake infrastructure lifecycle", () => {
       VERCEL_ENV: process.env.VERCEL_ENV,
       PLATFORM_PROVIDER: process.env.PLATFORM_PROVIDER,
       TIMEWEB_API_TOKEN: process.env.TIMEWEB_API_TOKEN,
-      TIMEWEB_MUTATIONS_ENABLED: process.env.TIMEWEB_MUTATIONS_ENABLED,
-      TIMEWEB_CAPABILITIES_VERIFIED:
-        process.env.TIMEWEB_CAPABILITIES_VERIFIED,
-      TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
-        process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
-      TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME:
-        process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME,
     };
     process.env.VERCEL_ENV = "production";
     process.env.PLATFORM_PROVIDER = "timeweb";
     process.env.TIMEWEB_API_TOKEN = "synthetic-test-token";
-    process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
-    process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
-    process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
-    process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME = "true";
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
@@ -1044,21 +1033,10 @@ describe("durable fake infrastructure lifecycle", () => {
       VERCEL_ENV: process.env.VERCEL_ENV,
       PLATFORM_PROVIDER: process.env.PLATFORM_PROVIDER,
       TIMEWEB_API_TOKEN: process.env.TIMEWEB_API_TOKEN,
-      TIMEWEB_MUTATIONS_ENABLED: process.env.TIMEWEB_MUTATIONS_ENABLED,
-      TIMEWEB_CAPABILITIES_VERIFIED:
-        process.env.TIMEWEB_CAPABILITIES_VERIFIED,
-      TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
-        process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
-      TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME:
-        process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME,
     };
     process.env.VERCEL_ENV = "production";
     process.env.PLATFORM_PROVIDER = "timeweb";
     process.env.TIMEWEB_API_TOKEN = "synthetic-test-token";
-    process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
-    process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
-    process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
-    process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME = "true";
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(
@@ -1089,13 +1067,6 @@ describe("durable fake infrastructure lifecycle", () => {
       VERCEL_ENV: process.env.VERCEL_ENV,
       PLATFORM_PROVIDER: process.env.PLATFORM_PROVIDER,
       TIMEWEB_API_TOKEN: process.env.TIMEWEB_API_TOKEN,
-      TIMEWEB_MUTATIONS_ENABLED: process.env.TIMEWEB_MUTATIONS_ENABLED,
-      TIMEWEB_CAPABILITIES_VERIFIED:
-        process.env.TIMEWEB_CAPABILITIES_VERIFIED,
-      TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
-        process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
-      TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME:
-        process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME,
       AUTH_FACTOR_ENCRYPTION_KEY: process.env.AUTH_FACTOR_ENCRYPTION_KEY,
     };
     const totpSecret = "JBSWY3DPEHPK3PXP";
@@ -1103,10 +1074,6 @@ describe("durable fake infrastructure lifecycle", () => {
     process.env.VERCEL_ENV = "production";
     process.env.PLATFORM_PROVIDER = "timeweb";
     process.env.TIMEWEB_API_TOKEN = "synthetic-test-token";
-    process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
-    process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
-    process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
-    process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME = "true";
     process.env.AUTH_FACTOR_ENCRYPTION_KEY = factorEncryptionKey;
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -1232,13 +1199,6 @@ describe("durable fake infrastructure lifecycle", () => {
       VERCEL_ENV: process.env.VERCEL_ENV,
       PLATFORM_PROVIDER: process.env.PLATFORM_PROVIDER,
       TIMEWEB_API_TOKEN: process.env.TIMEWEB_API_TOKEN,
-      TIMEWEB_MUTATIONS_ENABLED: process.env.TIMEWEB_MUTATIONS_ENABLED,
-      TIMEWEB_CAPABILITIES_VERIFIED:
-        process.env.TIMEWEB_CAPABILITIES_VERIFIED,
-      TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
-        process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
-      TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME:
-        process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME,
       AUTH_FACTOR_ENCRYPTION_KEY: process.env.AUTH_FACTOR_ENCRYPTION_KEY,
     };
     const totpSecret = "JBSWY3DPEHPK3PXP";
@@ -1246,10 +1206,6 @@ describe("durable fake infrastructure lifecycle", () => {
     process.env.VERCEL_ENV = "production";
     process.env.PLATFORM_PROVIDER = "timeweb";
     process.env.TIMEWEB_API_TOKEN = "synthetic-test-token";
-    process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
-    process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
-    process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
-    process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME = "true";
     process.env.AUTH_FACTOR_ENCRYPTION_KEY = factorEncryptionKey;
 
     const baselineId = "11111111-2222-4333-8444-555555555555";

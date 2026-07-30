@@ -2,7 +2,6 @@ import "server-only";
 
 import type { TimewebCatalogSnapshot } from "./contracts";
 import { createTimewebReadAdapter } from "./read-service";
-import { readTimewebMutationRuntimeGate } from "./runtime";
 
 const REGION_POLICY = [
   {
@@ -123,10 +122,8 @@ export type TimewebProvisioningPreview =
         | "INVALID_SELECTION"
         | "PUBLIC_IP_PRICE_NOT_CONFIGURED"
         | "PUBLIC_IP_OWNERSHIP_INVALID"
-        | "SMOKE_PROJECT_NOT_CONFIGURED"
-        | "SMOKE_PROJECT_UNAVAILABLE"
-        | "SMOKE_SSH_KEY_NOT_CONFIGURED"
-        | "SMOKE_SSH_KEY_UNAVAILABLE";
+        | "PROVIDER_PROJECT_UNAVAILABLE"
+        | "PROVIDER_SSH_KEY_UNAVAILABLE";
       message: string;
     }>;
 
@@ -135,6 +132,16 @@ type ServerEnvironment = Readonly<Record<string, string | undefined>>;
 function positiveInteger(value: string): number | null {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function lowestNumericId(
+  resources: ReadonlyArray<Readonly<{ id: string }>>,
+): number | null {
+  const ids = resources
+    .map((resource) => Number(resource.id))
+    .filter((id) => Number.isSafeInteger(id) && id > 0)
+    .sort((left, right) => left - right);
+  return ids[0] ?? null;
 }
 
 function hourlyRoubles(monthlyRoubles: number): number {
@@ -363,8 +370,8 @@ function selectPlan(
   if (providerCatalog.source === "timeweb" && projectId == null) {
     return {
       ok: false,
-      code: "SMOKE_PROJECT_NOT_CONFIGURED",
-      message: "Не задан TIMEWEB_SMOKE_PROJECT_ID.",
+      code: "PROVIDER_PROJECT_UNAVAILABLE",
+      message: "Провайдер не вернул доступный проект для нового сервера.",
     };
   }
   if (
@@ -373,15 +380,15 @@ function selectPlan(
   ) {
     return {
       ok: false,
-      code: "SMOKE_PROJECT_UNAVAILABLE",
+      code: "PROVIDER_PROJECT_UNAVAILABLE",
       message: "Project ID не найден в актуальном Timeweb API catalog.",
     };
   }
   if (providerCatalog.source === "timeweb" && sshKeyId == null) {
     return {
       ok: false,
-      code: "SMOKE_SSH_KEY_NOT_CONFIGURED",
-      message: "Не задан TIMEWEB_SMOKE_SSH_KEY_ID для passwordless root access.",
+      code: "PROVIDER_SSH_KEY_UNAVAILABLE",
+      message: "Провайдер не вернул SSH-ключ для passwordless root access.",
     };
   }
   if (
@@ -390,7 +397,7 @@ function selectPlan(
   ) {
     return {
       ok: false,
-      code: "SMOKE_SSH_KEY_UNAVAILABLE",
+      code: "PROVIDER_SSH_KEY_UNAVAILABLE",
       message: "SSH key ID не найден в актуальном Timeweb API catalog.",
     };
   }
@@ -441,7 +448,7 @@ export async function getTimewebProvisioningPreview(
     };
   }> = {},
 ): Promise<TimewebProvisioningPreview> {
-  const { gate, adapter } = createTimewebReadAdapter(environment, fetchImpl);
+  const { runtime, adapter } = createTimewebReadAdapter(environment, fetchImpl);
   if (!adapter) {
     return {
       ok: false,
@@ -449,25 +456,11 @@ export async function getTimewebProvisioningPreview(
       message: "Каталог серверов временно недоступен.",
     };
   }
-  if (
-    environment.VERCEL_ENV === "production" &&
-    readTimewebMutationRuntimeGate(environment).mode !== "timeweb"
-  ) {
-    return {
-      ok: false,
-      code: "MUTATION_GATE_CLOSED",
-      message: "Создание серверов временно недоступно.",
-    };
-  }
   const catalog = await adapter.discover();
   const projectId =
-    gate.mode === "timeweb"
-      ? positiveInteger(environment.TIMEWEB_SMOKE_PROJECT_ID ?? "")
-      : 1;
+    runtime.mode === "fake" ? 1 : lowestNumericId(catalog.projects);
   const sshKeyId =
-    gate.mode === "timeweb"
-      ? positiveInteger(environment.TIMEWEB_SMOKE_SSH_KEY_ID ?? "")
-      : 1;
+    runtime.mode === "fake" ? 1 : lowestNumericId(catalog.sshKeys);
   return selectPlan(
     catalog,
     projectId,

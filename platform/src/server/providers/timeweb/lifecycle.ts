@@ -35,7 +35,10 @@ import {
   type TimewebProvisioningPlan,
 } from "./provisioning";
 import { TimewebProviderError } from "./read-only";
-import { readTimewebMutationRuntimeGate } from "./runtime";
+import {
+  readCloudProviderRuntime,
+  runtimeUsesProvider,
+} from "../runtime";
 
 export class LifecycleProviderError extends Error {
   constructor(
@@ -1706,18 +1709,18 @@ class ProductionTimewebLifecycleAdapter
 export function isProductionTimewebWorkflow(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): boolean {
-  const gate = readTimewebMutationRuntimeGate(environment);
+  const runtime = readCloudProviderRuntime(environment);
   if (
     environment.VERCEL_ENV === "production" &&
     environment.PLATFORM_PROVIDER === "timeweb" &&
-    gate.mode !== "timeweb"
+    !runtimeUsesProvider(runtime, "timeweb")
   ) {
     throw new LifecycleProviderError(
       "MUTATION_GATE_CLOSED",
-      "Production Timeweb mutation gate закрылся во время workflow.",
+      "Production Timeweb provider недоступен во время workflow.",
     );
   }
-  return gate.mode === "timeweb";
+  return runtimeUsesProvider(runtime, "timeweb");
 }
 
 async function operationRequiresTimeweb(
@@ -1760,8 +1763,8 @@ export async function operationUsesProductionTimeweb(
 ): Promise<boolean> {
   const sql = getDatabase();
   const required = await operationRequiresTimeweb(sql, command.operationId);
-  const gate = readTimewebMutationRuntimeGate();
-  if (required && gate.mode !== "timeweb") {
+  const runtime = readCloudProviderRuntime();
+  if (required && !runtimeUsesProvider(runtime, "timeweb")) {
     throw new LifecycleProviderError(
       "PROVIDER_MODE_DRIFT",
       "Operation закреплена за Timeweb, но production gate изменился.",

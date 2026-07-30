@@ -15,8 +15,8 @@ import {
   reserveCreateOperation,
 } from "@/server/operations/repository";
 import { createEnvironmentWorkflow } from "@/workflows/infrastructure/create";
-import { getTimewebProvisioningPreview } from "@/server/providers/timeweb/provisioning";
-import { readTimewebMutationRuntimeGate } from "@/server/providers/timeweb";
+import { getCloudProvisioningPreview } from "@/server/providers/provisioning";
+import { readCloudProviderRuntime } from "@/server/providers/runtime";
 
 export const runtime = "nodejs";
 
@@ -153,10 +153,10 @@ export async function POST(request: Request): Promise<Response> {
   }
   const scenario = fakeScenario(body.simulation);
   try {
-    const mutationGate = readTimewebMutationRuntimeGate();
+    const providerRuntime = readCloudProviderRuntime();
     const preview =
-      mutationGate.mode === "timeweb"
-        ? await getTimewebProvisioningPreview(process.env, fetch, {
+      providerRuntime.mode === "provider"
+        ? await getCloudProvisioningPreview(process.env, fetch, {
             selection: {
               region: deployment.region,
               presetId: deployment.presetId as number,
@@ -171,8 +171,8 @@ export async function POST(request: Request): Promise<Response> {
     }
     if (
       process.env.VERCEL_ENV === "production" &&
-      process.env.PLATFORM_PROVIDER === "timeweb" &&
-      mutationGate.mode !== "timeweb"
+      process.env.PLATFORM_PROVIDER !== "fake" &&
+      providerRuntime.mode !== "provider"
     ) {
       return operationError(
         409,

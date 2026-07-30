@@ -1,7 +1,7 @@
 import "server-only";
 
 import { safeEqual } from "../auth/crypto";
-import { readTimewebMutationRuntimeGate } from "../providers/timeweb/runtime";
+import { readCloudProviderRuntime } from "../providers/runtime";
 
 type ServerEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -29,7 +29,7 @@ export function authorizeReconciliationCron(
   }
   if (
     environment.PLATFORM_PROVIDER !== "fake" &&
-    readTimewebMutationRuntimeGate(environment).mode !== "timeweb"
+    readCloudProviderRuntime(environment).mode !== "provider"
   ) {
     return { ok: false, status: 503, code: "PROVIDER_GATE_CLOSED" };
   }

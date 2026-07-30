@@ -43,7 +43,7 @@ function printHelp(): void {
 Требования:
   - отдельная пустая PostgreSQL database ${EXPECTED_DATABASE};
   - VERCEL_ENV=production и PLATFORM_PROVIDER=timeweb;
-  - открытые mutation gates, project и SSH key;
+  - TIMEWEB_API_TOKEN с доступом к существующим project и SSH key;
   - Timeweb account без VPS;
   - test token, который будет отозван после smoke.
 
@@ -65,10 +65,6 @@ function requireRuntime(): void {
   const requiredValues: Record<string, string> = {
     VERCEL_ENV: "production",
     PLATFORM_PROVIDER: "timeweb",
-    TIMEWEB_MUTATIONS_ENABLED: "true",
-    TIMEWEB_CAPABILITIES_VERIFIED: "true",
-    TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT: "true",
-    TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME: "true",
   };
   for (const [key, expected] of Object.entries(requiredValues)) {
     if (process.env[key] !== expected) {
@@ -77,15 +73,6 @@ function requireRuntime(): void {
   }
   if (!process.env.TIMEWEB_API_TOKEN) {
     throw new Error("TIMEWEB_API_TOKEN не настроен.");
-  }
-  for (const key of [
-    "TIMEWEB_SMOKE_PROJECT_ID",
-    "TIMEWEB_SMOKE_SSH_KEY_ID",
-  ]) {
-    const value = Number(process.env[key]);
-    if (!Number.isSafeInteger(value) || value <= 0) {
-      throw new Error(`${key} должен быть положительным целым числом.`);
-    }
   }
 }
 

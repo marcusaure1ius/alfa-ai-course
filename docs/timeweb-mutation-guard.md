@@ -68,8 +68,9 @@ ownership records в PostgreSQL.
 
 Provider mode также закреплён durable state: create operation с
 `providerPlan` и любая operation с active owned Timeweb resource обязаны
-продолжаться только через real adapter. Изменение kill-switch/provider между
-steps даёт `PROVIDER_MODE_DRIFT`; переход real → fake и fake → real запрещён.
+продолжаться только через real adapter. Изменение provider или исчезновение его
+credential между steps даёт `PROVIDER_MODE_DRIFT`; переход real → fake и fake →
+real запрещён.
 
 ## Guard перед каждым provider mutation
 
@@ -114,7 +115,7 @@ installing/starting сверяются с интервалом 15 секунд �
 Unknown/blocked status или исчерпание окна переводит среду в
 `cleanup_required`, не оставляя operation в бесконечном `creating`.
 
-## Production kill-switch
+## Production provider runtime
 
 Mutation adapter может быть создан только server-side при одновременных
 условиях:
@@ -123,31 +124,26 @@ Mutation adapter может быть создан только server-side пр�
 VERCEL_ENV=production
 PLATFORM_PROVIDER=timeweb
 TIMEWEB_API_TOKEN=<encrypted production environment variable>
-TIMEWEB_MUTATIONS_ENABLED=true
-TIMEWEB_CAPABILITIES_VERIFIED=true
-TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true
-TIMEWEB_SMOKE_REGION=<optional live region>
-TIMEWEB_SMOKE_PROJECT_ID=<existing disposable Timeweb project>
-TIMEWEB_SMOKE_SSH_KEY_ID=<existing smoke SSH key>
 ```
 
 В development, preview и test factory возвращает fake/disabled mode до чтения
 token. `TIMEWEB_API_TOKEN` не получает placeholder/value в `.env.example` и не
 попадает в browser DTO, PostgreSQL, logs или audit.
 
-Значения kill-switch в репозитории намеренно не включены. Перед production
-подключением владелец обязан отдельно:
+Project и SSH key adapter получает через `GET /api/v1/projects` и
+`GET /api/v1/ssh-keys`, выбирает детерминированно и сохраняет ID только в
+versioned provider plan. Перед production подключением владелец обязан:
 
-- включать `TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true` только для выделенного
-  тестового аккаунта без параллельных внешних VPS/IP mutation; иначе hashed
-  baseline recovery не имеет права присваивать новый IP этой операции;
+- не запускать параллельные внешние VPS/IP mutation во время disposable smoke;
+  иначе hashed baseline recovery не имеет права присваивать новый IP этой
+  операции;
 - проверить service scope и срок token по
   [официальной инструкции Timeweb](https://timeweb.cloud/docs/account-management/token);
 - осознанно настроить отдельное permission удаления без Telegram;
 - подтвердить один VPS, ownership и cleanup policy;
 - убедиться, что `/api/v1/account/services/cost` возвращает однозначную
   стоимость `floating_ip`; при отсутствии данных mutation запрещена;
-- подготовить отдельный disposable project и SSH key; root password отключён;
+- подготовить хотя бы один project и SSH key в аккаунте; root password отключён;
 - выполнить provider test в отдельной задаче с evidence.
 
 Production delete дополнительно требует TOTP и свежую re-auth через пароль +

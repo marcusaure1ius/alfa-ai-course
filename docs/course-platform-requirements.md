@@ -232,7 +232,7 @@ Desktop: сворачиваемая панель шириной около 256 p
 
 ### 7.1. Подключение Timeweb
 
-`PROV-01` В первом этапе один raw API token настраивается только как encrypted production environment variable Vercel `TIMEWEB_API_TOKEN`. UI не принимает, не возвращает и не изменяет raw token.
+`PROV-01` Общий `PLATFORM_PROVIDER` выбирает зарегистрированный cloud adapter. Credential принадлежит только adapter: для первого Timeweb-среза один raw API token настраивается как encrypted production environment variable Vercel `TIMEWEB_API_TOKEN`. UI не принимает, не возвращает и не изменяет credentials.
 
 `PROV-02` Admin запускает из UI read-only проверку настроенного token. Система получает account/capabilities и показывает только статус, дату проверки и доступные разрешения.
 
@@ -242,7 +242,7 @@ Desktop: сворачиваемая панель шириной около 256 p
 
 `PROV-04` Provider adapter находится только на сервере и имеет versioned internal interface. Browser никогда не обращается к Timeweb напрямую.
 
-`PROV-05` Идентификаторы preset, OS, project, region/zone и стоимость загружаются из API. При недоступности provider UI показывает cached data как устаревшие и запрещает платные mutation, если безопасный preview невозможен.
+`PROV-05` Идентификаторы preset, OS, project, SSH key, region/zone и стоимость загружаются из API. Project и SSH key выбираются детерминированно из live catalog без environment IDs и сохраняются только в versioned provider plan snapshot. Пустой список возвращает отдельную catalog/plan ошибку. При недоступности provider UI показывает cached data как устаревшие и запрещает платные mutation, если безопасный preview невозможен.
 
 `PROV-06` Preview и development deployments Vercel не получают production Timeweb tokens. Реальный provider smoke разрешён только из production deployment после явного подтверждения владельца. Клиентский денежный cap не применяется: актуальные provider price, balance и `monthly_fee` показываются как телеметрия, а решение принять или отклонить mutation остаётся за Timeweb.
 
@@ -406,8 +406,8 @@ flowchart LR
 - Vercel Marketplace Postgres, например Neon, как единый source of truth; connection pooling и регион рядом с Functions обязательны;
 - Vercel Workflow с `use workflow`/`use step` для crash-safe orchestration и retries;
 - Vercel Cron с обязательным `CRON_SECRET` для периодического reconciliation;
-- server-only Timeweb adapter с фиксированным allowlist вместо generic provider proxy;
-- один `TIMEWEB_API_TOKEN` находится только в encrypted production environment; preview/development его не получают;
+- provider-neutral registry и server-only adapters с фиксированным allowlist вместо generic provider proxy;
+- `PLATFORM_PROVIDER` выбирает adapter; Timeweb требует только один `TIMEWEB_API_TOKEN` в encrypted production environment, preview/development его не получают;
 - основной n8n VPS не запускает control plane и не получает Vercel secrets.
 
 Обычный Vercel Function не удерживает весь lifecycle в одном HTTP request: платные mutation стартуют durable Workflow и сразу возвращают `202`. Состояние не хранится в памяти Function. Workflow steps остаются идемпотентными на уровне PostgreSQL и ownership records, потому что provider mutation нельзя безопасно повторять только на основании автоматического retry.

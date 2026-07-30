@@ -20,7 +20,10 @@ import {
   COURSE_SERVER_HOSTNAME,
 } from "./bootstrap-profile";
 import { TimewebProviderError } from "./read-only";
-import { readTimewebMutationRuntimeGate } from "./runtime";
+import {
+  readCloudProviderRuntime,
+  runtimeUsesProvider,
+} from "../runtime";
 
 const API_ORIGIN = "https://api.timeweb.cloud";
 const MUTATION_REQUEST_TIMEOUT_MS = 60_000;
@@ -1196,15 +1199,15 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
 }
 
 /**
- * The real adapter can only be constructed after all production kill-switches
- * pass. Preview, development and tests cannot obtain a mutation adapter.
+ * The real adapter can only be constructed for the configured production
+ * provider. Preview, development and tests cannot obtain a mutation adapter.
  */
 export function createProductionTimewebMutationAdapter(
   environment: ServerEnvironment = process.env,
   fetchImpl: FetchLike = fetch,
 ): TimewebMutationHttpAdapter | null {
-  const gate = readTimewebMutationRuntimeGate(environment);
-  if (gate.mode !== "timeweb") return null;
+  const runtime = readCloudProviderRuntime(environment);
+  if (!runtimeUsesProvider(runtime, "timeweb")) return null;
   return new TimewebMutationHttpAdapter(
     environment.TIMEWEB_API_TOKEN!,
     fetchImpl,

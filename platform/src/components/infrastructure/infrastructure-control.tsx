@@ -30,10 +30,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type {
-  TimewebDeploySelection,
-  TimewebProvisioningPreview,
-} from "@/server/providers/timeweb/provisioning";
+import type { CloudProvisioningPreview } from "@/server/providers/provisioning";
+import type { TimewebDeploySelection } from "@/server/providers/timeweb/provisioning";
 
 type Environment = {
   id: string;
@@ -245,7 +243,7 @@ function DeleteEnvironment({
 }
 
 export function InfrastructureControl() {
-  const [preview, setPreview] = useState<TimewebProvisioningPreview | null>(null);
+  const [preview, setPreview] = useState<CloudProvisioningPreview | null>(null);
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selection, setSelection] = useState<TimewebDeploySelection | null>(null);
   const [name, setName] = useState("Учебный сервер");
@@ -275,7 +273,7 @@ export function InfrastructureControl() {
       }),
     ]);
     const nextPreview =
-      (await previewResponse.json()) as TimewebProvisioningPreview;
+      (await previewResponse.json()) as CloudProvisioningPreview;
     setPreview(nextPreview);
     if (nextPreview.ok) {
       setSelection((current) => current ?? nextPreview.catalog.defaultSelection);
@@ -562,7 +560,7 @@ export function InfrastructureControl() {
           <AlertTriangle aria-hidden="true" />
           <AlertTitle>Не удалось загрузить конфигурации</AlertTitle>
           <AlertDescription>
-            Обновите страницу или повторите попытку немного позже.
+            {preview.message}
           </AlertDescription>
         </Alert>
       ) : null}

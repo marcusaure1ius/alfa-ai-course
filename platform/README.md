@@ -15,7 +15,7 @@ project должен использовать **Root Directory `platform/`**. Ro
 4. ученик попадает в отдельный `/student`, который пока показывает пустой
    кабинет будущих материалов курса.
 
-Пользователь не выбирает provider mode, не вводит Vercel/Timeweb credentials и
+Пользователь не выбирает provider mode, не вводит Vercel/cloud credentials и
 не видит внутренние deployment gates. Эти параметры принадлежат только
 server-side окружению проекта. Второй фактор, если он включён для аккаунта,
 запрашивается отдельным шагом только после правильных email и пароля.
@@ -158,8 +158,9 @@ navigation, provider ID, IP, стоимости и operation data. Запрос 
   `DATABASE_URL`. Регион выбирается рядом с основным Vercel Functions region до
   создания ресурса.
 - Local database: отдельный PostgreSQL 17 container с синтетическими значениями.
-- Provider: `src/server/providers/timeweb/` импортирует `server-only`, публикует
-  versioned typed allowlist и принудительно использует fake mode вне production.
+- Provider: `src/server/providers/runtime.ts` содержит общий registry, а
+  `src/server/providers/timeweb/` — первый `server-only` adapter с versioned
+  typed allowlist. Вне production registry принудительно выбирает fake mode.
 - `TIMEWEB_API_TOKEN` не добавляется в `.env.example`, preview или development.
 - Для T-0055 созданы Vercel project и Neon Marketplace database; их проверенные
   IDs, scopes и ограничения записаны в runbook. Timeweb VPS, DNS и provider
@@ -198,10 +199,11 @@ HTTP method, произвольный payload и Timeweb resource ID откло�
 - ownership и provider resource ID, записанные самой платформой.
 
 Production mutation adapter имеет только typed create/update/delete/reconcile
-методы с фиксированными Timeweb endpoint. Он остаётся недоступен, пока отдельно
-не включены production provider mode, mutation kill-switch и подтверждение
-capabilities. В текущей foundation реализации workflow использует только fake
-adapter и не совершает реальных provider mutation.
+методы с фиксированными Timeweb endpoint. Для production нужны
+`PLATFORM_PROVIDER=timeweb` и единственный provider secret
+`TIMEWEB_API_TOKEN`. Project и SSH key adapter получает из Public API; ручные
+provider IDs и feature gates не настраиваются. В preview/development workflow
+использует fake adapter и не совершает реальных provider mutation.
 
 Полный контракт, reconciliation и checklist production-подключения описаны в
 [`docs/timeweb-mutation-guard.md`](../docs/timeweb-mutation-guard.md).
@@ -210,9 +212,9 @@ adapter и не совершает реальных provider mutation.
 
 `platform/vercel.json` объявляет один production-only Cron
 `/api/cron/reconcile`. Route скрыт вне production, требует
-`Authorization: Bearer <CRON_SECRET>` и работает только при
-`PLATFORM_PROVIDER=fake`. Он восстанавливает лишь operation без прикреплённого
-durable Workflow run; terminal operation и существующий run не перезапускаются.
+`Authorization: Bearer <CRON_SECRET>` и проверяет общий provider runtime. Он
+восстанавливает лишь operation без прикреплённого durable Workflow run;
+terminal operation и существующий run не перезапускаются.
 
 Root Directory `platform/`, раздельные Neon credentials, контролируемая
 migration, preview E2E, observability и rollback описаны в

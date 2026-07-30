@@ -76,11 +76,10 @@ Terraform provider. В частности, fresh VPS проходит transient
 
 ## Реальный disposable E2E
 
-Локальный `.env` должен иметь права `0600` и содержать те же production-shaped
-gates, project/SSH key и test token, что описаны в срезе 1A. Отдельный
-gate `TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME=true` подтверждает отсутствие
-параллельных A/CNAME mutations для approved hostname. База должна быть отдельной
-и пустой:
+Локальный `.env` должен иметь права `0600` и содержать production-shaped
+`PLATFORM_PROVIDER=timeweb`, test token и auth/database secrets из среза 1A.
+Project и SSH key читаются из Public API. Параллельные A/CNAME mutations для
+approved hostname во время smoke запрещены. База должна быть отдельной и пустой:
 
 ```bash
 cd platform
@@ -100,8 +99,8 @@ Smoke:
 
 Скрипт не печатает token, provider resource IDs, IP, auth material или response
 bodies. При ошибке он запускает guarded recovery; если автоматический cleanup
-не доказан, база сохраняется, среда остаётся `cleanup_required`, а kill-switches
-нельзя отключать до ручной проверки.
+не доказан, база сохраняется, среда остаётся `cleanup_required`, а provider
+credential нельзя удалять до ручной проверки.
 
 ## Delete и ownership
 

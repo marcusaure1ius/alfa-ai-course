@@ -11,7 +11,7 @@
 1. root starter kit — описанный ниже Ubuntu/Docker Compose runtime;
 2. `platform/` — Course Control Plane на Vercel.
 
-Control plane не входит в Docker Compose starter kit и не запускается на учебном VPS. Один Vercel project имеет Root Directory `platform/`, собственные dependencies, build/tests, environment secrets и release lifecycle. Он использует Neon Postgres через Vercel Marketplace и единый server-only Timeweb adapter; root installer/runtime сохраняет прежний контракт и проверяется независимо. Application runtime получает pooled `DATABASE_URL`; локальная разработка использует отдельный PostgreSQL 17 container с синтетическими credentials и fake provider mode.
+Control plane не входит в Docker Compose starter kit и не запускается на учебном VPS. Один Vercel project имеет Root Directory `platform/`, собственные dependencies, build/tests, environment secrets и release lifecycle. Он использует Neon Postgres через Vercel Marketplace и provider-neutral registry server-only cloud adapters; первый adapter реализован для Timeweb. Root installer/runtime сохраняет прежний контракт и проверяется независимо. Application runtime получает pooled `DATABASE_URL`; локальная разработка использует отдельный PostgreSQL 17 container с синтетическими credentials и fake provider mode.
 
 ```mermaid
 flowchart LR
@@ -19,17 +19,18 @@ flowchart LR
   V --> DB["Neon Postgres\nVercel Marketplace"]
   V --> WF["Vercel Workflow"]
   CR["Vercel Cron"] --> WF
-  WF --> A["Server-only Timeweb adapter\nallowlisted operations"]
-  A --> TW["Timeweb catalog / VPS / IP / backup / DNS API"]
+  WF --> R["Provider registry"]
+  R --> A["Server-only Timeweb adapter\nallowlisted operations"]
+  A --> TW["Timeweb catalog / projects / SSH keys / VPS / IP API"]
   TW --> VPS["Один основной VPS\nUbuntu image selected by admin"]
   VPS --> C["Caddy"]
   C --> N["n8n"]
   N --> P["Private PostgreSQL"]
 ```
 
-Платные create/delete операции запускаются как durable Vercel Workflow и не удерживают один HTTP request. Deploy configurator читает live catalog, создаёт чистый VPS в выбранной зоне с отдельным IPv4 и применяет autobackup системного диска. Ubuntu 26.04 — default только для чистого VPS; root starter kit остаётся Ubuntu-24-only. Bootstrap через `cloud-init`, DNS и n8n readiness относятся к отдельному совместимому install flow. Исходящий SSH из Vercel не используется. Один `TIMEWEB_API_TOKEN` находится только в production environment Vercel, не выдаётся preview/development и доступен только server-side typed adapter без произвольного provider proxy. Delete дополнительно требует RBAC, exact-name modal, свежую re-auth, audit, ownership и idempotency checks. Hard limit — один active/creating/degraded VPS.
+Платные create/delete операции запускаются как durable Vercel Workflow и не удерживают один HTTP request. Deploy configurator читает live catalog, включая проекты и SSH-ключи, создаёт чистый VPS в выбранной зоне с отдельным IPv4 и применяет autobackup системного диска. Ubuntu 26.04 — default только для чистого VPS; root starter kit остаётся Ubuntu-24-only. Bootstrap через `cloud-init`, DNS и n8n readiness относятся к отдельному совместимому install flow. Исходящий SSH из Vercel не используется. Общий `PLATFORM_PROVIDER` выбирает adapter; для Timeweb единственный provider-specific secret `TIMEWEB_API_TOKEN` находится только в production environment Vercel. Project/SSH key IDs выбираются детерминированно из Public API и сохраняются только в versioned operation snapshot. Delete дополнительно требует RBAC, exact-name modal, свежую re-auth, audit, ownership и idempotency checks. Hard limit — один active/creating/degraded VPS.
 
-Подробные решения: [ADR-0005](../adr/0005-course-platform-control-plane.md), superseding [ADR-0006](../adr/0006-single-vercel-project-for-course-platform.md), [ADR-0007 по Neon Postgres](../adr/0007-neon-postgres-for-course-platform.md), [ADR-0009 по deploy configurator](../adr/0009-timeweb-deploy-configurator.md) и [требования control plane](course-platform-requirements.md). Разделы ниже продолжают быть канонической архитектурой самого starter-kit runtime.
+Подробные решения: [ADR-0005](../adr/0005-course-platform-control-plane.md), superseding [ADR-0006](../adr/0006-single-vercel-project-for-course-platform.md), [ADR-0007 по Neon Postgres](../adr/0007-neon-postgres-for-course-platform.md), [ADR-0009 по deploy configurator](../adr/0009-timeweb-deploy-configurator.md), [ADR-0010 по provider-neutral runtime](../adr/0010-provider-neutral-cloud-runtime.md) и [требования control plane](course-platform-requirements.md). Разделы ниже продолжают быть канонической архитектурой самого starter-kit runtime.
 
 ## Контекст системы
 

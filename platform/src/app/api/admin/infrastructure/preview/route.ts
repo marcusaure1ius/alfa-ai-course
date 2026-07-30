@@ -1,5 +1,8 @@
 import { requireAdmin } from "@/server/auth/access";
-import { getTimewebProvisioningPreview } from "@/server/providers/timeweb/provisioning";
+import {
+  getCloudProvisioningPreview,
+  toPublicCloudProvisioningPreview,
+} from "@/server/providers/provisioning";
 
 export const runtime = "nodejs";
 
@@ -39,7 +42,7 @@ export async function GET(request: Request): Promise<Response> {
       { status: 400, headers: { "cache-control": "no-store" } },
     );
   }
-  const preview = await getTimewebProvisioningPreview(process.env, fetch, {
+  const preview = await getCloudProvisioningPreview(process.env, fetch, {
     ...(hasSelection
       ? {
           selection: {
@@ -55,7 +58,12 @@ export async function GET(request: Request): Promise<Response> {
         }
       : {}),
   });
-  return Response.json(preview, {
+  if (!preview.ok) {
+    console.warn("cloud_provisioning_preview_unavailable", {
+      code: preview.code,
+    });
+  }
+  return Response.json(toPublicCloudProvisioningPreview(preview), {
     status: preview.ok ? 200 : 424,
     headers: { "cache-control": "no-store" },
   });

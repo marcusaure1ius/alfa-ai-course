@@ -10,7 +10,10 @@ import {
   TimewebProviderError,
   TimewebReadOnlyAdapter,
 } from "./read-only";
-import { readTimewebRuntimeGate } from "./runtime";
+import {
+  readCloudProviderRuntime,
+  runtimeUsesProvider,
+} from "../runtime";
 
 type ServerEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -18,18 +21,18 @@ export function createTimewebReadAdapter(
   environment: ServerEnvironment = process.env,
   fetchImpl: typeof fetch = fetch,
 ): {
-  gate: ReturnType<typeof readTimewebRuntimeGate>;
+  runtime: ReturnType<typeof readCloudProviderRuntime>;
   adapter: TimewebReadAdapter | null;
 } {
-  const gate = readTimewebRuntimeGate(environment);
-  if (gate.mode === "fake") {
-    return { gate, adapter: new FakeTimewebReadAdapter() };
+  const runtime = readCloudProviderRuntime(environment);
+  if (runtime.mode === "fake") {
+    return { runtime, adapter: new FakeTimewebReadAdapter() };
   }
-  if (gate.mode === "blocked") {
-    return { gate, adapter: null };
+  if (!runtimeUsesProvider(runtime, "timeweb")) {
+    return { runtime, adapter: null };
   }
   return {
-    gate,
+    runtime,
     adapter: new TimewebReadOnlyAdapter(environment.TIMEWEB_API_TOKEN ?? "", fetchImpl),
   };
 }
@@ -39,7 +42,7 @@ export async function checkTimewebConnection(
   fetchImpl: typeof fetch = fetch,
 ): Promise<TimewebConnectionCheck> {
   const checkedAt = new Date().toISOString();
-  const { gate, adapter } = createTimewebReadAdapter(environment, fetchImpl);
+  const { runtime, adapter } = createTimewebReadAdapter(environment, fetchImpl);
   if (!adapter) {
     const error = new TimewebProviderError(
       "NOT_CONFIGURED",
@@ -58,7 +61,7 @@ export async function checkTimewebConnection(
 
   try {
     const catalog = await adapter.discover();
-    const mode = gate.mode === "fake" ? "fake" : "timeweb";
+    const mode = runtime.mode === "fake" ? "fake" : "timeweb";
     return {
       version: TIMEWEB_READ_DTO_VERSION,
       ok: true,

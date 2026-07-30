@@ -101,12 +101,6 @@ const productionEnvironment = {
   VERCEL_ENV: "production",
   PLATFORM_PROVIDER: "timeweb",
   TIMEWEB_API_TOKEN: "synthetic-test-token",
-  TIMEWEB_MUTATIONS_ENABLED: "true",
-  TIMEWEB_CAPABILITIES_VERIFIED: "true",
-  TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT: "true",
-  TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME: "true",
-  TIMEWEB_SMOKE_PROJECT_ID: "303",
-  TIMEWEB_SMOKE_SSH_KEY_ID: "404",
 };
 
 function providerFetch() {
@@ -151,6 +145,8 @@ describe("getTimewebProvisioningPreview", () => {
         hourlyServerRoubles: 1.37,
         monthlyPublicIpRoubles: 180,
         monthlyTotalRoubles: 1_180,
+        projectId: 303,
+        sshKeyId: 404,
       },
     });
     expect(fetchImpl).toHaveBeenCalledTimes(10);
@@ -167,6 +163,73 @@ describe("getTimewebProvisioningPreview", () => {
     await expect(
       getTimewebProvisioningPreview(productionEnvironment, providerFetch()),
     ).resolves.toMatchObject({ ok: true, mode: "timeweb" });
+  });
+
+  it("chooses project and SSH key deterministically from the provider catalog", async () => {
+    const preview = await getTimewebProvisioningPreview(
+      productionEnvironment,
+      vi.fn<typeof fetch>(async (input) => {
+        const url = String(input);
+        if (url.endsWith("/api/v1/projects")) {
+          return Response.json({
+            projects: [
+              { id: 900, name: "Later project" },
+              { id: 303, name: "First project" },
+            ],
+          });
+        }
+        if (url.endsWith("/api/v1/ssh-keys")) {
+          return Response.json({
+            ssh_keys: [
+              { id: 800, name: "Later key" },
+              { id: 404, name: "First key" },
+            ],
+          });
+        }
+        return Response.json(providerPayload(url));
+      }),
+    );
+
+    expect(preview).toMatchObject({
+      ok: true,
+      plan: { projectId: 303, sshKeyId: 404 },
+    });
+  });
+
+  it("returns a catalog error when the provider account has no project", async () => {
+    const preview = await getTimewebProvisioningPreview(
+      productionEnvironment,
+      vi.fn<typeof fetch>(async (input) => {
+        const url = String(input);
+        if (url.endsWith("/api/v1/projects")) {
+          return Response.json({ projects: [] });
+        }
+        return Response.json(providerPayload(url));
+      }),
+    );
+
+    expect(preview).toMatchObject({
+      ok: false,
+      code: "PROVIDER_PROJECT_UNAVAILABLE",
+    });
+  });
+
+  it("returns a catalog error when the provider account has no SSH key", async () => {
+    const preview = await getTimewebProvisioningPreview(
+      productionEnvironment,
+      vi.fn<typeof fetch>(async (input) => {
+        const url = String(input);
+        if (url.endsWith("/api/v1/ssh-keys")) {
+          return Response.json({ ssh_keys: [] });
+        }
+        return Response.json(providerPayload(url));
+      }),
+    );
+
+    expect(preview).toMatchObject({
+      ok: false,
+      code: "PROVIDER_SSH_KEY_UNAVAILABLE",
+    });
   });
 
   it("selects Frankfurt, Ubuntu 24.04 and enabled backups explicitly", async () => {

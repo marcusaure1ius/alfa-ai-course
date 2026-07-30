@@ -23,12 +23,6 @@ export {
   type TimewebServerReconciliation,
   type TimewebUpdateServerInput,
 } from "./contracts";
-export {
-  readTimewebMutationRuntimeGate,
-  readTimewebRuntimeGate,
-  type TimewebMutationRuntimeGate,
-  type TimewebRuntimeGate,
-} from "./runtime";
 export { FakeProviderError, FakeTimewebAdapter } from "./fake";
 export { FakeTimewebReadAdapter } from "./read-only-fake";
 export {
