@@ -11,11 +11,26 @@
 1. root starter kit — описанный ниже Ubuntu/Docker Compose runtime;
 2. `platform/` — Course Control Plane на Vercel.
 
-Control plane не входит в Docker Compose starter kit и не запускается на учебном VPS. Один Vercel project имеет Root Directory `platform/`, собственные dependencies, build/tests, environment secrets и release lifecycle. Он использует Neon Postgres через Vercel Marketplace и provider-neutral registry server-only cloud adapters; первый adapter реализован для Timeweb. Root installer/runtime сохраняет прежний контракт и проверяется независимо. Application runtime получает pooled `DATABASE_URL`; локальная разработка использует отдельный PostgreSQL 17 container с синтетическими credentials и fake provider mode.
+Control plane не входит в Docker Compose starter kit и не запускается на учебном VPS. Один Vercel project имеет Root Directory `platform/`, собственные dependencies, build/tests, environment secrets и release lifecycle. Для пользователя этот deployable является Neurokurs — закрытым text-first workspace курса. Внутри него доменные уровни разделены:
+
+1. **course:** программа, материалы, задания, прогресс и помощь;
+2. **tool:** учебный продукт и выданный ученику доступ;
+3. **learning environment:** среда, в которой работает конкретный инструмент;
+4. **cloud resource:** VPS, IP, DNS и provider operation, доступные только административному control plane.
+
+Tool не равен VPS: n8n — первый тип учебного инструмента, а Timeweb server —
+одна из возможных реализаций его environment. Новые инструменты могут не
+требовать собственного VPS и не должны наследовать provider DTO в публичный UI.
+
+Platform использует Neon Postgres через Vercel Marketplace и provider-neutral registry server-only cloud adapters; первый adapter реализован для Timeweb. Root installer/runtime сохраняет прежний контракт и проверяется независимо. Application runtime получает pooled `DATABASE_URL`; локальная разработка использует отдельный PostgreSQL 17 container с синтетическими credentials и fake provider mode.
 
 ```mermaid
 flowchart LR
-  U["Admin / Student"] --> V["Vercel\nplatform/"]
+  U["Guest / Student / Admin"] --> V["Neurokurs\nplatform/"]
+  V --> CSE["Course content\nand access"]
+  CSE --> TOOL["Learning tools"]
+  TOOL --> ENV["Learning environments"]
+  ENV --> R
   V --> DB["Neon Postgres\nVercel Marketplace"]
   V --> WF["Vercel Workflow"]
   CR["Vercel Cron"] --> WF
