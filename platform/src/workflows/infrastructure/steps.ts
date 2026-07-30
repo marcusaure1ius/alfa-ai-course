@@ -34,10 +34,10 @@ async function adapter(
 
 export async function providerSliceStep(
   command: WorkflowCommand,
-): Promise<"production-1a" | "fake-foundation"> {
+): Promise<"production-deploy" | "fake-foundation"> {
   "use step";
   return (await operationUsesProductionTimeweb(command))
-    ? "production-1a"
+    ? "production-deploy"
     : "fake-foundation";
 }
 
@@ -453,6 +453,40 @@ export async function reconcileServerStep(
   }
 }
 reconcileServerStep.maxRetries = 20;
+
+export async function configureBackupsStep(
+  command: WorkflowCommand,
+): Promise<void> {
+  "use step";
+  const sql = getDatabase();
+  await guardMutation(command, "create", "server");
+  const step = await beginStep(sql, command.operationId, "configure_backups", 40);
+  if (step.alreadyCompleted) return;
+  const executionToken = requireStepClaim(step);
+  try {
+    await (await adapter(command)).configureBackups();
+    await finishStep(
+      sql,
+      command.operationId,
+      "configure_backups",
+      executionToken,
+      { status: "succeeded" },
+    );
+  } catch (error) {
+    const providerError = lifecycleProviderError(error);
+    if (providerError) {
+      await failProviderStep(
+        command,
+        "configure_backups",
+        executionToken,
+        providerError,
+        5_000,
+      );
+    }
+    throw error;
+  }
+}
+configureBackupsStep.maxRetries = 4;
 
 export async function configureDnsStep(
   command: WorkflowCommand,

@@ -2,46 +2,55 @@ import { describe, expect, it, vi } from "vitest";
 
 import { getTimewebProvisioningPreview } from "./provisioning";
 
+const SHAPES = [
+  [2, 2_048, 40_960, 800],
+  [2, 4_096, 51_200, 1_000],
+  [4, 8_192, 81_920, 1_800],
+  [8, 12_288, 102_400, 2_900],
+  [8, 16_384, 163_840, 4_300],
+] as const;
+
+function presetsFor(
+  location: string,
+  tag: string,
+  startId: number,
+  multiplier = 1,
+) {
+  return SHAPES.map(([cpu, ram, disk, price], index) => ({
+    id: startId + index,
+    location,
+    tags: ["site", "cp", tag],
+    price: price * multiplier,
+    cpu,
+    ram,
+    disk,
+    disk_type: "nvme",
+    bandwidth: location === "de-1" ? 200 : 1_000,
+  }));
+}
+
 function providerPayload(url: string): unknown {
   if (url.endsWith("/account/status")) return { status: { is_blocked: false } };
   if (url.endsWith("/account/finances")) {
-    return {
-      finances: { balance: 2_000, currency: "RUB", monthly_fee: 181 },
-    };
+    return { finances: { balance: 1, currency: "RUB", monthly_fee: 181 } };
   }
   if (url.endsWith("/api/v1/servers")) return { servers: [] };
   if (url.endsWith("/presets/servers")) {
     return {
       server_presets: [
+        ...presetsFor("ru-3", "msk_nvme", 4_799),
+        ...presetsFor("nl-1", "nl_base", 3_344, 2),
+        ...presetsFor("de-1", "fra_nvme", 6_063, 4),
         {
-          id: 42,
-          location: "ru-1",
-          price: 700,
-          cpu: 2,
-          ram: 2048,
-          disk: 30720,
+          id: 3_011,
+          location: "ru-3",
+          tags: ["site", "cp", "nsk_base"],
+          price: 207,
+          cpu: 1,
+          ram: 1_024,
+          disk: 15_360,
           disk_type: "nvme",
-          bandwidth: 200,
-        },
-        {
-          id: 99,
-          location: "ru-1",
-          price: 1_100,
-          cpu: 4,
-          ram: 4096,
-          disk: 51200,
-          disk_type: "nvme",
-          bandwidth: 300,
-        },
-        {
-          id: 77,
-          location: "ru-2",
-          price: 750,
-          cpu: 2,
-          ram: 2048,
-          disk: 30720,
-          disk_type: "nvme",
-          bandwidth: 200,
+          bandwidth: 100,
         },
       ],
     };
@@ -49,7 +58,8 @@ function providerPayload(url: string): unknown {
   if (url.endsWith("/os/servers")) {
     return {
       servers_os: [
-        { id: 24, family: "linux", name: "Ubuntu", version: "24.04 LTS" },
+        { id: 99, family: "linux", name: "Ubuntu", version: "24.04" },
+        { id: 145, family: "linux", name: "Ubuntu", version: "26.04" },
       ],
     };
   }
@@ -57,14 +67,19 @@ function providerPayload(url: string): unknown {
     return {
       locations: [
         {
-          location: "ru-1",
+          location: "ru-3",
           location_code: "RU",
-          availability_zones: ["spb-3"],
+          availability_zones: ["msk-1"],
         },
         {
-          location: "ru-2",
-          location_code: "RU",
-          availability_zones: ["nsk-1"],
+          location: "nl-1",
+          location_code: "NL",
+          availability_zones: ["ams-1"],
+        },
+        {
+          location: "de-1",
+          location_code: "DE",
+          availability_zones: ["fra-1"],
         },
       ],
     };
@@ -74,13 +89,10 @@ function providerPayload(url: string): unknown {
     return { services_costs: [{ type: "floating_ip", cost: 180 }] };
   }
   if (url.endsWith("/api/v1/projects")) {
-    return { projects: [{ id: 303, name: "Disposable smoke" }] };
+    return { projects: [{ id: 303, name: "Course platform" }] };
   }
   if (url.endsWith("/api/v1/ssh-keys")) {
-    return { ssh_keys: [{ id: 404, name: "Smoke key" }] };
-  }
-  if (url.includes("/domains/n8n.neurokurs.ru/dns-records?")) {
-    return { meta: { total: 0 }, dns_records: [] };
+    return { ssh_keys: [{ id: 404, name: "Course key" }] };
   }
   throw new Error(`Unexpected URL ${url}`);
 }
@@ -97,217 +109,112 @@ const productionEnvironment = {
   TIMEWEB_SMOKE_SSH_KEY_ID: "404",
 };
 
+function providerFetch() {
+  return vi.fn<typeof fetch>(async (input) =>
+    Response.json(providerPayload(String(input))),
+  );
+}
+
 describe("getTimewebProvisioningPreview", () => {
-  it("keeps the non-production fake preview aligned with the live OS contract", async () => {
-    const preview = await getTimewebProvisioningPreview({
-      VERCEL_ENV: "preview",
-      PLATFORM_PROVIDER: "timeweb",
-    });
-
-    expect(preview).toMatchObject({
-      ok: true,
-      mode: "fake",
-      plan: {
-        operatingSystemId: 202,
-        operatingSystemLabel: "Ubuntu 24.04 x86_64",
-      },
-    });
-  });
-
-  it("selects current Ubuntu 24.04, the cheapest compatible preset and live price", async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async (input) =>
-      Response.json(providerPayload(String(input))),
-    );
+  it("uses Ubuntu 26.04 and Moscow recommended Premium NVMe by default", async () => {
+    const fetchImpl = providerFetch();
     const preview = await getTimewebProvisioningPreview(
       productionEnvironment,
       fetchImpl,
     );
 
-    expect(preview).toEqual({
-      ok: true,
-      mode: "timeweb",
-      plan: expect.objectContaining({
-        presetId: 42,
-        operatingSystemId: 24,
-        operatingSystemLabel: "Ubuntu 24.04 LTS x86_64",
-        availabilityZone: "spb-3",
-        monthlyServerRoubles: 700,
-        cpu: 2,
-        ramMb: 2048,
-        diskMb: 30720,
-        diskType: "nvme",
-        bandwidthMbps: 200,
-        monthlyPublicIpRoubles: 180,
-        monthlyTotalRoubles: 880,
-        requiredBalanceRoubles: 1_061,
-        balanceRoubles: 2_000,
-        projectId: 303,
-        sshKeyId: 404,
-      }),
-    });
-    expect(fetchImpl).toHaveBeenCalledTimes(11);
-  });
-
-  it("keeps provider pricing and balance informational instead of blocking mutation", async () => {
-    const preview = await getTimewebProvisioningPreview(
-      productionEnvironment,
-      vi.fn<typeof fetch>(async (input) => {
-        if (String(input).endsWith("/account/finances")) {
-          return Response.json({
-            finances: {
-              balance: 1_000,
-              currency: "RUB",
-              monthly_fee: 181,
-            },
-          });
-        }
-        return Response.json(providerPayload(String(input)));
-      }),
-    );
-
     expect(preview).toMatchObject({
       ok: true,
       mode: "timeweb",
+      catalog: {
+        regions: [
+          { id: "ru-3", label: "Москва", availabilityZone: "msk-1" },
+          { id: "nl-1", label: "Амстердам", availabilityZone: "ams-1" },
+          { id: "de-1", label: "Франкфурт", availabilityZone: "fra-1" },
+        ],
+        defaultSelection: {
+          region: "ru-3",
+          operatingSystemId: 145,
+          backupsEnabled: false,
+          publicIpv4: true,
+        },
+      },
       plan: {
-        balanceRoubles: 1_000,
-        requiredBalanceRoubles: 1_061,
+        version: "timeweb-provisioning-v3",
+        deploymentMode: "plain-vps",
+        presetId: 4_800,
+        operatingSystemId: 145,
+        operatingSystemLabel: "Ubuntu 26.04 x86_64",
+        region: "ru-3",
+        availabilityZone: "msk-1",
+        monthlyServerRoubles: 1_000,
+        hourlyServerRoubles: 1.37,
+        monthlyPublicIpRoubles: 180,
+        monthlyTotalRoubles: 1_180,
+      },
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(10);
+    if (!preview.ok) throw new Error("Expected successful preview");
+    expect(preview.catalog.regions[0]!.presets).toHaveLength(5);
+    expect(
+      preview.catalog.regions[0]!.presets.some(
+        (preset) => preset.id === 3_011,
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps balance informational and does not use it as a deploy limit", async () => {
+    await expect(
+      getTimewebProvisioningPreview(productionEnvironment, providerFetch()),
+    ).resolves.toMatchObject({ ok: true, mode: "timeweb" });
+  });
+
+  it("selects Frankfurt, Ubuntu 24.04 and enabled backups explicitly", async () => {
+    const preview = await getTimewebProvisioningPreview(
+      productionEnvironment,
+      providerFetch(),
+      {
+        selection: {
+          region: "de-1",
+          presetId: 6_064,
+          operatingSystemId: 99,
+          backupsEnabled: true,
+          publicIpv4: true,
+        },
+      },
+    );
+    expect(preview).toMatchObject({
+      ok: true,
+      plan: {
+        regionLabel: "Франкфурт",
+        availabilityZone: "fra-1",
+        operatingSystemLabel: "Ubuntu 24.04 x86_64",
+        backupsEnabled: true,
+        backupInterval: "week",
+        backupCopyCount: 1,
       },
     });
   });
 
-  it("does not count an exact already-billed owned IP twice on repeated preflight", async () => {
-    const ownedIp = {
-      externalId: "11111111-2222-4333-8444-555555555555",
-      address: "203.0.113.10",
-    };
-    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
-      const url = String(input);
-      if (url.endsWith("/account/finances")) {
-        return Response.json({
-          finances: {
-            balance: 1_100,
-            currency: "RUB",
-            monthly_fee: 361,
-          },
-        });
-      }
-      if (url.endsWith("/floating-ips")) {
-        return Response.json({
-          ips: [
-            {
-              id: ownedIp.externalId,
-              ip: ownedIp.address,
-              availability_zone: "spb-3",
-              resource_type: null,
-              resource_id: null,
-            },
-          ],
-        });
-      }
-      return Response.json(providerPayload(url));
-    });
-
+  it("rejects a preset that does not belong to the selected region", async () => {
     await expect(
       getTimewebProvisioningPreview(
         productionEnvironment,
-        fetchImpl,
-        { approvedOwnedPublicIp: ownedIp },
-      ),
-    ).resolves.toMatchObject({
-      ok: true,
-      mode: "timeweb",
-      plan: { requiredBalanceRoubles: 1_061 },
-    });
-    await expect(
-      getTimewebProvisioningPreview(productionEnvironment, fetchImpl),
-    ).resolves.toMatchObject({
-      ok: true,
-      mode: "timeweb",
-      plan: { requiredBalanceRoubles: 1_241 },
-    });
-  });
-
-  it("fails repeated preflight for an absent, bound or wrong-zone durable IP", async () => {
-    const ownedIp = {
-      externalId: "11111111-2222-4333-8444-555555555555",
-      address: "203.0.113.10",
-    };
-    const candidates = [
-      [],
-      [
+        providerFetch(),
         {
-          id: ownedIp.externalId,
-          ip: ownedIp.address,
-          availability_zone: "spb-4",
-          resource_type: null,
-          resource_id: null,
+          selection: {
+            region: "nl-1",
+            presetId: 4_800,
+            operatingSystemId: 145,
+            backupsEnabled: false,
+            publicIpv4: true,
+          },
         },
-      ],
-      [
-        {
-          id: ownedIp.externalId,
-          ip: ownedIp.address,
-          availability_zone: "spb-3",
-          resource_type: "server",
-          resource_id: 999,
-        },
-      ],
-    ];
-
-    for (const ips of candidates) {
-      const preview = await getTimewebProvisioningPreview(
-        productionEnvironment,
-        vi.fn<typeof fetch>(async (input) => {
-          if (String(input).endsWith("/floating-ips")) {
-            return Response.json({ ips });
-          }
-          return Response.json(providerPayload(String(input)));
-        }),
-        { approvedOwnedPublicIp: ownedIp },
-      );
-      expect(preview).toEqual({
-        ok: false,
-        code: "PUBLIC_IP_OWNERSHIP_INVALID",
-        message:
-          "Owned floating IP отсутствует, перемещён или уже привязан к другому ресурсу.",
-      });
-    }
-  });
-
-  it("selects the cheapest live preset in an owner-selected region", async () => {
-    const preview = await getTimewebProvisioningPreview(
-      { ...productionEnvironment, TIMEWEB_SMOKE_REGION: "ru-2" },
-      vi.fn<typeof fetch>(async (input) =>
-        Response.json(providerPayload(String(input))),
       ),
-    );
-    expect(preview).toMatchObject({
-      ok: true,
-      mode: "timeweb",
-      plan: {
-        presetId: 77,
-        region: "ru-2",
-        availabilityZone: "nsk-1",
-        monthlyTotalRoubles: 930,
-      },
-    });
+    ).resolves.toMatchObject({ ok: false, code: "INVALID_SELECTION" });
   });
 
-  it("fails closed for an invalid configured region", async () => {
-    const preview = await getTimewebProvisioningPreview(
-      { ...productionEnvironment, TIMEWEB_SMOKE_REGION: "ru_2" },
-      vi.fn<typeof fetch>(async (input) =>
-        Response.json(providerPayload(String(input))),
-      ),
-    );
-    expect(preview).toEqual({
-      ok: false,
-      code: "SMOKE_REGION_UNAVAILABLE",
-      message: "Настроенный smoke region имеет недопустимый формат.",
-    });
-  });
-
-  it("fails closed when Timeweb API has no current public IPv4 price", async () => {
+  it("fails closed when Timeweb has no current public IPv4 price", async () => {
     const preview = await getTimewebProvisioningPreview(
       productionEnvironment,
       vi.fn<typeof fetch>(async (input) => {
@@ -323,102 +230,21 @@ describe("getTimewebProvisioningPreview", () => {
     });
   });
 
-  it("fails closed when the approved hostname already has an A record", async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
-      if (
-        String(input).includes(
-          "/domains/n8n.neurokurs.ru/dns-records?",
-        )
-      ) {
-        return Response.json({
-          meta: { total: 1 },
-          dns_records: [
-            {
-              id: 77,
-              type: "A",
-              data: { subdomain: "n8n", value: "203.0.113.10" },
-              ttl: 600,
-            },
-          ],
-        });
-      }
-      return Response.json(providerPayload(String(input)));
-    });
-    const preview = await getTimewebProvisioningPreview(
-      productionEnvironment,
-      fetchImpl,
-    );
-    expect(preview).toEqual({
-      ok: false,
-      code: "DNS_HOSTNAME_CONFLICT",
-      message: "Approved hostname уже содержит DNS A record.",
-    });
-    await expect(
-      getTimewebProvisioningPreview(
-        productionEnvironment,
-        fetchImpl,
-        {
-          approvedOwnedDns: {
-            environmentId: "11111111-1111-4111-8111-111111111111",
-            externalId: "77",
-            address: "203.0.113.10",
-          },
-        },
-      ),
-    ).resolves.toMatchObject({ ok: true, mode: "timeweb" });
-
-    const approvedOwnedDns = {
-      environmentId: "11111111-1111-4111-8111-111111111111",
-      externalId: "77",
+  it("validates an already reserved IP against the selected zone", async () => {
+    const ownedIp = {
+      externalId: "11111111-2222-4333-8444-555555555555",
       address: "203.0.113.10",
     };
-    await expect(
-      getTimewebProvisioningPreview(
-        productionEnvironment,
-        vi.fn<typeof fetch>(async (input) =>
-          Response.json(providerPayload(String(input))),
-        ),
-        { approvedOwnedDns },
-      ),
-    ).resolves.toMatchObject({
-      ok: false,
-      code: "DNS_HOSTNAME_CONFLICT",
-    });
-    await expect(
-      getTimewebProvisioningPreview(
-        productionEnvironment,
-        fetchImpl,
-        {
-          approvedOwnedDns: {
-            ...approvedOwnedDns,
-            externalId: "78",
-          },
-        },
-      ),
-    ).resolves.toMatchObject({
-      ok: false,
-      code: "DNS_HOSTNAME_CONFLICT",
-    });
-    const duplicateFetch = vi.fn<typeof fetch>(async (input) => {
-      if (
-        String(input).includes(
-          "/domains/n8n.neurokurs.ru/dns-records?",
-        )
-      ) {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      if (String(input).endsWith("/floating-ips")) {
         return Response.json({
-          meta: { total: 2 },
-          dns_records: [
+          ips: [
             {
-              id: 77,
-              type: "A",
-              data: { subdomain: "n8n", value: "203.0.113.10" },
-              ttl: 600,
-            },
-            {
-              id: 78,
-              type: "A",
-              data: { subdomain: "n8n", value: "203.0.113.11" },
-              ttl: 600,
+              id: ownedIp.externalId,
+              ip: ownedIp.address,
+              availability_zone: "msk-1",
+              resource_type: null,
+              resource_id: null,
             },
           ],
         });
@@ -428,12 +254,24 @@ describe("getTimewebProvisioningPreview", () => {
     await expect(
       getTimewebProvisioningPreview(
         productionEnvironment,
-        duplicateFetch,
-        { approvedOwnedDns },
+        fetchImpl,
+        { approvedOwnedPublicIp: ownedIp },
       ),
-    ).resolves.toMatchObject({
-      ok: false,
-      code: "DNS_HOSTNAME_CONFLICT",
+    ).resolves.toMatchObject({ ok: true });
+  });
+
+  it("keeps fake development aligned with the same public contract", async () => {
+    const preview = await getTimewebProvisioningPreview({
+      VERCEL_ENV: "preview",
+      PLATFORM_PROVIDER: "timeweb",
+    });
+    expect(preview).toMatchObject({
+      ok: true,
+      mode: "fake",
+      plan: {
+        operatingSystemLabel: "Ubuntu 26.04 x86_64",
+        region: "ru-3",
+      },
     });
   });
 });

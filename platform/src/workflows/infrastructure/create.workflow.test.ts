@@ -21,6 +21,13 @@ process.env.DATABASE_URL = databaseUrl;
 process.env.AUTH_SECRET = "workflow-example-not-a-secret-32-characters";
 process.env.APP_ORIGIN = "http://localhost:3000";
 process.env.VERCEL_ENV = "development";
+const fakeDeployment = {
+  region: "ru-3",
+  presetId: 4_800,
+  operatingSystemId: 202,
+  backupsEnabled: false,
+  publicIpv4: true,
+} as const;
 
 let sql: DatabaseSql;
 let actor: AuthSession;
@@ -152,6 +159,7 @@ describe("Vercel Workflow orchestration", () => {
           name: "API среда",
           idempotencyKey: "api-create-idempotency-01",
           simulation: "success",
+          deployment: fakeDeployment,
         }),
       });
     const first = await createEndpoint(request());

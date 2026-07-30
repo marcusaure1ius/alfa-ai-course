@@ -1,8 +1,8 @@
 # Требования к платформе курса и управлению учебной инфраструктурой
 
 **Статус:** требования первого этапа
-**Задачи:** `T-0048`, упрощение deployment — `T-0059`
-**Дата проверки внешних источников:** 2026-07-29
+**Задачи:** `T-0048`, упрощение deployment — `T-0059`, live configurator — `T-0060`
+**Дата проверки внешних источников:** 2026-07-30
 **Язык интерфейса первого этапа:** русский
 
 ## 1. Решение
@@ -13,8 +13,8 @@
 
 1. администратор входит в платформу;
 2. открывает первый раздел боковой панели «Инфраструктура»;
-3. создаёт основную учебную среду на Timeweb Cloud;
-4. платформа создаёт VPS, DNS-запись, устанавливает проверенную версию starter kit, дожидается HTTPS и показывает итоговый URL;
+3. выбирает live Timeweb тариф, регион, образ и backup, затем создаёт чистый VPS;
+4. отдельным следующим этапом платформа устанавливает совместимый starter kit, создаёт DNS-запись, дожидается HTTPS и показывает итоговый URL;
 5. администратор видит каждый шаг, ошибку и стоимость ресурсов;
 6. администратор может безопасно удалить среду и связанные с ней платные ресурсы.
 
@@ -35,6 +35,7 @@
 Проверенные внешние факты:
 
 - Timeweb позволяет создавать VPS через API и передавать `cloud-init` при создании; `cloud-init` выполняется без интерактивных запросов от `root` ([создание сервера](https://timeweb.cloud/docs/cloud-servers/manage-servers/create-server), [cloud-init](https://timeweb.cloud/docs/cloud-servers/manage-servers/cloud-init));
+- Timeweb позволяет после создания сервера получить системный диск и включить или выключить его автобэкап отдельным API-вызовом; стоимость существующей backup-копии составляет 6 ₽/ГБ ([API](https://timeweb.cloud/api-docs), [резервное копирование](https://timeweb.cloud/docs/cloud-servers/manage-servers/backup));
 - Timeweb API token можно ограничить по сервисам и сроку действия; разрешение удалять сервисы без кода из Telegram задаётся отдельно ([API-токены](https://timeweb.cloud/docs/account-management/token));
 - публичный IPv4 является отдельным тарифицируемым ресурсом, после удаления сервера может сохраниться и продолжить тарифицироваться ([публичные IP](https://timeweb.cloud/docs/public-ip));
 - Timeweb поддерживает управление DNS-записями, включая `A`, `AAAA`, `CNAME` и `TXT`; стандартный TTL равен 600 секундам ([DNS-записи](https://timeweb.cloud/docs/domains/dns-records-management));
@@ -44,7 +45,7 @@
 - Vercel Cron вызывает Function endpoint только в production; endpoint должен проверять `CRON_SECRET` ([Vercel Cron Jobs](https://vercel.com/docs/cron-jobs));
 - текущий starter kit поддерживает только Ubuntu 24.04 LTS x86_64, использует Caddy, PostgreSQL и закреплённый n8n; `.env` имеет права `0600`, а `N8N_ENCRYPTION_KEY` генерируется и хранится постоянно.
 
-Цены, идентификаторы тарифов, образов и зон запрещено фиксировать в коде: они читаются из актуального API. Перед реализацией provider adapter исполнитель должен сверить DTO и доступные операции с текущей официальной спецификацией/SDK Timeweb. Этот документ не является свидетельством реального вызова Timeweb API, покупки VPS или выпуска сертификата.
+Цены и идентификаторы тарифов/образов запрещено фиксировать в коде: они читаются из актуального API. Разрешён versioned product-policy allowlist поддерживаемых region/zone, текущих product tags и resource shapes, потому что публичный catalog не содержит отдельного `orderable` flag и включает legacy presets. Перед реализацией provider adapter исполнитель должен сверить DTO и доступные операции с текущей официальной спецификацией/SDK Timeweb. Этот документ не является свидетельством реального вызова Timeweb API, покупки VPS или выпуска сертификата.
 
 Отдельный release gate — модель владения n8n. Официальное разъяснение n8n различает помощь клиенту с его собственным instance и hosting/management клиентских workflow и credentials ([n8n license use cases](https://support.n8n.io/article/can-i-use-your-license-for-my-use-case), [Sustainable Use License](https://docs.n8n.io/sustainable-use-license/)). Если серверы остаются в аккаунте школы, а ученики используют размещённый и управляемый школой n8n, до production запуска требуется письменное подтверждение допустимой лицензии от n8n. Этот документ не является юридическим заключением.
 
@@ -108,7 +109,7 @@
 - массовое создание серверов;
 - другие облачные провайдеры;
 - управление n8n workflow и credentials учеников;
-- автоматический backup/restore и обновление n8n;
+- application-level backup/restore и обновление n8n (provider autobackup системного диска входит в deploy configurator);
 - managed multi-tenant n8n, queue mode, HA и Kubernetes;
 - передача VPS между аккаунтами Timeweb и автоматический перенос billing ownership;
 - автоматическое создание owner account n8n без подтверждённого официального и безопасного интерфейса;
@@ -192,13 +193,15 @@ Desktop: сворачиваемая панель шириной около 256 p
 
 ### 6.4. Мастер создания
 
-1. Имя основной среды.
-2. Регион/зона, актуальный preset и образ Ubuntu 24.04 x86_64.
-3. Публичный/переносимый IP.
-4. Default hostname `n8n.neurokurs.ru` с read-only отображением зоны и проверкой отсутствия конфликта.
-5. Профиль установки n8n и его exact version.
-6. Preview: создаваемые ресурсы, оценка цены, сетевые правила и план cleanup.
-7. Подтверждение и переход к экрану операции.
+1. Имя сервера.
+2. Регион: Москва (`msk-1`), Амстердам (`ams-1`) или Франкфурт (`fra-1`).
+3. Актуальный Premium NVMe preset с CPU, RAM, disk, bandwidth, месячной и почасовой ценой.
+4. Образ из live Ubuntu catalog; default — Ubuntu 26.04 x86_64.
+5. Автобэкап включён/выключен; при включении — weekly и одна копия.
+6. Публичный/переносимый IPv4 включён и создаётся сразу.
+7. Preview ресурсов и provider price, подтверждение и переход к экрану durable operation.
+
+Этот мастер создаёт чистый VPS. Он не принимает shell script, не запускает Ubuntu-24-only starter kit и не обещает готовность n8n. Установка совместимого профиля остаётся отдельным versioned flow.
 
 Мастер не принимает произвольный shell script. Профили установки версионируются и выбираются из allowlist.
 
@@ -231,6 +234,8 @@ Desktop: сворачиваемая панель шириной около 256 p
 
 `PROV-06` Preview и development deployments Vercel не получают production Timeweb tokens. Реальный provider smoke разрешён только из production deployment после явного подтверждения владельца. Клиентский денежный cap не применяется: актуальные provider price, balance и `monthly_fee` показываются как телеметрия, а решение принять или отклонить mutation остаётся за Timeweb.
 
+`PROV-07` Configurator нормализует live catalog в три поддерживаемых region/zone и пять Premium NVMe resource shapes. Legacy presets с другими product tags не отображаются. Выбор region, zone, OS, preset, backup и IPv4 сохраняется в versioned durable snapshot без raw provider payload.
+
 ### 7.2. Создание VPS
 
 `INF-01` `POST` создания отвечает `202 Accepted` и `operationId`; HTTP request не ждёт установки VPS.
@@ -243,10 +248,10 @@ Desktop: сворачиваемая панель шириной около 256 p
 - отсутствует другой активный или создаваемый VPS: hard limit первого этапа равен одному;
 - актуальные цена и баланс прочитаны для preview, но не блокируют mutation;
 - выбранные IP и сервер находятся в совместимой зоне;
-- образ соответствует Ubuntu 24.04 x86_64;
+- выбранные region, zone, Premium NVMe preset и Ubuntu image всё ещё присутствуют в актуальном catalog;
 - отсутствует другая активная mutation этой среды.
 
-`INF-03` Платформа резервирует переносимый публичный IP, создаёт DNS `A` на него, затем создаёт VPS с этим IP и `cloud-init`. Это позволяет знать DNS target до запуска Caddy.
+`INF-03` Deploy configurator резервирует переносимый публичный IP, затем создаёт чистый VPS с этим IP. После provider readiness он применяет выбранное состояние автобэкапа к единственному системному диску. DNS и `cloud-init` выполняются только отдельным совместимым install flow.
 
 `INF-04` Если резервирование IP до VPS невозможно для выбранной конфигурации, adapter использует подтверждённый альтернативный порядок и фиксирует его отдельным provider capability flag.
 

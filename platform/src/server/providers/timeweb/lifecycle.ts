@@ -19,11 +19,9 @@ import type {
   TimewebServerStatus,
 } from "./contracts";
 import {
-  buildStarterKitCloudInit,
   COURSE_DNS_TTL_SECONDS,
   COURSE_DNS_ZONE,
   COURSE_HOSTNAME,
-  COURSE_SERVER_HOSTNAME,
   STARTER_KIT_BOOTSTRAP_PROFILE,
 } from "./bootstrap-profile";
 import { FakeProviderError, FakeTimewebAdapter } from "./fake";
@@ -57,6 +55,7 @@ export type InfrastructureLifecycleAdapter = Readonly<{
   resolveDnsAmbiguity(): Promise<void>;
   createServer(): Promise<OwnedProviderResource>;
   reconcileServer(): Promise<void>;
+  configureBackups(): Promise<void>;
   configureDns(): Promise<OwnedProviderResource | void>;
   verifyBootstrapReachable(): Promise<void>;
   waitForDns(): Promise<void>;
@@ -81,7 +80,8 @@ function safePlan(value: unknown): TimewebProvisioningPlan {
   }
   const plan = value as Record<string, unknown>;
   if (
-    plan.version !== "timeweb-provisioning-v2" ||
+    plan.version !== "timeweb-provisioning-v3" ||
+    plan.deploymentMode !== "plain-vps" ||
     !Number.isSafeInteger(plan.presetId) ||
     !Number.isSafeInteger(plan.operatingSystemId) ||
     typeof plan.projectId !== "number" ||
@@ -91,13 +91,14 @@ function safePlan(value: unknown): TimewebProvisioningPlan {
     typeof plan.monthlyPublicIpRoubles !== "number" ||
     !Number.isFinite(plan.monthlyPublicIpRoubles) ||
     !Number.isSafeInteger(plan.bandwidthMbps) ||
-    typeof plan.requiredBalanceRoubles !== "number" ||
-    !Number.isFinite(plan.requiredBalanceRoubles) ||
+    typeof plan.backupsEnabled !== "boolean" ||
+    plan.backupInterval !== "week" ||
+    plan.backupCopyCount !== 1 ||
+    plan.publicIpv4 !== true ||
     typeof plan.availabilityZone !== "string" ||
     plan.projectId <= 0 ||
     plan.sshKeyId <= 0 ||
     (plan.bandwidthMbps as number) <= 0 ||
-    plan.requiredBalanceRoubles <= 0 ||
     plan.monthlyPublicIpRoubles <= 0
   ) {
     throw new LifecycleProviderError(
@@ -1040,55 +1041,29 @@ class ProductionTimewebLifecycleAdapter
     }
   }
 
-  private async assertFreshProviderPlan(
-    allowVerifiedOwnedDns = false,
-  ): Promise<void> {
-    let approvedOwnedDns:
-      | {
-          environmentId: string;
-          externalId: string;
-          address: string;
-        }
-      | undefined;
+  private async assertFreshProviderPlan(): Promise<void> {
     let approvedOwnedPublicIp:
       | {
           externalId: string;
           address: string;
         }
       | undefined;
-    if (allowVerifiedOwnedDns) {
-      const [dns, publicIp] = await Promise.all([
-        activeResource(
-          this.sql,
-          this.context.environmentId,
-          "dns_record",
-        ),
-        activeResource(
-          this.sql,
-          this.context.environmentId,
-          "public_ip",
-        ),
-      ]);
+    {
+      const publicIp = await activeResource(
+        this.sql,
+        this.context.environmentId,
+        "public_ip",
+      );
       const expectedAddress = publicIp?.publicMetadata.address;
       if (
-        !dns ||
         !publicIp ||
-        typeof expectedAddress !== "string" ||
-        dns.publicMetadata.zone !== COURSE_DNS_ZONE ||
-        dns.publicMetadata.hostname !== COURSE_HOSTNAME ||
-        dns.publicMetadata.type !== "A" ||
-        dns.publicMetadata.value !== expectedAddress
+        typeof expectedAddress !== "string"
       ) {
         throw new LifecycleProviderError(
-          "OWNED_DNS_NOT_READY",
-          "Owned DNS metadata не позволяет пропустить hostname preflight.",
+          "PUBLIC_IP_NOT_READY",
+          "Owned floating IP отсутствует до повторного provider preflight.",
         );
       }
-      approvedOwnedDns = {
-        environmentId: this.context.environmentId,
-        externalId: dns.externalId,
-        address: expectedAddress,
-      };
       approvedOwnedPublicIp = {
         externalId: publicIp.externalId,
         address: expectedAddress,
@@ -1097,7 +1072,16 @@ class ProductionTimewebLifecycleAdapter
     const preview = await getTimewebProvisioningPreview(
       process.env,
       fetch,
-      { approvedOwnedDns, approvedOwnedPublicIp },
+      {
+        selection: {
+          region: this.requirePlan().region,
+          presetId: this.requirePlan().presetId,
+          operatingSystemId: this.requirePlan().operatingSystemId,
+          backupsEnabled: this.requirePlan().backupsEnabled,
+          publicIpv4: true,
+        },
+        approvedOwnedPublicIp,
+      },
     );
     if (!preview.ok) {
       throw new LifecycleProviderError(
@@ -1115,7 +1099,8 @@ class ProductionTimewebLifecycleAdapter
       fresh.sshKeyId !== expected.sshKeyId ||
       fresh.bandwidthMbps !== expected.bandwidthMbps ||
       fresh.monthlyServerRoubles !== expected.monthlyServerRoubles ||
-      fresh.monthlyPublicIpRoubles !== expected.monthlyPublicIpRoubles
+      fresh.monthlyPublicIpRoubles !== expected.monthlyPublicIpRoubles ||
+      fresh.backupsEnabled !== expected.backupsEnabled
     ) {
       throw new LifecycleProviderError(
         "STALE_PROVIDER_PLAN",
@@ -1157,7 +1142,7 @@ class ProductionTimewebLifecycleAdapter
           "Owned server не найден после timeout; повторное создание запрещено.",
         );
       }
-      await this.assertFreshProviderPlan(true);
+      await this.assertFreshProviderPlan();
       if (!this.createExecutionToken) {
         throw new LifecycleProviderError(
           "STEP_STATE_INVALID",
@@ -1184,6 +1169,7 @@ class ProductionTimewebLifecycleAdapter
       const resource = await this.adapter.createServer({
         environmentId: this.context.environmentId,
         name: this.context.environmentName,
+        deploymentMode: "plain-vps",
         presetId: plan.presetId,
         operatingSystemId: plan.operatingSystemId,
         availabilityZone: plan.availabilityZone,
@@ -1191,8 +1177,6 @@ class ProductionTimewebLifecycleAdapter
         sshKeyId: plan.sshKeyId,
         bandwidthMbps: plan.bandwidthMbps,
         publicIpv4: publicIp.publicMetadata.address,
-        serverHostname: COURSE_SERVER_HOSTNAME,
-        cloudInit: buildStarterKitCloudInit(),
       });
       await recordResource(this.sql, this.command, resource, {
         presetId: plan.presetId,
@@ -1203,6 +1187,41 @@ class ProductionTimewebLifecycleAdapter
         passwordAuthentication: false,
       });
       return resource;
+    } catch (error) {
+      throw mappedError(error);
+    }
+  }
+
+  async configureBackups(): Promise<void> {
+    const plan = this.requirePlan();
+    const resource = await activeResource(
+      this.sql,
+      this.context.environmentId,
+      "server",
+    );
+    if (!resource) {
+      throw new LifecycleProviderError(
+        "SERVER_NOT_RECORDED",
+        "Owned server отсутствует до настройки автобэкапов.",
+        true,
+      );
+    }
+    const firstBackup = new Date(plan.checkedAt);
+    firstBackup.setUTCDate(firstBackup.getUTCDate() + 1);
+    const day = firstBackup.getUTCDay();
+    try {
+      await this.adapter.configureServerAutoBackups(
+        { ...resource, kind: "server" },
+        plan.backupsEnabled
+          ? {
+              enabled: true,
+              interval: "week",
+              copyCount: 1,
+              creationStartAt: firstBackup.toISOString(),
+              dayOfWeek: day === 0 ? 7 : day,
+            }
+          : { enabled: false },
+      );
     } catch (error) {
       throw mappedError(error);
     }
@@ -1526,6 +1545,7 @@ class ProductionTimewebLifecycleAdapter
   }
 
   async recordReadyInstallation(): Promise<void> {
+    if (this.requirePlan().deploymentMode === "plain-vps") return;
     await this.sql.begin(async (transaction) => {
       await transaction`
         INSERT INTO software_installations (
@@ -1779,6 +1799,7 @@ export async function createInfrastructureLifecycleAdapter(
       resolveDnsAmbiguity: async () => undefined,
       createServer: () => fake.createServer(),
       reconcileServer: async () => undefined,
+      configureBackups: async () => undefined,
       configureDns: () => fake.configureDns(),
       verifyBootstrapReachable: async () => undefined,
       waitForDns: async () => undefined,

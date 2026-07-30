@@ -3,6 +3,7 @@ import "server-only";
 import {
   TIMEWEB_MUTATION_ADAPTER_VERSION,
   type OwnedProviderResource,
+  type TimewebAutoBackupSettings,
   type TimewebCreateServerInput,
   type TimewebDnsRecord,
   type TimewebMutationAdapter,
@@ -580,14 +581,19 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
         false,
       );
     }
-    const serverHostname = validServerHostname(input.serverHostname);
-    if (
-      serverHostname !== COURSE_SERVER_HOSTNAME ||
-      input.cloudInit !== buildStarterKitCloudInit()
-    ) {
+    const deploymentMode = input.deploymentMode ?? "starter-kit";
+    const isStarterKit =
+      deploymentMode === "starter-kit" &&
+      input.serverHostname === COURSE_SERVER_HOSTNAME &&
+      input.cloudInit === buildStarterKitCloudInit();
+    const isPlainVps =
+      deploymentMode === "plain-vps" &&
+      input.serverHostname === undefined &&
+      input.cloudInit === undefined;
+    if (!isStarterKit && !isPlainVps) {
       throw new TimewebProviderError(
         "INVALID_RESPONSE",
-        "Cloud-init не совпадает с approved exact bootstrap profile.",
+        "Deployment profile не прошёл allowlist-проверку.",
         false,
       );
     }
@@ -602,8 +608,12 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
       is_root_password_required: false,
       bandwidth: positiveInteger(input.bandwidthMbps, "Bandwidth"),
       network: { floating_ip: validIpv4(input.publicIpv4) },
-      cloud_init: input.cloudInit,
-      hostname: serverHostname,
+      ...(isStarterKit
+        ? {
+            cloud_init: input.cloudInit,
+            hostname: validServerHostname(input.serverHostname),
+          }
+        : {}),
     });
     const payload = await response.json().catch(() => null);
     return {
@@ -611,6 +621,50 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
       kind: "server",
       environmentId: input.environmentId,
     };
+  }
+
+  async configureServerAutoBackups(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+    settings: TimewebAutoBackupSettings,
+  ): Promise<void> {
+    const verified = ownedServer(resource);
+    const disksResponse = await this.request(
+      "GET",
+      `${SERVER_COLLECTION_PATH}/${verified.externalId}/disks`,
+    );
+    const systemDisks = objectArray(
+      await disksResponse.json().catch(() => null),
+      "server_disks",
+    ).filter((disk) => disk.is_system === true);
+    if (systemDisks.length !== 1) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Timeweb не вернул единственный системный диск сервера.",
+        false,
+      );
+    }
+    const rawDiskId = systemDisks[0]!.id;
+    if (typeof rawDiskId !== "number") {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Timeweb вернул некорректный ID системного диска.",
+        false,
+      );
+    }
+    const diskId = positiveInteger(rawDiskId, "System disk");
+    await this.request(
+      "PATCH",
+      `${SERVER_COLLECTION_PATH}/${verified.externalId}/disks/${diskId}/auto-backups`,
+      settings.enabled
+        ? {
+            is_enabled: true,
+            interval: settings.interval,
+            copy_count: settings.copyCount,
+            creation_start_at: settings.creationStartAt,
+            day_of_week: settings.dayOfWeek,
+          }
+        : { is_enabled: false },
+    );
   }
 
   async updateServer(input: TimewebUpdateServerInput): Promise<void> {

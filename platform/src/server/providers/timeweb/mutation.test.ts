@@ -178,6 +178,84 @@ describe("TimewebMutationHttpAdapter", () => {
     ]);
   });
 
+  it("creates a plain VPS without starter-kit cloud-init", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      Response.json({ server: { id: 54321 } }, { status: 201 }),
+    );
+    const adapter = new TimewebMutationHttpAdapter(
+      "synthetic-test-token",
+      fetchImpl,
+    );
+
+    await expect(
+      adapter.createServer({
+        ...createServerInput,
+        deploymentMode: "plain-vps",
+        serverHostname: undefined,
+        cloudInit: undefined,
+      }),
+    ).resolves.toEqual(resource);
+    const body = JSON.parse(
+      String(fetchImpl.mock.calls[0]?.[1]?.body),
+    ) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("cloud_init");
+    expect(body).not.toHaveProperty("hostname");
+    expect(body).toMatchObject({
+      preset_id: 101,
+      os_id: 202,
+      availability_zone: "spb-3",
+      network: { floating_ip: publicIpResource.address },
+    });
+  });
+
+  it("configures weekly auto-backups on the system disk only", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          server_disks: [
+            {
+              id: 777,
+              is_system: true,
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ auto_backups_settings: {} }));
+    const adapter = new TimewebMutationHttpAdapter(
+      "synthetic-test-token",
+      fetchImpl,
+    );
+
+    await adapter.configureServerAutoBackups(resource, {
+      enabled: true,
+      interval: "week",
+      copyCount: 1,
+      creationStartAt: "2026-07-31T00:00:00.000Z",
+      dayOfWeek: 5,
+    });
+
+    expect(fetchImpl.mock.calls).toEqual([
+      [
+        "https://api.timeweb.cloud/api/v1/servers/54321/disks",
+        expect.objectContaining({ method: "GET" }),
+      ],
+      [
+        "https://api.timeweb.cloud/api/v1/servers/54321/disks/777/auto-backups",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({
+            is_enabled: true,
+            interval: "week",
+            copy_count: 1,
+            creation_start_at: "2026-07-31T00:00:00.000Z",
+            day_of_week: 5,
+          }),
+        }),
+      ],
+    ]);
+  });
+
   it("rejects attacker-controlled provider IDs before fetch", async () => {
     const fetchImpl = vi.fn<typeof fetch>();
     const adapter = new TimewebMutationHttpAdapter(

@@ -111,24 +111,60 @@ export async function POST(request: Request): Promise<Response> {
   if (!access.ok) return access.response;
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const deployment =
+    body?.deployment &&
+    typeof body.deployment === "object" &&
+    !Array.isArray(body.deployment)
+      ? (body.deployment as Record<string, unknown>)
+      : null;
   if (
     !body ||
-    !hasOnlyInputKeys(body, ["name", "idempotencyKey", "simulation"]) ||
+    !hasOnlyInputKeys(body, [
+      "name",
+      "idempotencyKey",
+      "simulation",
+      "deployment",
+    ]) ||
     typeof body.name !== "string" ||
     body.name.trim().length < 2 ||
     body.name.length > 80 ||
     typeof body.idempotencyKey !== "string" ||
     body.idempotencyKey.length < 16 ||
-    body.idempotencyKey.length > 128
+    body.idempotencyKey.length > 128 ||
+    !deployment ||
+    !hasOnlyInputKeys(deployment, [
+      "region",
+      "presetId",
+      "operatingSystemId",
+      "backupsEnabled",
+      "publicIpv4",
+    ]) ||
+    typeof deployment.region !== "string" ||
+    !Number.isSafeInteger(deployment.presetId) ||
+    !Number.isSafeInteger(deployment.operatingSystemId) ||
+    typeof deployment.backupsEnabled !== "boolean" ||
+    deployment.publicIpv4 !== true
   ) {
-    return operationError(400, "INVALID_INPUT", "Проверьте имя и idempotency key.");
+    return operationError(
+      400,
+      "INVALID_INPUT",
+      "Проверьте имя и выбранную конфигурацию.",
+    );
   }
   const scenario = fakeScenario(body.simulation);
   try {
     const mutationGate = readTimewebMutationRuntimeGate();
     const preview =
       mutationGate.mode === "timeweb"
-        ? await getTimewebProvisioningPreview()
+        ? await getTimewebProvisioningPreview(process.env, fetch, {
+            selection: {
+              region: deployment.region,
+              presetId: deployment.presetId as number,
+              operatingSystemId: deployment.operatingSystemId as number,
+              backupsEnabled: deployment.backupsEnabled,
+              publicIpv4: true,
+            },
+          })
         : null;
     if (preview && !preview.ok) {
       return operationError(409, preview.code, preview.message);

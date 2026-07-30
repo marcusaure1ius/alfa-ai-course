@@ -1,7 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Loader2, Plus, RefreshCw, Server, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  HardDrive,
+  Loader2,
+  MapPin,
+  Plus,
+  RefreshCw,
+  Server,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
 
 import {
   AlertDialog,
@@ -19,7 +30,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { TimewebProvisioningPreview } from "@/server/providers/timeweb/provisioning";
+import type {
+  TimewebDeploySelection,
+  TimewebProvisioningPreview,
+} from "@/server/providers/timeweb/provisioning";
 
 type Environment = {
   id: string;
@@ -149,7 +163,7 @@ function DeleteEnvironment({
               </p>
             )}
             <p className="mt-2 text-destructive">
-              Backup не создаётся; сохраняемых данных или ресурсов нет.
+              Сервер, его диски и provider backups будут удалены безвозвратно.
             </p>
           </div>
           <label className="grid gap-1.5 text-sm">
@@ -218,33 +232,50 @@ function DeleteEnvironment({
 export function InfrastructureControl() {
   const [preview, setPreview] = useState<TimewebProvisioningPreview | null>(null);
   const [environments, setEnvironments] = useState<Environment[]>([]);
-  const [name, setName] = useState("Timeweb smoke");
+  const [selection, setSelection] = useState<TimewebDeploySelection | null>(null);
+  const [name, setName] = useState("Учебный сервер");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (selected = selection) => {
+    const query = selected
+      ? new URLSearchParams({
+          region: selected.region,
+          presetId: String(selected.presetId),
+          operatingSystemId: String(selected.operatingSystemId),
+          backupsEnabled: String(selected.backupsEnabled),
+        })
+      : null;
     const [previewResponse, environmentsResponse] = await Promise.all([
-      fetch("/api/admin/infrastructure/preview", {
-        cache: "no-store",
-        credentials: "same-origin",
-      }),
+      fetch(
+        `/api/admin/infrastructure/preview${query ? `?${query}` : ""}`,
+        {
+          cache: "no-store",
+          credentials: "same-origin",
+        },
+      ),
       fetch("/api/admin/infrastructure/environments", {
         cache: "no-store",
         credentials: "same-origin",
       }),
     ]);
-    setPreview((await previewResponse.json()) as TimewebProvisioningPreview);
+    const nextPreview =
+      (await previewResponse.json()) as TimewebProvisioningPreview;
+    setPreview(nextPreview);
+    if (nextPreview.ok) {
+      setSelection((current) => current ?? nextPreview.catalog.defaultSelection);
+    }
     const data = (await environmentsResponse.json()) as EnvironmentResponse;
     setEnvironments(data.environments ?? []);
-  }, []);
+  }, [selection]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void refresh(), 0);
+    const timer = window.setTimeout(() => void refresh(), selection ? 180 : 0);
     return () => window.clearTimeout(timer);
-  }, [refresh]);
+  }, [refresh, selection]);
 
   async function create() {
-    if (!preview?.ok || name.trim().length < 2) return;
+    if (!preview?.ok || !selection || name.trim().length < 2) return;
     setPending(true);
     setMessage(null);
     try {
@@ -259,6 +290,7 @@ export function InfrastructureControl() {
         body: JSON.stringify({
           name: name.trim(),
           idempotencyKey: `create-${crypto.randomUUID()}`,
+          deployment: selection,
         }),
       });
       const body = (await response.json()) as {
@@ -275,73 +307,293 @@ export function InfrastructureControl() {
     }
   }
 
+  const catalog = preview?.ok ? preview.catalog : null;
+  const selectedRegion = catalog?.regions.find(
+    (region) => region.id === selection?.region,
+  );
+  const activeEnvironment = environments.some(
+    (item) => item.status !== "deleted",
+  );
+
   return (
     <main className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">
-            Timeweb lifecycle · slice 1A
+            Timeweb Cloud · deploy
           </p>
-          <h1 className="mt-2 text-2xl font-semibold sm:text-3xl">Учебная инфраструктура</h1>
+          <h1 className="mt-2 text-2xl font-semibold sm:text-3xl">
+            Новый учебный сервер
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Один VPS, один IPv4, server-only adapter и обязательный automatic cleanup.
+            Выберите регион и конфигурацию. Цены загружаются из Timeweb перед
+            созданием.
           </p>
         </div>
-        <Button variant="outline" onClick={() => void refresh()}>
+        <Button variant="outline" onClick={() => void refresh(selection)}>
           <RefreshCw aria-hidden="true" />
-          Обновить
+          Обновить тарифы
         </Button>
       </div>
 
       {preview?.ok ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Актуальный provider preview</CardTitle>
-            <CardDescription>
-              {preview.mode === "timeweb"
-                ? "IDs и стоимость получены из Timeweb API"
-                : "Локальные fake-данные без облачных mutation"}{" "}
-              {new Date(preview.plan.checkedAt).toLocaleString("ru-RU")}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div><p className="text-xs text-muted-foreground">ОС</p><p>{preview.plan.operatingSystemLabel}</p></div>
-            <div>
-              <p className="text-xs text-muted-foreground">Preset / зона</p>
-              <p>{preview.plan.cpu} vCPU · {Math.round(preview.plan.ramMb / 1024)} GB · {Math.round(preview.plan.diskMb / 1024)} GB {preview.plan.diskType}</p>
-              <p className="text-xs text-muted-foreground">{preview.plan.region} / {preview.plan.availabilityZone}</p>
+        <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#111923] text-slate-50 shadow-xl shadow-slate-950/10">
+          <div className="border-b border-slate-800 px-4 py-5 sm:px-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-violet-300">
+                  Premium NVMe
+                </p>
+                <h2 className="mt-2 text-xl font-semibold">
+                  Конфигурация сервера
+                </h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Каталог обновлён{" "}
+                  {new Date(preview.catalog.checkedAt).toLocaleString("ru-RU")}.
+                </p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="grid gap-1.5 text-sm text-slate-300">
+                  <span className="flex items-center gap-1.5">
+                    <MapPin className="size-4" aria-hidden="true" />
+                    Регион
+                  </span>
+                  <select
+                    value={selection?.region ?? ""}
+                    onChange={(event) => {
+                      const region = preview.catalog.regions.find(
+                        (candidate) => candidate.id === event.target.value,
+                      );
+                      if (!region || !selection) return;
+                      const recommended =
+                        region.presets.find(
+                          (preset) =>
+                            preset.cpu === 2 &&
+                            preset.ramMb === 4_096 &&
+                            preset.diskMb === 51_200,
+                        ) ?? region.presets[0]!;
+                      setSelection({
+                        ...selection,
+                        region: region.id,
+                        presetId: recommended.id,
+                      });
+                    }}
+                    className="h-10 min-w-48 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                    aria-label="Регион сервера"
+                  >
+                    {preview.catalog.regions.map((region) => (
+                      <option key={region.id} value={region.id}>
+                        {region.label} · {region.availabilityZone}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1.5 text-sm text-slate-300">
+                  Образ
+                  <select
+                    value={selection?.operatingSystemId ?? ""}
+                    onChange={(event) =>
+                      selection &&
+                      setSelection({
+                        ...selection,
+                        operatingSystemId: Number(event.target.value),
+                      })
+                    }
+                    className="h-10 min-w-48 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                    aria-label="Образ операционной системы"
+                  >
+                    {preview.catalog.operatingSystems.map((operatingSystem) => (
+                      <option key={operatingSystem.id} value={operatingSystem.id}>
+                        {operatingSystem.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
-            <div><p className="text-xs text-muted-foreground">VPS + IPv4</p><p>{preview.plan.monthlyTotalRoubles.toLocaleString("ru-RU")} ₽/мес.</p></div>
-            <div><p className="text-xs text-muted-foreground">Баланс</p><p>{preview.plan.balanceRoubles.toLocaleString("ru-RU")} ₽</p></div>
-          </CardContent>
-        </Card>
+          </div>
+
+          <div className="space-y-3 p-3 sm:p-5">
+            <div className="hidden grid-cols-[1.1fr_0.8fr_0.9fr_0.9fr_1.2fr] gap-4 px-5 text-xs text-slate-500 sm:grid">
+              <span>CPU</span>
+              <span>RAM</span>
+              <span>NVMe</span>
+              <span>Канал</span>
+              <span>Стоимость</span>
+            </div>
+            {selectedRegion?.presets.map((preset) => {
+              const selected = preset.id === selection?.presetId;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() =>
+                    selection &&
+                    setSelection({ ...selection, presetId: preset.id })
+                  }
+                  aria-pressed={selected}
+                  className={`relative grid w-full grid-cols-2 gap-x-4 gap-y-3 rounded-xl border p-4 text-left transition sm:grid-cols-[1.1fr_0.8fr_0.9fr_0.9fr_1.2fr] sm:items-center sm:px-5 ${
+                    selected
+                      ? "border-violet-400 bg-slate-800 ring-1 ring-violet-400"
+                      : "border-transparent bg-slate-800/80 hover:border-slate-600 hover:bg-slate-800"
+                  } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300`}
+                >
+                  {selected ? (
+                    <span className="absolute -top-2 left-3 flex items-center gap-1 rounded-full bg-violet-700 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      <Check className="size-3" aria-hidden="true" />
+                      Выбрано
+                    </span>
+                  ) : null}
+                  <span>
+                    <span className="block text-[11px] text-slate-300 sm:hidden">
+                      CPU
+                    </span>
+                    <span className="font-semibold">{preset.cpu} vCPU</span>
+                  </span>
+                  <span>
+                    <span className="block text-[11px] text-slate-300 sm:hidden">
+                      RAM
+                    </span>
+                    <span className="font-semibold">
+                      {preset.ramMb / 1_024} ГБ
+                    </span>
+                  </span>
+                  <span>
+                    <span className="block text-[11px] text-slate-300 sm:hidden">
+                      NVMe
+                    </span>
+                    <span className="font-semibold">
+                      {preset.diskMb / 1_024} ГБ
+                    </span>
+                  </span>
+                  <span>
+                    <span className="block text-[11px] text-slate-300 sm:hidden">
+                      Канал
+                    </span>
+                    <span className="font-semibold">
+                      {preset.bandwidthMbps === 1_000
+                        ? "1 Гбит/с"
+                        : `${preset.bandwidthMbps} Мбит/с`}
+                    </span>
+                  </span>
+                  <span className="col-span-2 flex items-baseline justify-between gap-2 border-t border-slate-700/70 pt-3 sm:col-span-1 sm:block sm:border-0 sm:pt-0">
+                    <span className="font-semibold">
+                      {preset.monthlyRoubles.toLocaleString("ru-RU")} ₽/мес
+                    </span>
+                    <span className="text-sm text-slate-300 sm:mt-0.5 sm:block">
+                      {preset.hourlyRoubles.toLocaleString("ru-RU", {
+                        minimumFractionDigits: 2,
+                      })}{" "}
+                      ₽/час
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid gap-3 border-t border-slate-800 p-4 sm:grid-cols-2 sm:p-6">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={selection?.backupsEnabled ?? false}
+              onClick={() =>
+                selection &&
+                setSelection({
+                  ...selection,
+                  backupsEnabled: !selection.backupsEnabled,
+                })
+              }
+              className="flex items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-900/70 p-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+            >
+              <span className="flex gap-3">
+                <HardDrive className="mt-0.5 size-5 text-violet-300" aria-hidden="true" />
+                <span>
+                  <span className="block font-medium">Автобэкапы</span>
+                  <span className="mt-0.5 block text-xs text-slate-400">
+                    Раз в неделю, хранить 1 копию · 6 ₽/ГБ за копию
+                  </span>
+                </span>
+              </span>
+              <span
+                className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition ${
+                  selection?.backupsEnabled ? "bg-violet-500" : "bg-slate-700"
+                }`}
+                aria-hidden="true"
+              >
+                <span
+                  className={`size-5 rounded-full bg-white transition ${
+                    selection?.backupsEnabled ? "translate-x-5" : ""
+                  }`}
+                />
+              </span>
+            </button>
+            <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/70 p-4">
+              <ShieldCheck className="size-5 text-emerald-400" aria-hidden="true" />
+              <div>
+                <p className="font-medium">Публичный IPv4 включён</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Создаётся и привязывается сразу ·{" "}
+                  {preview.catalog.publicIpv4.monthlyRoubles.toLocaleString("ru-RU")}{" "}
+                  ₽/мес
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
       ) : preview ? (
         <Alert variant="destructive">
           <AlertTriangle aria-hidden="true" />
-          <AlertTitle>Платные mutation заблокированы</AlertTitle>
+          <AlertTitle>Конфигуратор временно недоступен</AlertTitle>
           <AlertDescription>{preview.message}</AlertDescription>
         </Alert>
       ) : null}
 
       <Card>
         <CardHeader>
-          <CardTitle>Создать disposable VPS</CardTitle>
-          <CardDescription>Hard limit: одна активная или создаваемая среда.</CardDescription>
+          <CardTitle>Проверить и создать</CardTitle>
+          <CardDescription>
+            Создаётся чистый VPS с выбранной Ubuntu, публичным IPv4 и SSH-ключом.
+            Установка n8n в эту операцию не входит.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3 sm:flex-row">
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            maxLength={80}
-            aria-label="Имя среды"
-          />
-          <Button
-            disabled={!preview?.ok || environments.some((item) => item.status !== "deleted") || pending}
-            onClick={() => void create()}
-          >
-            {pending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Plus aria-hidden="true" />}
-            Создать
-          </Button>
+        <CardContent className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <label className="grid gap-1.5 text-sm">
+            Имя сервера
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              maxLength={80}
+              aria-label="Имя сервера"
+            />
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {preview?.ok ? (
+              <div className="mr-2">
+                <p className="text-xs text-muted-foreground">VPS + IPv4</p>
+                <p className="text-lg font-semibold">
+                  {preview.plan.monthlyTotalRoubles.toLocaleString("ru-RU")} ₽/мес
+                </p>
+              </div>
+            ) : null}
+            <Button
+              size="lg"
+              disabled={!preview?.ok || !selection || activeEnvironment || pending}
+              onClick={() => void create()}
+            >
+              {pending ? (
+                <Loader2 aria-hidden="true" className="animate-spin" />
+              ) : (
+                <Plus aria-hidden="true" />
+              )}
+              Создать сервер
+            </Button>
+          </div>
+          {activeEnvironment ? (
+            <p className="text-sm text-muted-foreground lg:col-span-2">
+              Сначала удалите активный сервер: в первом релизе доступна одна среда.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

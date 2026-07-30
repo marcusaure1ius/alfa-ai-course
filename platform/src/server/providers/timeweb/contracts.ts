@@ -92,6 +92,7 @@ export type TimewebCatalogSnapshot = Readonly<{
     Readonly<{
       id: string;
       region: string;
+      tags: readonly string[];
       priceRoubles: number;
       cpu: number;
       ramMb: number;
@@ -172,6 +173,7 @@ export interface TimewebReadAdapter {
 export type TimewebCreateServerInput = Readonly<{
   environmentId: string;
   name: string;
+  deploymentMode?: "starter-kit" | "plain-vps";
   presetId: number;
   operatingSystemId: number;
   availabilityZone: string;
@@ -179,9 +181,20 @@ export type TimewebCreateServerInput = Readonly<{
   sshKeyId: number;
   bandwidthMbps: number;
   publicIpv4: string;
-  serverHostname: string;
-  cloudInit: string;
+  serverHostname?: string;
+  cloudInit?: string;
 }>;
+
+export type TimewebAutoBackupSettings = Readonly<
+  | { enabled: false }
+  | {
+      enabled: true;
+      interval: "week";
+      copyCount: 1;
+      creationStartAt: string;
+      dayOfWeek: number;
+    }
+>;
 
 export type TimewebDnsRecord = OwnedProviderResource &
   Readonly<{
@@ -239,6 +252,10 @@ export interface TimewebMutationAdapter {
   createServer(
     input: TimewebCreateServerInput,
   ): Promise<OwnedProviderResource & Readonly<{ kind: "server" }>>;
+  configureServerAutoBackups(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+    settings: TimewebAutoBackupSettings,
+  ): Promise<void>;
   updateServer(input: TimewebUpdateServerInput): Promise<void>;
   rebootServer(
     resource: OwnedProviderResource & Readonly<{ kind: "server" }>,

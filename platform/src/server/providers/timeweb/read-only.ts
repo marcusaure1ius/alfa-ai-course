@@ -299,6 +299,9 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
       return {
         id: identifier(preset.id),
         region: providerValue(preset.location),
+        tags: Array.isArray(preset.tags)
+          ? preset.tags.map(providerValue)
+          : [],
         priceRoubles: number(preset.price),
         cpu: number(preset.cpu),
         ramMb: number(preset.ram),
