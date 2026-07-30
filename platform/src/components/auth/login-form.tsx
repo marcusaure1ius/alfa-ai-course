@@ -15,6 +15,7 @@ export function LoginForm() {
   const [mfaCode, setMfaCode] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mfaRequired, setMfaRequired] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,9 +41,22 @@ export function LoginForm() {
           ...(mfaCode ? { mfaCode } : {}),
         }),
       });
-      const body = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(body.error ?? "Вход отклонён.");
-      router.push("/admin/infrastructure");
+      const body = (await response.json()) as {
+        error?: string;
+        code?: string;
+        user?: { role?: "admin" | "student" };
+      };
+      if (!response.ok) {
+        if (body.code === "MFA_REQUIRED") {
+          setMfaRequired(true);
+          setMfaCode("");
+          return;
+        }
+        throw new Error(body.error ?? "Не удалось войти.");
+      }
+      router.push(
+        body.user?.role === "student" ? "/student" : "/admin/infrastructure",
+      );
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Вход отклонён.");
@@ -53,7 +67,7 @@ export function LoginForm() {
 
   return (
     <form className="grid gap-4" onSubmit={submit}>
-      <label className="grid gap-1.5 text-sm">
+      <label className="grid gap-2 text-sm font-medium">
         Email
         <Input
           type="email"
@@ -63,7 +77,7 @@ export function LoginForm() {
           required
         />
       </label>
-      <label className="grid gap-1.5 text-sm">
+      <label className="grid gap-2 text-sm font-medium">
         Пароль
         <Input
           type="password"
@@ -74,27 +88,44 @@ export function LoginForm() {
           required
         />
       </label>
-      <label className="grid gap-1.5 text-sm">
-        Код authenticator
-        <Input
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          value={mfaCode}
-          onChange={(event) =>
-            setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-          }
-          pattern="[0-9]{6}"
-          placeholder="Обязателен для production admin"
-        />
-      </label>
+      {mfaRequired ? (
+        <div className="grid gap-3 rounded-lg border bg-muted/50 p-4">
+          <div>
+            <p className="text-sm font-medium">Подтвердите вход</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Введите шестизначный код из приложения-аутентификатора.
+            </p>
+          </div>
+          <label className="grid gap-2 text-sm font-medium">
+            Код подтверждения
+            <Input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              value={mfaCode}
+              onChange={(event) =>
+                setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              pattern="[0-9]{6}"
+              placeholder="000000"
+              required
+            />
+          </label>
+        </div>
+      ) : null}
       {error ? (
         <Alert variant="destructive" aria-live="polite">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
-      <Button type="submit" disabled={pending}>
+      <Button
+        type="submit"
+        size="lg"
+        className="mt-1 w-full"
+        disabled={pending || (mfaRequired && mfaCode.length !== 6)}
+      >
         {pending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <LogIn aria-hidden="true" />}
-        {pending ? "Проверяем…" : "Войти"}
+        {pending ? "Проверяем…" : mfaRequired ? "Подтвердить вход" : "Войти"}
       </Button>
     </form>
   );

@@ -2,8 +2,6 @@
 
 import * as React from "react";
 import {
-  Cable,
-  Globe2,
   History,
   ListChecks,
   Search,
@@ -27,8 +25,6 @@ import {
 const entries = [
   { href: "/admin/infrastructure", label: "Серверы", icon: Server },
   { href: "/admin/operations", label: "Операции", icon: ListChecks },
-  { href: "/admin/domains", label: "Домены и DNS", icon: Globe2 },
-  { href: "/admin/timeweb", label: "Подключение Timeweb", icon: Cable },
   { href: "/admin/students", label: "Ученики", icon: Users },
   { href: "/admin/audit", label: "Аудит", icon: History },
   { href: "/admin/settings", label: "Настройки", icon: Settings2 },

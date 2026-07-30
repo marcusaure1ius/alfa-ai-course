@@ -38,7 +38,8 @@ export function requiresProductionMfa(
   return (
     role === "admin" &&
     vercelEnvironment === "production" &&
-    (!hasVerifiedFactor || !challengeSatisfied)
+    hasVerifiedFactor &&
+    !challengeSatisfied
   );
 }
 

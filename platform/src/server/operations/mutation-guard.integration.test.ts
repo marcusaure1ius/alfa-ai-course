@@ -97,6 +97,15 @@ describe("guarded Timeweb mutation authorization", () => {
     const previousEnvironment = process.env.VERCEL_ENV;
     process.env.VERCEL_ENV = "production";
     try {
+      await sql`
+        INSERT INTO auth_factors (
+          id, user_id, factor_type, label, secret_ciphertext, verified_at
+        )
+        VALUES (
+          ${randomUUID()}, ${actor.userId}, 'totp', 'Test factor',
+          'encrypted-test-value', now()
+        )
+      `;
       const operationId = await createOperation();
 
       await expect(
@@ -110,6 +119,22 @@ describe("guarded Timeweb mutation authorization", () => {
         SET mfa_authenticated_at = now()
         WHERE id = ${actor.sessionId}
       `;
+      await expect(
+        authorizeMutationStep(sql, createCommand(operationId)),
+      ).resolves.toMatchObject({
+        environmentId: expect.any(String),
+      });
+    } finally {
+      if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = previousEnvironment;
+    }
+  });
+
+  it("allows password-reauthenticated production mutations before MFA enrollment", async () => {
+    const previousEnvironment = process.env.VERCEL_ENV;
+    process.env.VERCEL_ENV = "production";
+    try {
+      const operationId = await createOperation();
       await expect(
         authorizeMutationStep(sql, createCommand(operationId)),
       ).resolves.toMatchObject({

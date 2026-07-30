@@ -17,8 +17,6 @@ import { CommandMenu } from "./command-menu";
 const names: Record<string, string> = {
   infrastructure: "Серверы",
   operations: "Операции",
-  domains: "Домены и DNS",
-  timeweb: "Подключение Timeweb",
   students: "Ученики",
   audit: "Аудит",
   settings: "Настройки",
@@ -41,7 +39,7 @@ export function AdminHeader() {
             <ChevronRight aria-hidden="true" />
           </BreadcrumbSeparator>
           <BreadcrumbItem>
-            <BreadcrumbPage>{names[segment] ?? "Инфраструктура"}</BreadcrumbPage>
+            <BreadcrumbPage>{names[segment] ?? "Серверы"}</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>

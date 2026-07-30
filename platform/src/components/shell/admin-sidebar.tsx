@@ -2,8 +2,6 @@
 
 import {
   Activity,
-  Cable,
-  Globe2,
   History,
   ListChecks,
   Server,
@@ -12,7 +10,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { LogoutButton } from "@/components/auth/logout-button";
 import {
   Sidebar,
   SidebarContent,
@@ -32,8 +30,6 @@ import { NavLink } from "./nav-link";
 const infrastructure = [
   { href: "/admin/infrastructure", label: "Серверы", icon: Server },
   { href: "/admin/operations", label: "Операции", icon: ListChecks },
-  { href: "/admin/domains", label: "Домены и DNS", icon: Globe2 },
-  { href: "/admin/timeweb", label: "Подключение Timeweb", icon: Cable },
 ] as const;
 
 export function AdminSidebar({ email }: { email: string }) {
@@ -49,7 +45,7 @@ export function AdminSidebar({ email }: { email: string }) {
               <span className="grid min-w-0 flex-1 text-left leading-tight">
                 <span className="truncate font-semibold">Нейрокурс</span>
                 <span className="truncate font-mono text-[0.66rem] uppercase tracking-[0.12em] text-muted-foreground">
-                  Control plane
+                  Панель управления
                 </span>
               </span>
             </SidebarMenuButton>
@@ -59,7 +55,7 @@ export function AdminSidebar({ email }: { email: string }) {
       <SidebarSeparator />
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Инфраструктура</SidebarGroupLabel>
+          <SidebarGroupLabel>Управление</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {infrastructure.map((item) => (
@@ -83,23 +79,6 @@ export function AdminSidebar({ email }: { email: string }) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Граница системы</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <div className="mx-2 grid gap-2 rounded-md border bg-sidebar-accent/50 p-3 group-data-[collapsible=icon]:hidden">
-              <div className="flex items-center gap-2 text-xs font-medium">
-                <Cable aria-hidden="true" className="size-3.5 text-primary" />
-                Fake provider
-                <Badge variant="outline" className="ml-auto">
-                  local
-                </Badge>
-              </div>
-              <p className="text-xs leading-5 text-muted-foreground">
-                Облачные credentials и платные действия отключены.
-              </p>
-            </div>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
       <SidebarSeparator />
       <SidebarFooter className="p-3">
@@ -118,6 +97,9 @@ export function AdminSidebar({ email }: { email: string }) {
                 className="ml-auto size-3.5 text-status-ready"
               />
             </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <LogoutButton />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

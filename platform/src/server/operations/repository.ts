@@ -368,6 +368,7 @@ type GuardRow = {
   user_status: string;
   session_active: boolean;
   reauth_fresh: boolean;
+  has_verified_factor: boolean;
   mfa_fresh: boolean;
 };
 
@@ -402,6 +403,13 @@ export async function authorizeMutationStep(
         environments.status AS environment_status,
         users.role_id AS user_role,
         users.status AS user_status,
+        EXISTS (
+          SELECT 1
+          FROM auth_factors
+          WHERE auth_factors.user_id = users.id
+            AND auth_factors.verified_at IS NOT NULL
+            AND auth_factors.disabled_at IS NULL
+        ) AS has_verified_factor,
         (
           auth_sessions.id IS NOT NULL
           AND auth_sessions.revoked_at IS NULL
@@ -434,7 +442,11 @@ export async function authorizeMutationStep(
       throw new MutationGuardError("FORBIDDEN");
     }
     if (!row.reauth_fresh) throw new MutationGuardError("STALE_REAUTH");
-    if (process.env.VERCEL_ENV === "production" && !row.mfa_fresh) {
+    if (
+      process.env.VERCEL_ENV === "production" &&
+      row.has_verified_factor &&
+      !row.mfa_fresh
+    ) {
       throw new MutationGuardError("STALE_REAUTH");
     }
     if (!["queued", "running"].includes(row.operation_status)) {

@@ -1,13 +1,5 @@
-import { Globe2 } from "lucide-react";
-
-import { AdminPlaceholder } from "@/components/shell/admin-placeholder";
+import { redirect } from "next/navigation";
 
 export default function DomainsPage() {
-  return (
-    <AdminPlaceholder
-      title="Домены и DNS"
-      description="Здесь появятся безопасные DNS allocation и TLS status без raw provider payload."
-      icon={Globe2}
-    />
-  );
+  redirect("/admin/infrastructure");
 }

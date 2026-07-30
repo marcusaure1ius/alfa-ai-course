@@ -152,6 +152,20 @@
       linear-gradient(var(--primary), var(--primary)) 2.05rem 1.75rem / 1px
         calc(100% - 3.5rem) no-repeat;
   }
+
+  .login-canvas {
+    background-image:
+      radial-gradient(
+        circle at 12% 18%,
+        oklch(0.68 0.16 257 / 0.13),
+        transparent 27rem
+      ),
+      radial-gradient(
+        circle at 82% 82%,
+        oklch(0.76 0.12 292 / 0.1),
+        transparent 24rem
+      );
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

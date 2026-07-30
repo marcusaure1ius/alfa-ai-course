@@ -446,7 +446,7 @@ export async function getTimewebProvisioningPreview(
     return {
       ok: false,
       code: "MUTATION_GATE_CLOSED",
-      message: "Production Timeweb token не настроен.",
+      message: "Каталог серверов временно недоступен.",
     };
   }
   if (
@@ -456,7 +456,7 @@ export async function getTimewebProvisioningPreview(
     return {
       ok: false,
       code: "MUTATION_GATE_CLOSED",
-      message: "Production mutation gates закрыты.",
+      message: "Создание серверов временно недоступно.",
     };
   }
   const catalog = await adapter.discover();

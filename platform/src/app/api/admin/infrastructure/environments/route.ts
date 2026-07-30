@@ -177,7 +177,7 @@ export async function POST(request: Request): Promise<Response> {
       return operationError(
         409,
         "MUTATION_GATE_CLOSED",
-        "Production Timeweb mutation gates закрыты.",
+        "Создание серверов временно недоступно.",
       );
     }
     const reserved = await reserveCreateOperation(getDatabase(), access.session, {

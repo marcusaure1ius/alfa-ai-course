@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Нейрокурс — управление учебной средой",
+  title: "Нейрокурс — личный кабинет",
   description:
-    "Control plane для безопасного управления учебной инфраструктурой курса.",
+    "Кабинеты ученика и администратора образовательной платформы Нейрокурс.",
 };
 
 export default function RootLayout({

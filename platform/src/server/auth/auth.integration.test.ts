@@ -238,6 +238,27 @@ describe("database-backed authentication", () => {
     }
   });
 
+  it("allows an ordinary production password login before MFA enrollment", async () => {
+    const previousEnvironment = process.env.VERCEL_ENV;
+    process.env.VERCEL_ENV = "production";
+    try {
+      await bootstrapAdmin(sql, {
+        email: "admin@example.test",
+        password: "correct horse battery staple",
+      });
+      const accepted = await loginWithPassword(sql, {
+        email: "admin@example.test",
+        password: "correct horse battery staple",
+      });
+      expect(accepted.ok).toBe(true);
+      if (!accepted.ok) throw new Error("Production password login was rejected.");
+      expect(accepted.session.mfaAuthenticatedAt).toBeNull();
+    } finally {
+      if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = previousEnvironment;
+    }
+  });
+
   it("verifies the first TOTP code before enrolling an admin factor", async () => {
     const factorEncryptionKey = Buffer.alloc(32, 12).toString("base64url");
     const totpSecret = "JBSWY3DPEHPK3PXP";

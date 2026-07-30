@@ -9,10 +9,14 @@ import { hasPermission } from "./rbac";
 import { getSessionByToken, type AuthSession } from "./service";
 
 export async function requirePageSession(): Promise<AuthSession> {
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value ?? null;
-  const session = await getSessionByToken(getDatabase(), token);
+  const session = await getPageSession();
   if (!session) unauthorized();
   return session;
+}
+
+export async function getPageSession(): Promise<AuthSession | null> {
+  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value ?? null;
+  return getSessionByToken(getDatabase(), token);
 }
 
 export async function requireAdminPage(): Promise<AuthSession> {

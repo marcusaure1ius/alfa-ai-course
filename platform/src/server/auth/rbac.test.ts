@@ -19,8 +19,8 @@ describe("RBAC", () => {
     expect(hasPermission("student", "audit:read")).toBe(false);
   });
 
-  it("enforces the production admin MFA gate", () => {
-    expect(requiresProductionMfa("admin", "production", false)).toBe(true);
+  it("enforces MFA in production only after the admin enrolled a factor", () => {
+    expect(requiresProductionMfa("admin", "production", false)).toBe(false);
     expect(requiresProductionMfa("admin", "production", true)).toBe(true);
     expect(requiresProductionMfa("admin", "production", true, true)).toBe(false);
     expect(requiresProductionMfa("admin", "preview", false)).toBe(false);

@@ -64,6 +64,21 @@ async function csrfToken(): Promise<string> {
   return body.csrfToken;
 }
 
+const statusLabels: Record<string, string> = {
+  creating: "Создаётся",
+  active: "Работает",
+  degraded: "Нужна проверка",
+  deleting: "Удаляется",
+  cleanup_required: "Нужно завершить удаление",
+  deleted: "Удалён",
+};
+
+const resourceLabels: Record<string, string> = {
+  server: "Сервер",
+  public_ip: "Публичный IP",
+  backup: "Резервные копии",
+};
+
 function DeleteEnvironment({
   environment,
   onAccepted,
@@ -97,7 +112,7 @@ function DeleteEnvironment({
           ...(mfaCode ? { mfaCode } : {}),
         }),
       });
-      if (!reauth.ok) throw new Error("Пароль или второй фактор не подтверждены.");
+      if (!reauth.ok) throw new Error("Не удалось подтвердить вход.");
       const response = await fetch(
         `/api/admin/infrastructure/environments/${environment.id}`,
         {
@@ -114,11 +129,11 @@ function DeleteEnvironment({
           }),
         },
       );
-      if (!response.ok) throw new Error("Cleanup operation отклонена.");
+      if (!response.ok) throw new Error("Не удалось удалить сервер.");
       onAccepted();
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : "Cleanup operation отклонена.",
+        error instanceof Error ? error.message : "Не удалось удалить сервер.",
       );
     } finally {
       setPending(false);
@@ -138,32 +153,32 @@ function DeleteEnvironment({
           <AlertDialogTitle>Удалить «{environment.name}»?</AlertDialogTitle>
           <AlertDialogDescription>
             VPS и принадлежащий ему публичный IP будут удалены автоматически.
-            Данные на сервере восстановить нельзя. Действие требует MFA и свежую
-            re-auth не старше 10 минут.
+            Данные на сервере восстановить нельзя. Для подтверждения введите
+            пароль от кабинета.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-3">
           <div className="rounded-md border bg-muted/40 p-3 text-sm">
-            <p className="font-medium">Фактические owned ресурсы</p>
+            <p className="font-medium">Будут удалены</p>
             {environment.ownedResources.length > 0 ? (
               <ul className="mt-2 space-y-1">
                 {environment.ownedResources.map((resource) => (
                   <li
                     key={`${resource.kind}:${resource.providerResourceId}`}
-                    className="break-all font-mono text-xs"
+                    className="text-xs"
                   >
-                    {resource.kind} · {resource.providerResourceId} ·{" "}
-                    {resource.status} · {resource.monthlyRoubles} ₽/мес.
+                    {resourceLabels[resource.kind] ?? "Связанный ресурс"} ·{" "}
+                    {resource.monthlyRoubles} ₽/мес.
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="mt-1 text-muted-foreground">
-                Активные owned VPS/IP не найдены.
+                Активные ресурсы не найдены.
               </p>
             )}
             <p className="mt-2 text-destructive">
-              Сервер, его диски и provider backups будут удалены безвозвратно.
+              Сервер, его диски и резервные копии будут удалены безвозвратно.
             </p>
           </div>
           <label className="grid gap-1.5 text-sm">
@@ -189,7 +204,7 @@ function DeleteEnvironment({
             Я подтверждаю безвозвратную потерю данных.
           </label>
           <label className="grid gap-1.5 text-sm">
-            Пароль для свежей re-auth
+            Пароль от кабинета
             <Input
               type="password"
               autoComplete="current-password"
@@ -198,7 +213,7 @@ function DeleteEnvironment({
             />
           </label>
           <label className="grid gap-1.5 text-sm">
-            Код authenticator
+            Код из приложения (если включён)
             <Input
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -206,7 +221,7 @@ function DeleteEnvironment({
               onChange={(event) =>
                 setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))
               }
-              placeholder="Обязателен в production"
+              placeholder="000000"
             />
           </label>
         </div>
@@ -297,11 +312,15 @@ export function InfrastructureControl() {
         operationId?: string;
         error?: { message?: string };
       };
-      if (!response.ok) throw new Error(body.error?.message ?? "Mutation отклонена.");
-      setMessage(`Операция ${body.operationId} принята durable Workflow.`);
+      if (!response.ok) {
+        throw new Error(body.error?.message ?? "Не удалось создать сервер.");
+      }
+      setMessage("Сервер поставлен в очередь на создание.");
       await refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Mutation отклонена.");
+      setMessage(
+        error instanceof Error ? error.message : "Не удалось создать сервер.",
+      );
     } finally {
       setPending(false);
     }
@@ -319,20 +338,17 @@ export function InfrastructureControl() {
     <main className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">
-            Timeweb Cloud · deploy
-          </p>
+          <p className="text-sm font-medium text-primary">Панель администратора</p>
           <h1 className="mt-2 text-2xl font-semibold sm:text-3xl">
-            Новый учебный сервер
+            Серверы для n8n
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Выберите регион и конфигурацию. Цены загружаются из Timeweb перед
-            созданием.
+            Создайте новый сервер и следите за текущими серверами в одном окне.
           </p>
         </div>
         <Button variant="outline" onClick={() => void refresh(selection)}>
           <RefreshCw aria-hidden="true" />
-          Обновить тарифы
+          Обновить цены
         </Button>
       </div>
 
@@ -348,7 +364,7 @@ export function InfrastructureControl() {
                   Конфигурация сервера
                 </h2>
                 <p className="mt-1 text-sm text-slate-400">
-                  Каталог обновлён{" "}
+                  Цены обновлены{" "}
                   {new Date(preview.catalog.checkedAt).toLocaleString("ru-RU")}.
                 </p>
               </div>
@@ -414,7 +430,7 @@ export function InfrastructureControl() {
           </div>
 
           <div className="space-y-3 p-3 sm:p-5">
-            <div className="hidden grid-cols-[1.1fr_0.8fr_0.9fr_0.9fr_1.2fr] gap-4 px-5 text-xs text-slate-500 sm:grid">
+            <div className="hidden grid-cols-[1.1fr_0.8fr_0.9fr_0.9fr_1.2fr] gap-4 px-5 text-xs text-slate-400 sm:grid">
               <span>CPU</span>
               <span>RAM</span>
               <span>NVMe</span>
@@ -544,8 +560,10 @@ export function InfrastructureControl() {
       ) : preview ? (
         <Alert variant="destructive">
           <AlertTriangle aria-hidden="true" />
-          <AlertTitle>Конфигуратор временно недоступен</AlertTitle>
-          <AlertDescription>{preview.message}</AlertDescription>
+          <AlertTitle>Не удалось загрузить конфигурации</AlertTitle>
+          <AlertDescription>
+            Обновите страницу или повторите попытку немного позже.
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -553,8 +571,8 @@ export function InfrastructureControl() {
         <CardHeader>
           <CardTitle>Проверить и создать</CardTitle>
           <CardDescription>
-            Создаётся чистый VPS с выбранной Ubuntu, публичным IPv4 и SSH-ключом.
-            Установка n8n в эту операцию не входит.
+            Сейчас платформа создаёт сам сервер с Ubuntu и публичным IP.
+            Установка n8n пока запускается отдельно после создания.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
@@ -591,7 +609,7 @@ export function InfrastructureControl() {
           </div>
           {activeEnvironment ? (
             <p className="text-sm text-muted-foreground lg:col-span-2">
-              Сначала удалите активный сервер: в первом релизе доступна одна среда.
+              Сначала удалите активный сервер: сейчас доступен один сервер.
             </p>
           ) : null}
         </CardContent>
@@ -603,7 +621,7 @@ export function InfrastructureControl() {
           <Card className="border-dashed">
             <CardContent className="flex items-center gap-3 py-8 text-muted-foreground">
               <Server aria-hidden="true" />
-              Сред пока нет.
+              Серверов пока нет. Выберите конфигурацию выше и создайте первый.
             </CardContent>
           </Card>
         ) : (
@@ -613,7 +631,9 @@ export function InfrastructureControl() {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-medium">{environment.name}</p>
-                    <Badge variant="outline">{environment.status}</Badge>
+                    <Badge variant="outline">
+                      {statusLabels[environment.status] ?? "Обновляется"}
+                    </Badge>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {environment.publicIp ?? "IP ещё не назначен"} · {environment.monthlyRoubles.toLocaleString("ru-RU")} ₽/мес.
@@ -622,8 +642,8 @@ export function InfrastructureControl() {
                     <ul className="mt-2 space-y-1 text-xs text-destructive">
                       {environment.ownedResources.map((resource) => (
                         <li key={`${resource.kind}:${resource.providerResourceId}`}>
-                          Остался {resource.kind}: {resource.providerResourceId} (
-                          {resource.monthlyRoubles} ₽/мес.)
+                          Остался {resourceLabels[resource.kind] ?? "ресурс"} (
+                          {resource.monthlyRoubles} ₽/мес.). Повторите удаление.
                         </li>
                       ))}
                     </ul>

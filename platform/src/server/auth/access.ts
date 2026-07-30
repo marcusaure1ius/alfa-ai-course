@@ -55,18 +55,6 @@ export async function requireFreshAdmin(request: Request): Promise<AccessResult>
     };
   }
   if (process.env.VERCEL_ENV === "production") {
-    if (
-      !result.session.mfaAuthenticatedAt ||
-      !hasFreshReauthentication(result.session.mfaAuthenticatedAt)
-    ) {
-      return {
-        ok: false,
-        response: Response.json(
-          { error: "Для production mutation требуется свежий MFA challenge." },
-          { status: 403, headers: { "cache-control": "no-store" } },
-        ),
-      };
-    }
     const factors = await getDatabase()<{ present: boolean }[]>`
       SELECT EXISTS (
         SELECT 1
@@ -77,11 +65,15 @@ export async function requireFreshAdmin(request: Request): Promise<AccessResult>
           AND disabled_at IS NULL
       ) AS present
     `;
-    if (!factors[0]?.present) {
+    if (
+      factors[0]?.present &&
+      (!result.session.mfaAuthenticatedAt ||
+        !hasFreshReauthentication(result.session.mfaAuthenticatedAt))
+    ) {
       return {
         ok: false,
         response: Response.json(
-          { error: "Для production mutation требуется подтверждённый MFA." },
+          { error: "Введите актуальный код подтверждения." },
           { status: 403, headers: { "cache-control": "no-store" } },
         ),
       };

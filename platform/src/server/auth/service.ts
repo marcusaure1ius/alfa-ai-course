@@ -494,7 +494,11 @@ export async function reauthenticateSession(
       UPDATE auth_sessions
       SET reauthenticated_at = now(),
           mfa_authenticated_at = CASE
-            WHEN ${process.env.VERCEL_ENV === "production"} THEN now()
+            WHEN ${
+              process.env.VERCEL_ENV === "production" &&
+              Boolean(user?.has_verified_factor) &&
+              challengeSatisfied
+            } THEN now()
             ELSE mfa_authenticated_at
           END,
           last_seen_at = now()

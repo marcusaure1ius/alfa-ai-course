@@ -49,7 +49,10 @@ export async function POST(request: Request): Promise<Response> {
           ? "Слишком много попыток. Повторите позже."
           : "Неверный email или пароль.";
     return Response.json(
-      { error },
+      {
+        error,
+        ...(result.reason === "mfa_required" ? { code: "MFA_REQUIRED" } : {}),
+      },
       { status, headers: { "cache-control": "no-store" } },
     );
   }

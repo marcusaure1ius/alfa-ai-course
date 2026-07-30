@@ -4,6 +4,27 @@
 project должен использовать **Root Directory `platform/`**. Root starter kit,
 его Compose, scripts и workflows не входят в platform build context.
 
+## Пользовательский путь
+
+Платформа рассчитана на один обычный вход по адресу `https://neurokurs.ru`:
+
+1. пользователь вводит email и пароль;
+2. платформа определяет роль аккаунта;
+3. администратор сразу попадает в `/admin/infrastructure`, где видит создание и
+   список серверов;
+4. ученик попадает в отдельный `/student`, который пока показывает пустой
+   кабинет будущих материалов курса.
+
+Пользователь не выбирает provider mode, не вводит Vercel/Timeweb credentials и
+не видит внутренние deployment gates. Эти параметры принадлежат только
+server-side окружению проекта. Второй фактор, если он включён для аккаунта,
+запрашивается отдельным шагом только после правильных email и пароля.
+
+Экран «Серверы» на текущем этапе создаёт VPS с выбранной Ubuntu, публичным IPv4
+и опциональными резервными копиями. Автоматическая установка n8n, DNS и TLS
+остаётся отдельным lifecycle `T-0057`; интерфейс не выдаёт созданный VPS за уже
+готовую n8n-среду.
+
 ## Локальный запуск без cloud credentials
 
 Требования: Node.js 24 и Docker Compose. Production Vercel/Neon/Timeweb ресурсы
@@ -47,11 +68,10 @@ unset BOOTSTRAP_ADMIN_PASSWORD
 необратимо закрыт в той же транзакции. Повторная команда завершается ошибкой.
 Для локального файла окружения используйте `chmod 600 .env.local`.
 
-Production admin не сможет завершить password-only вход: gate требует активный
-подтверждённый MFA factor и успешно пройденный challenge. TOTP/WebAuthn
-challenge не имитируется. Для существующего administrator TOTP enrollment
-выполняется одноразовой CLI-командой с обязательной проверкой первого code;
-production порядок и требования описаны в
+Если для администратора включён второй фактор, после правильного пароля форма
+отдельно попросит шестизначный код. TOTP/WebAuthn challenge не имитируется. Для
+существующего администратора TOTP enrollment выполняется одноразовой
+CLI-командой с обязательной проверкой первого кода; технический порядок описан в
 [`docs/timeweb-lifecycle-smoke.md`](../docs/timeweb-lifecycle-smoke.md).
 
 ## Auth и RBAC
@@ -120,23 +140,16 @@ npm run test:workflow
 
 ## Responsive shell
 
-`/admin` открывает первым раздел «Инфраструктура». На desktop используется
+`/admin` открывает первым раздел «Серверы». На desktop используется
 сворачиваемая shadcn Sidebar, на mobile тот же navigation автоматически
 переходит в focus-trapped Sheet и закрывается после перехода. Поиск разделов
 доступен по `Cmd/Ctrl+K`.
 
-Для локальной проверки empty/fake/error состояний без provider API:
-
-```text
-/admin/infrastructure
-/admin/infrastructure?demo=list
-/admin/infrastructure?demo=error
-```
-
-Параметр `demo` игнорируется в production. `/student` использует отдельную
-оболочку без admin navigation, provider ID, IP, стоимости и operation data.
-Запрос ученика к `/admin/**` останавливается server-side Proxy policy с `403`;
-скрытие ссылок не используется как контроль доступа.
+`/admin/infrastructure` всегда открывает один и тот же продуктовый экран без
+query-переключателей. `/student` использует отдельную оболочку без admin
+navigation, provider ID, IP, стоимости и operation data. Запрос ученика к
+`/admin/**` останавливается server-side Proxy policy с `403`; скрытие ссылок не
+используется как контроль доступа.
 
 ## Границы foundation
 

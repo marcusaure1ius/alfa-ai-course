@@ -8,6 +8,10 @@ import { AdminSidebar } from "./admin-sidebar";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/admin/infrastructure",
+  useRouter: () => ({
+    replace: vi.fn(),
+    refresh: vi.fn(),
+  }),
 }));
 
 beforeAll(() => {
@@ -39,8 +43,6 @@ describe("AdminSidebar collapsed navigation", () => {
     const destinations = [
       ["Серверы", "/admin/infrastructure"],
       ["Операции", "/admin/operations"],
-      ["Домены и DNS", "/admin/domains"],
-      ["Подключение Timeweb", "/admin/timeweb"],
     ] as const;
 
     for (const [label, href] of destinations) {
@@ -49,5 +51,7 @@ describe("AdminSidebar collapsed navigation", () => {
       expect(link.getAttribute("data-slot")).toBe("sidebar-menu-button");
       expect(link.className).not.toContain("group-data-[collapsible=icon]:hidden");
     }
+    expect(screen.queryByText("Fake provider")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Подключение Timeweb" })).toBeNull();
   });
 });
