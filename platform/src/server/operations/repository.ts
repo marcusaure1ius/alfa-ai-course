@@ -6,6 +6,10 @@ import type { AuthSession } from "../auth/service";
 import { hasFreshReauthentication, hasPermission } from "../auth/rbac";
 import type { DatabaseSql } from "../db/client";
 import type { OwnedProviderResource } from "../providers/timeweb/contracts";
+import {
+  COURSE_DNS_ZONE,
+  COURSE_HOSTNAME,
+} from "../providers/timeweb/bootstrap-profile";
 import type { TimewebProvisioningPlan } from "../providers/timeweb/provisioning";
 import {
   MUTATION_COMMAND_VERSION,
@@ -196,6 +200,17 @@ export async function reserveCreateOperation(
         INSERT INTO environments (id, name, owner_user_id, status)
         VALUES (${environmentId}, ${input.name}, ${actor.userId}, 'creating')
       `;
+      if (input.providerPlan) {
+        await transaction`
+          INSERT INTO domain_allocations (
+            id, environment_id, hostname, zone_name, record_type, status
+          )
+          VALUES (
+            ${randomUUID()}, ${environmentId}, ${COURSE_HOSTNAME},
+            ${COURSE_DNS_ZONE}, 'A', 'reserved'
+          )
+        `;
+      }
       await transaction`
         INSERT INTO operations (
           id, environment_id, kind, status, requested_by_user_id,

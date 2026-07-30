@@ -2,17 +2,35 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 
-import { getDatabase, type DatabaseSql } from "@/server/db/client";
+import {
+  getDatabase,
+  type DatabaseSql,
+  type DatabaseTransactionSql,
+} from "@/server/db/client";
 import type { WorkflowCommand } from "@/server/operations/contracts";
 import { operationEnvironmentId } from "@/server/operations/repository";
 
 import type {
   OwnedProviderResource,
+  TimewebDnsRecord,
   TimewebPublicIpCandidate,
   TimewebPublicIpResource,
   TimewebResourceKind,
+  TimewebServerStatus,
 } from "./contracts";
+import {
+  buildStarterKitCloudInit,
+  COURSE_DNS_TTL_SECONDS,
+  COURSE_DNS_ZONE,
+  COURSE_HOSTNAME,
+  COURSE_SERVER_HOSTNAME,
+  STARTER_KIT_BOOTSTRAP_PROFILE,
+} from "./bootstrap-profile";
 import { FakeProviderError, FakeTimewebAdapter } from "./fake";
+import {
+  createExternalEnvironmentVerifier,
+  ExternalHealthError,
+} from "./external-health";
 import { createProductionTimewebMutationAdapter } from "./mutation";
 import {
   getTimewebProvisioningPreview,
@@ -35,10 +53,16 @@ export class LifecycleProviderError extends Error {
 export type InfrastructureLifecycleAdapter = Readonly<{
   reservePublicIp(): Promise<void>;
   resolvePublicIpAmbiguity(): Promise<void>;
+  resolveServerAmbiguity(): Promise<void>;
+  resolveDnsAmbiguity(): Promise<void>;
   createServer(): Promise<OwnedProviderResource>;
   reconcileServer(): Promise<void>;
   configureDns(): Promise<OwnedProviderResource | void>;
+  verifyBootstrapReachable(): Promise<void>;
+  waitForDns(): Promise<void>;
   verifyTls(): Promise<void>;
+  verifyN8nHealth(): Promise<void>;
+  recordReadyInstallation(): Promise<void>;
   deleteOwnedResource(resource: OwnedProviderResource): Promise<void>;
 }>;
 
@@ -57,7 +81,7 @@ function safePlan(value: unknown): TimewebProvisioningPlan {
   }
   const plan = value as Record<string, unknown>;
   if (
-    plan.version !== "timeweb-provisioning-v1" ||
+    plan.version !== "timeweb-provisioning-v2" ||
     !Number.isSafeInteger(plan.presetId) ||
     !Number.isSafeInteger(plan.operatingSystemId) ||
     typeof plan.projectId !== "number" ||
@@ -66,9 +90,14 @@ function safePlan(value: unknown): TimewebProvisioningPlan {
     !Number.isSafeInteger(plan.sshKeyId) ||
     typeof plan.monthlyPublicIpRoubles !== "number" ||
     !Number.isFinite(plan.monthlyPublicIpRoubles) ||
+    !Number.isSafeInteger(plan.bandwidthMbps) ||
+    typeof plan.requiredBalanceRoubles !== "number" ||
+    !Number.isFinite(plan.requiredBalanceRoubles) ||
     typeof plan.availabilityZone !== "string" ||
     plan.projectId <= 0 ||
     plan.sshKeyId <= 0 ||
+    (plan.bandwidthMbps as number) <= 0 ||
+    plan.requiredBalanceRoubles <= 0 ||
     plan.monthlyPublicIpRoubles <= 0
   ) {
     throw new LifecycleProviderError(
@@ -153,7 +182,7 @@ async function activeResource(
 }
 
 async function recordResource(
-  sql: DatabaseSql,
+  sql: DatabaseSql | DatabaseTransactionSql,
   command: WorkflowCommand,
   resource: OwnedProviderResource,
   publicMetadata: Record<string, string | number | boolean | null>,
@@ -179,7 +208,7 @@ async function recordResource(
 }
 
 async function markDeleted(
-  sql: DatabaseSql,
+  sql: DatabaseSql | DatabaseTransactionSql,
   resource: OwnedProviderResource,
 ): Promise<void> {
   const rows = await sql<{ id: string }[]>`
@@ -203,6 +232,7 @@ async function markDeleted(
 const PROVIDER_MUTATION_STARTED_LOG =
   "provider mutation started; response outcome may be ambiguous";
 const PUBLIC_IP_MUTATION_LOG_VERSION = "public-ip-create-v1";
+const DNS_MUTATION_LOG_VERSION = "dns-a-create-v1";
 
 export async function providerMutationStarted(
   sql: DatabaseSql,
@@ -310,6 +340,250 @@ async function markPublicIpMutationStarted(
   }
 }
 
+export type DnsMutationMarker = Readonly<{
+  targetHash: string;
+  baselineHashes: ReadonlySet<string>;
+}>;
+
+async function dnsMutationMarker(
+  sql: DatabaseSql,
+  operationId: string,
+): Promise<DnsMutationMarker | null> {
+  const rows = await sql<{ logs_redacted: string | null }[]>`
+    SELECT logs_redacted
+    FROM operation_steps
+    WHERE operation_id = ${operationId} AND logical_key = 'configure_dns'
+  `;
+  const value = rows[0]?.logs_redacted;
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as {
+      version?: unknown;
+      targetHash?: unknown;
+      baselineHashes?: unknown;
+    };
+    if (
+      parsed.version === DNS_MUTATION_LOG_VERSION &&
+      typeof parsed.targetHash === "string" &&
+      /^[0-9a-f]{64}$/.test(parsed.targetHash) &&
+      Array.isArray(parsed.baselineHashes) &&
+      parsed.baselineHashes.every(
+        (hash) => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash),
+      )
+    ) {
+      return {
+        targetHash: parsed.targetHash,
+        baselineHashes: new Set(parsed.baselineHashes),
+      };
+    }
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "DNS mutation marker повреждён.",
+    );
+  } catch {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "DNS mutation marker повреждён.",
+    );
+  }
+}
+
+async function markDnsMutationStarted(
+  sql: DatabaseSql,
+  operationId: string,
+  executionToken: string,
+  target: string,
+  baselineIds: readonly string[],
+): Promise<void> {
+  const logs = JSON.stringify({
+    version: DNS_MUTATION_LOG_VERSION,
+    targetHash: providerIdHash(target),
+    baselineHashes: baselineIds.map(providerIdHash).sort(),
+  });
+  const rows = await sql<{ id: string }[]>`
+    UPDATE operation_steps
+    SET logs_redacted = ${logs}, updated_at = now()
+    WHERE operation_id = ${operationId}
+      AND logical_key = 'configure_dns'
+      AND status = 'running'
+      AND execution_token = ${executionToken}
+    RETURNING id
+  `;
+  if (!rows[0]) {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "DNS step потерял durable lease до provider mutation.",
+      true,
+    );
+  }
+}
+
+async function clearDnsMutationMarkerAfterDefinitiveRejection(
+  sql: DatabaseSql,
+  operationId: string,
+  executionToken: string,
+): Promise<void> {
+  const rows = await sql<{ id: string }[]>`
+    UPDATE operation_steps
+    SET logs_redacted = NULL, updated_at = now()
+    WHERE operation_id = ${operationId}
+      AND logical_key = 'configure_dns'
+      AND status = 'running'
+      AND execution_token = ${executionToken}
+    RETURNING id
+  `;
+  if (!rows[0]) {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "DNS step потерял durable lease после definitive provider rejection.",
+    );
+  }
+}
+
+export async function runFreshDnsCreate<T>(
+  create: () => Promise<T>,
+  clearMarker: () => Promise<void>,
+): Promise<T> {
+  try {
+    return await create();
+  } catch (error) {
+    if (
+      error instanceof TimewebProviderError &&
+      ["INVALID_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(
+        error.code,
+      )
+    ) {
+      await clearMarker();
+    }
+    throw error;
+  }
+}
+
+async function recordDnsResource(
+  sql: DatabaseSql,
+  command: WorkflowCommand,
+  resource: TimewebDnsRecord,
+): Promise<void> {
+  await sql.begin(async (transaction) => {
+    await recordResource(transaction, command, resource, {
+      zone: resource.zone,
+      hostname: resource.hostname,
+      type: resource.type,
+      value: resource.value,
+      ttl: resource.ttl,
+    });
+    const rows = await transaction<{ id: string }[]>`
+      UPDATE domain_allocations
+      SET provider_resource_id = provider_resources.id,
+          status = 'record_created',
+          updated_at = now()
+      FROM provider_resources
+      WHERE domain_allocations.environment_id = ${resource.environmentId}
+        AND domain_allocations.hostname = ${resource.hostname}
+        AND domain_allocations.zone_name = ${resource.zone}
+        AND domain_allocations.record_type = 'A'
+        AND domain_allocations.status IN ('reserved', 'record_created')
+        AND provider_resources.environment_id = domain_allocations.environment_id
+        AND provider_resources.provider = 'timeweb'
+        AND provider_resources.resource_kind = 'dns_record'
+        AND provider_resources.provider_resource_id = ${resource.externalId}
+      RETURNING domain_allocations.id
+    `;
+    if (!rows[0]) {
+      throw new LifecycleProviderError(
+        "DNS_RESERVATION_LOST",
+        "Reserved hostname не найден после DNS mutation.",
+      );
+    }
+  });
+}
+
+function assertDnsMutationTarget(
+  marker: DnsMutationMarker,
+  expectedHostname: string,
+  expectedAddress: string,
+): void {
+  if (
+    marker.targetHash !==
+    providerIdHash(`${expectedHostname}:${expectedAddress}`)
+  ) {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "DNS mutation marker не совпадает с approved target.",
+    );
+  }
+}
+
+export function recoverDnsRecordCandidate(
+  records: readonly TimewebDnsRecord[],
+  marker: DnsMutationMarker,
+  expectedHostname: string,
+  expectedAddress: string,
+  conflictingHostnames: readonly string[],
+  attemptCount = 10,
+): TimewebDnsRecord {
+  assertDnsMutationTarget(
+    marker,
+    expectedHostname,
+    expectedAddress,
+  );
+  const hostnameRecords = records.filter(
+    (record) => record.hostname === expectedHostname,
+  );
+  const nonBaseline = hostnameRecords.filter(
+    (record) =>
+      !marker.baselineHashes.has(providerIdHash(record.externalId)),
+  );
+  const conflictCount = conflictingHostnames.filter(
+    (hostname) => hostname === expectedHostname,
+  ).length;
+  if (
+    nonBaseline.length === 0 &&
+    conflictCount === 0 &&
+    attemptCount < 10
+  ) {
+    throw new LifecycleProviderError(
+      "DNS_RECORD_NOT_READY",
+      "Timeweb ещё не показывает созданную DNS-запись.",
+      true,
+    );
+  }
+  const exact = nonBaseline.filter(
+    (record) => record.value === expectedAddress,
+  );
+  if (
+    conflictCount !== 1 ||
+    nonBaseline.length !== 1 ||
+    exact.length !== 1
+  ) {
+    throw new LifecycleProviderError(
+      nonBaseline.length > 1
+        ? "DUPLICATE_OWNED_RESOURCE"
+        : "UNKNOWN_DNS_OUTCOME",
+      "Не удалось однозначно восстановить созданную DNS-запись.",
+    );
+  }
+  return exact[0]!;
+}
+
+export function resolveDnsAmbiguityCandidate(
+  records: readonly TimewebDnsRecord[],
+  marker: DnsMutationMarker,
+  expectedHostname: string,
+  expectedAddress: string,
+  conflictingHostnames: readonly string[],
+  attemptCount: number,
+): TimewebDnsRecord {
+  return recoverDnsRecordCandidate(
+    records,
+    marker,
+    expectedHostname,
+    expectedAddress,
+    conflictingHostnames,
+    attemptCount,
+  );
+}
+
 export function recoverPublicIpCandidate(
   candidates: readonly TimewebPublicIpCandidate[],
   baseline: ReadonlySet<string>,
@@ -370,6 +644,52 @@ export function resolvePublicIpAmbiguityCandidate(
   );
 }
 
+export function requireReadyServerStatus(
+  status: TimewebServerStatus,
+  attemptCount: number,
+): void {
+  if (status.state === "unsupported") {
+    throw new LifecycleProviderError(
+      "PROVIDER_STATUS_UNSUPPORTED",
+      "Timeweb вернул неизвестный server status; автоматический active запрещён.",
+    );
+  }
+  if (["blocked", "no_paid"].includes(status.value)) {
+    if (attemptCount < 3) {
+      throw new LifecycleProviderError(
+        "SERVER_NOT_READY",
+        `Timeweb временно показывает ${status.value} во время provisioning.`,
+        true,
+      );
+    }
+    throw new LifecycleProviderError(
+      status.value === "blocked"
+        ? "SERVER_BLOCKED"
+        : "SERVER_BILLING_BLOCKED",
+      `Timeweb сохранил terminal status ${status.value}.`,
+    );
+  }
+  if (status.value === "permanent_blocked") {
+    throw new LifecycleProviderError(
+      "SERVER_BILLING_BLOCKED",
+      `Timeweb вернул terminal status ${status.value}.`,
+    );
+  }
+  if (status.value === "removed") {
+    throw new LifecycleProviderError(
+      "SERVER_REMOVED",
+      "Timeweb удалил VPS до завершения provisioning.",
+    );
+  }
+  if (status.value !== "on") {
+    throw new LifecycleProviderError(
+      "SERVER_NOT_READY",
+      `Timeweb server ещё не готов: ${status.value}.`,
+      true,
+    );
+  }
+}
+
 async function unresolvedPublicIpMutation(
   sql: DatabaseSql,
   environmentId: string,
@@ -427,6 +747,13 @@ async function operationStepAttempts(
 
 function mappedError(error: unknown): LifecycleProviderError {
   if (error instanceof LifecycleProviderError) return error;
+  if (error instanceof ExternalHealthError) {
+    return new LifecycleProviderError(
+      error.code,
+      error.message,
+      error.retryable,
+    );
+  }
   if (error instanceof TimewebProviderError) {
     const code =
       error.code === "TIMEOUT"
@@ -469,6 +796,7 @@ class ProductionTimewebLifecycleAdapter
     >,
     private readonly createExecutionToken?: string,
     private readonly reserveIpExecutionToken?: string,
+    private readonly configureDnsExecutionToken?: string,
   ) {}
 
   private requirePlan(): TimewebProvisioningPlan {
@@ -479,6 +807,23 @@ class ProductionTimewebLifecycleAdapter
       );
     }
     return this.context.plan;
+  }
+
+  private async publicIpv4(): Promise<string> {
+    const publicIp = await activeResource(
+      this.sql,
+      this.context.environmentId,
+      "public_ip",
+    );
+    const address = publicIp?.publicMetadata.address;
+    if (typeof address !== "string") {
+      throw new LifecycleProviderError(
+        "PUBLIC_IP_NOT_READY",
+        "Owned floating IP отсутствует в durable state.",
+        true,
+      );
+    }
+    return address;
   }
 
   async reservePublicIp(): Promise<void> {
@@ -568,6 +913,74 @@ class ProductionTimewebLifecycleAdapter
     }
   }
 
+  async resolveServerAmbiguity(): Promise<void> {
+    try {
+      if (
+        await activeResource(
+          this.sql,
+          this.context.environmentId,
+          "server",
+        )
+      ) {
+        return;
+      }
+      const rows = await this.sql<
+        {
+          create_operation_id: string;
+          input_snapshot: Record<string, unknown>;
+        }[]
+      >`
+        SELECT id AS create_operation_id, input_snapshot
+        FROM operations
+        WHERE environment_id = ${this.context.environmentId}
+          AND kind = 'create_environment'
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+      const row = rows[0];
+      if (
+        !row ||
+        !(await providerMutationStarted(
+          this.sql,
+          row.create_operation_id,
+        ))
+      ) {
+        return;
+      }
+      const recovered = await this.adapter.findServerByEnvironmentId(
+        this.context.environmentId,
+      );
+      if (recovered) {
+        const plan = safePlan(row.input_snapshot.providerPlan);
+        await recordResource(this.sql, this.command, recovered, {
+          presetId: plan.presetId,
+          operatingSystemId: plan.operatingSystemId,
+          availabilityZone: plan.availabilityZone,
+          monthlyRoubles: plan.monthlyServerRoubles,
+          projectId: plan.projectId,
+          passwordAuthentication: false,
+        });
+        return;
+      }
+      const attempts = await operationStepAttempts(
+        this.sql,
+        this.command.operationId,
+        "resolve_server_ambiguity",
+      );
+      throw new LifecycleProviderError(
+        attempts < 10
+          ? "SERVER_OUTCOME_NOT_READY"
+          : "UNKNOWN_SERVER_OUTCOME",
+        attempts < 10
+          ? "Timeweb ещё не показывает VPS после неоднозначного create."
+          : "VPS create outcome нельзя безопасно считать отсутствующим.",
+        attempts < 10,
+      );
+    } catch (error) {
+      throw mappedError(error);
+    }
+  }
+
   private async ensureAttachedPublicIp(
     server: OwnedProviderResource & Readonly<{ kind: "server" }>,
   ): Promise<void> {
@@ -627,8 +1040,65 @@ class ProductionTimewebLifecycleAdapter
     }
   }
 
-  private async assertFreshProviderPlan(): Promise<void> {
-    const preview = await getTimewebProvisioningPreview();
+  private async assertFreshProviderPlan(
+    allowVerifiedOwnedDns = false,
+  ): Promise<void> {
+    let approvedOwnedDns:
+      | {
+          environmentId: string;
+          externalId: string;
+          address: string;
+        }
+      | undefined;
+    let approvedOwnedPublicIp:
+      | {
+          externalId: string;
+          address: string;
+        }
+      | undefined;
+    if (allowVerifiedOwnedDns) {
+      const [dns, publicIp] = await Promise.all([
+        activeResource(
+          this.sql,
+          this.context.environmentId,
+          "dns_record",
+        ),
+        activeResource(
+          this.sql,
+          this.context.environmentId,
+          "public_ip",
+        ),
+      ]);
+      const expectedAddress = publicIp?.publicMetadata.address;
+      if (
+        !dns ||
+        !publicIp ||
+        typeof expectedAddress !== "string" ||
+        dns.publicMetadata.zone !== COURSE_DNS_ZONE ||
+        dns.publicMetadata.hostname !== COURSE_HOSTNAME ||
+        dns.publicMetadata.type !== "A" ||
+        dns.publicMetadata.value !== expectedAddress
+      ) {
+        throw new LifecycleProviderError(
+          "OWNED_DNS_NOT_READY",
+          "Owned DNS metadata не позволяет пропустить hostname preflight.",
+        );
+      }
+      approvedOwnedDns = {
+        environmentId: this.context.environmentId,
+        externalId: dns.externalId,
+        address: expectedAddress,
+      };
+      approvedOwnedPublicIp = {
+        externalId: publicIp.externalId,
+        address: expectedAddress,
+      };
+    }
+    const preview = await getTimewebProvisioningPreview(
+      process.env,
+      fetch,
+      { approvedOwnedDns, approvedOwnedPublicIp },
+    );
     if (!preview.ok) {
       throw new LifecycleProviderError(
         preview.code,
@@ -643,6 +1113,7 @@ class ProductionTimewebLifecycleAdapter
       fresh.availabilityZone !== expected.availabilityZone ||
       fresh.projectId !== expected.projectId ||
       fresh.sshKeyId !== expected.sshKeyId ||
+      fresh.bandwidthMbps !== expected.bandwidthMbps ||
       fresh.monthlyServerRoubles !== expected.monthlyServerRoubles ||
       fresh.monthlyPublicIpRoubles !== expected.monthlyPublicIpRoubles
     ) {
@@ -686,11 +1157,23 @@ class ProductionTimewebLifecycleAdapter
           "Owned server не найден после timeout; повторное создание запрещено.",
         );
       }
-      await this.assertFreshProviderPlan();
+      await this.assertFreshProviderPlan(true);
       if (!this.createExecutionToken) {
         throw new LifecycleProviderError(
           "STEP_STATE_INVALID",
           "Create execution token отсутствует до provider mutation.",
+        );
+      }
+      const publicIp = await activeResource(
+        this.sql,
+        this.context.environmentId,
+        "public_ip",
+      );
+      if (typeof publicIp?.publicMetadata.address !== "string") {
+        throw new LifecycleProviderError(
+          "PUBLIC_IP_NOT_READY",
+          "Owned floating IP отсутствует до server create.",
+          true,
         );
       }
       await markProviderMutationStarted(
@@ -706,6 +1189,10 @@ class ProductionTimewebLifecycleAdapter
         availabilityZone: plan.availabilityZone,
         projectId: plan.projectId,
         sshKeyId: plan.sshKeyId,
+        bandwidthMbps: plan.bandwidthMbps,
+        publicIpv4: publicIp.publicMetadata.address,
+        serverHostname: COURSE_SERVER_HOSTNAME,
+        cloudInit: buildStarterKitCloudInit(),
       });
       await recordResource(this.sql, this.command, resource, {
         presetId: plan.presetId,
@@ -745,25 +1232,14 @@ class ProductionTimewebLifecycleAdapter
           true,
         );
       }
-      if (reconciliation.status.state === "unsupported") {
-        throw new LifecycleProviderError(
-          "PROVIDER_STATUS_UNSUPPORTED",
-          "Timeweb вернул неизвестный server status; автоматический active запрещён.",
-        );
-      }
-      if (reconciliation.status.value === "blocked") {
-        throw new LifecycleProviderError(
-          "SERVER_BLOCKED",
-          "Timeweb заблокировал созданный VPS.",
-        );
-      }
-      if (reconciliation.status.value !== "on") {
-        throw new LifecycleProviderError(
-          "SERVER_NOT_READY",
-          `Timeweb server ещё не готов: ${reconciliation.status.value}.`,
-          true,
-        );
-      }
+      requireReadyServerStatus(
+        reconciliation.status,
+        await operationStepAttempts(
+          this.sql,
+          this.command.operationId,
+          "provider_installing",
+        ),
+      );
       await this.ensureAttachedPublicIp({
         ...resource,
         kind: "server",
@@ -773,18 +1249,314 @@ class ProductionTimewebLifecycleAdapter
     }
   }
 
-  async configureDns(): Promise<void> {
-    throw new LifecycleProviderError(
-      "OUT_OF_SCOPE",
-      "DNS относится к срезу 1B и не вызывается в production 1A.",
+  async configureDns(): Promise<OwnedProviderResource> {
+    const existing = await activeResource(
+      this.sql,
+      this.context.environmentId,
+      "dns_record",
     );
+    if (existing) {
+      const metadata = existing.publicMetadata;
+      if (
+        metadata.zone !== COURSE_DNS_ZONE ||
+        metadata.hostname !== COURSE_HOSTNAME ||
+        metadata.type !== "A" ||
+        typeof metadata.value !== "string" ||
+        typeof metadata.ttl !== "number"
+      ) {
+        throw new LifecycleProviderError(
+          "WRONG_OWNERSHIP",
+          "Recorded DNS resource не прошёл metadata-проверку.",
+        );
+      }
+      const resource: TimewebDnsRecord = {
+        ...existing,
+        kind: "dns_record",
+        zone: COURSE_DNS_ZONE,
+        hostname: COURSE_HOSTNAME,
+        type: "A",
+        value: metadata.value,
+        ttl: metadata.ttl,
+      };
+      await recordDnsResource(this.sql, this.command, resource);
+      return resource;
+    }
+    try {
+      const allocations = await this.sql<
+        { hostname: string; zone_name: string; status: string }[]
+      >`
+        SELECT hostname, zone_name, status
+        FROM domain_allocations
+        WHERE environment_id = ${this.context.environmentId}
+          AND status NOT IN ('released', 'deleted')
+        LIMIT 2
+      `;
+      const allocation = allocations[0];
+      if (
+        allocations.length !== 1 ||
+        allocation?.hostname !== COURSE_HOSTNAME ||
+        allocation.zone_name !== COURSE_DNS_ZONE ||
+        !["reserved", "record_created"].includes(allocation.status)
+      ) {
+        throw new LifecycleProviderError(
+          "DNS_RESERVATION_INVALID",
+          "Approved hostname не зарезервирован для environment.",
+        );
+      }
+      const publicIp = await activeResource(
+        this.sql,
+        this.context.environmentId,
+        "public_ip",
+      );
+      const address = publicIp?.publicMetadata.address;
+      if (typeof address !== "string") {
+        throw new LifecycleProviderError(
+          "PUBLIC_IP_NOT_READY",
+          "Owned floating IP отсутствует до DNS create.",
+          true,
+        );
+      }
+      const records = await this.adapter.listDnsRecords({
+        environmentId: this.context.environmentId,
+        zone: COURSE_DNS_ZONE,
+        hostname: COURSE_HOSTNAME,
+      });
+      const hostnameRecords = records.filter(
+        (record) => record.hostname === COURSE_HOSTNAME,
+      );
+      const hostnames = await this.adapter.listDnsConflictingHostnames({
+        environmentId: this.context.environmentId,
+        zone: COURSE_DNS_ZONE,
+        hostname: COURSE_HOSTNAME,
+      });
+      const marker = await dnsMutationMarker(
+        this.sql,
+        this.command.operationId,
+      );
+      if (marker) {
+        const attempts = await operationStepAttempts(
+          this.sql,
+          this.command.operationId,
+          "configure_dns",
+        );
+        const recovered = recoverDnsRecordCandidate(
+          hostnameRecords,
+          marker,
+          COURSE_HOSTNAME,
+          address,
+          hostnames,
+          attempts,
+        );
+        await recordDnsResource(this.sql, this.command, recovered);
+        return recovered;
+      }
+      if (hostnames.includes(COURSE_HOSTNAME)) {
+        throw new LifecycleProviderError(
+          "DNS_CONFLICT",
+          "Hostname n8n.neurokurs.ru уже содержит A-запись.",
+        );
+      }
+      if (!this.configureDnsExecutionToken) {
+        throw new LifecycleProviderError(
+          "STEP_STATE_INVALID",
+          "DNS execution token отсутствует до provider mutation.",
+        );
+      }
+      await markDnsMutationStarted(
+        this.sql,
+        this.command.operationId,
+        this.configureDnsExecutionToken,
+        `${COURSE_HOSTNAME}:${address}`,
+        hostnameRecords.map((record) => record.externalId),
+      );
+      const resource = await runFreshDnsCreate(
+        () =>
+          this.adapter.createDnsARecord({
+            environmentId: this.context.environmentId,
+            zone: COURSE_DNS_ZONE,
+            hostname: COURSE_HOSTNAME,
+            value: address,
+            ttl: COURSE_DNS_TTL_SECONDS,
+          }),
+        () =>
+          clearDnsMutationMarkerAfterDefinitiveRejection(
+            this.sql,
+            this.command.operationId,
+            this.configureDnsExecutionToken!,
+          ),
+      );
+      await recordDnsResource(this.sql, this.command, resource);
+      return resource;
+    } catch (error) {
+      throw mappedError(error);
+    }
+  }
+
+  async resolveDnsAmbiguity(): Promise<void> {
+    try {
+      if (
+        await activeResource(
+          this.sql,
+          this.context.environmentId,
+          "dns_record",
+        )
+      ) {
+        return;
+      }
+      const rows = await this.sql<
+        { create_operation_id: string; hostname: string; status: string }[]
+      >`
+        SELECT
+          operations.id AS create_operation_id,
+          domain_allocations.hostname,
+          domain_allocations.status
+        FROM operations
+        JOIN domain_allocations
+          ON domain_allocations.environment_id = operations.environment_id
+        WHERE operations.environment_id = ${this.context.environmentId}
+          AND operations.kind = 'create_environment'
+          AND domain_allocations.hostname = ${COURSE_HOSTNAME}
+        ORDER BY operations.created_at DESC
+        LIMIT 1
+      `;
+      const row = rows[0];
+      if (!row || ["released", "deleted"].includes(row.status)) return;
+      const marker = await dnsMutationMarker(
+        this.sql,
+        row.create_operation_id,
+      );
+      if (!marker) {
+        const released = await this.sql<{ id: string }[]>`
+          UPDATE domain_allocations
+          SET status = 'released', updated_at = now()
+          WHERE environment_id = ${this.context.environmentId}
+            AND hostname = ${COURSE_HOSTNAME}
+            AND status = 'reserved'
+          RETURNING id
+        `;
+        if (!released[0]) {
+          throw new LifecycleProviderError(
+            "DNS_RESERVATION_LOST",
+            "DNS allocation без mutation marker не освобождён.",
+          );
+        }
+        return;
+      }
+
+      const publicIp = await activeResource(
+        this.sql,
+        this.context.environmentId,
+        "public_ip",
+      );
+      const address = publicIp?.publicMetadata.address;
+      if (typeof address !== "string") {
+        throw new LifecycleProviderError(
+          "UNKNOWN_DNS_OUTCOME",
+          "DNS mutation была начата, но expected public IP недоступен.",
+        );
+      }
+      const records = await this.adapter.listDnsRecords({
+        environmentId: this.context.environmentId,
+        zone: COURSE_DNS_ZONE,
+        hostname: COURSE_HOSTNAME,
+      });
+      const matches = records.filter(
+        (record) => record.hostname === COURSE_HOSTNAME,
+      );
+      const conflictingHostnames =
+        await this.adapter.listDnsConflictingHostnames({
+          environmentId: this.context.environmentId,
+          zone: COURSE_DNS_ZONE,
+          hostname: COURSE_HOSTNAME,
+        });
+      const recovered = resolveDnsAmbiguityCandidate(
+        matches,
+        marker,
+        COURSE_HOSTNAME,
+        address,
+        conflictingHostnames,
+        await operationStepAttempts(
+          this.sql,
+          this.command.operationId,
+          "resolve_dns_ambiguity",
+        ),
+      );
+      await recordDnsResource(this.sql, this.command, recovered);
+    } catch (error) {
+      throw mappedError(error);
+    }
   }
 
   async verifyTls(): Promise<void> {
-    throw new LifecycleProviderError(
-      "OUT_OF_SCOPE",
-      "TLS относится к срезу 1B и не вызывается в production 1A.",
-    );
+    try {
+      await createExternalEnvironmentVerifier().verifyTlsAndPorts(
+        await this.publicIpv4(),
+      );
+    } catch (error) {
+      throw mappedError(error);
+    }
+  }
+
+  async verifyBootstrapReachable(): Promise<void> {
+    try {
+      await createExternalEnvironmentVerifier().verifyBootstrapReachable(
+        await this.publicIpv4(),
+      );
+    } catch (error) {
+      throw mappedError(error);
+    }
+  }
+
+  async waitForDns(): Promise<void> {
+    try {
+      await createExternalEnvironmentVerifier().verifyDns(
+        await this.publicIpv4(),
+      );
+    } catch (error) {
+      throw mappedError(error);
+    }
+  }
+
+  async verifyN8nHealth(): Promise<void> {
+    try {
+      await createExternalEnvironmentVerifier().verifyN8nHealth();
+    } catch (error) {
+      throw mappedError(error);
+    }
+  }
+
+  async recordReadyInstallation(): Promise<void> {
+    await this.sql.begin(async (transaction) => {
+      await transaction`
+        INSERT INTO software_installations (
+          id, environment_id, profile_name, profile_version,
+          software_version, status, health_status, installed_at,
+          last_checked_at
+        )
+        VALUES (
+          ${randomUUID()}, ${this.context.environmentId}, 'starter-kit',
+          ${STARTER_KIT_BOOTSTRAP_PROFILE.version},
+          ${STARTER_KIT_BOOTSTRAP_PROFILE.n8nVersion},
+          'ready_owner_setup_required', 'healthy', now(), now()
+        )
+        ON CONFLICT (environment_id, profile_name) DO UPDATE SET
+          profile_version = EXCLUDED.profile_version,
+          software_version = EXCLUDED.software_version,
+          status = EXCLUDED.status,
+          health_status = EXCLUDED.health_status,
+          installed_at = COALESCE(
+            software_installations.installed_at,
+            EXCLUDED.installed_at
+          ),
+          last_checked_at = EXCLUDED.last_checked_at,
+          updated_at = now()
+      `;
+      await transaction`
+        UPDATE environments
+        SET public_url = ${`https://${COURSE_HOSTNAME}`}, updated_at = now()
+        WHERE id = ${this.context.environmentId}
+      `;
+    });
   }
 
   async deleteOwnedResource(resource: OwnedProviderResource): Promise<void> {
@@ -832,12 +1604,79 @@ class ProductionTimewebLifecycleAdapter
           );
         }
       } else {
-        throw new LifecycleProviderError(
-          "OUT_OF_SCOPE",
-          "DNS cleanup относится к срезу 1B.",
+        const current = await activeResource(
+          this.sql,
+          resource.environmentId,
+          "dns_record",
         );
+        if (!current || current.externalId !== resource.externalId) {
+          throw new LifecycleProviderError(
+            "WRONG_OWNERSHIP",
+            "DNS resource metadata не подтверждает ownership.",
+          );
+        }
+        const metadata = current.publicMetadata;
+        if (
+          metadata.zone !== COURSE_DNS_ZONE ||
+          metadata.hostname !== COURSE_HOSTNAME ||
+          metadata.type !== "A" ||
+          typeof metadata.value !== "string" ||
+          typeof metadata.ttl !== "number"
+        ) {
+          throw new LifecycleProviderError(
+            "WRONG_OWNERSHIP",
+            "DNS resource metadata не подтверждает ownership.",
+          );
+        }
+        const dnsRecord: TimewebDnsRecord = {
+          ...resource,
+          kind: "dns_record",
+          zone: COURSE_DNS_ZONE,
+          hostname: COURSE_HOSTNAME,
+          type: "A",
+          value: metadata.value,
+          ttl: metadata.ttl,
+        };
+        await this.adapter.deleteDnsRecord(dnsRecord);
+        const absent = await waitForAbsent(() =>
+          this.adapter.reconcileDnsRecord(dnsRecord),
+        );
+        if (!absent) {
+          throw new LifecycleProviderError(
+            "DELETE_NOT_CONFIRMED",
+            "Timeweb ещё не подтвердил удаление DNS record.",
+            true,
+          );
+        }
       }
-      await markDeleted(this.sql, resource);
+      if (resource.kind === "dns_record") {
+        await this.sql.begin(async (transaction) => {
+          await markDeleted(transaction, resource);
+          const released = await transaction<{ id: string }[]>`
+            UPDATE domain_allocations
+            SET status = 'released', updated_at = now()
+            WHERE environment_id = ${resource.environmentId}
+              AND hostname = ${COURSE_HOSTNAME}
+              AND provider_resource_id IN (
+                SELECT id
+                FROM provider_resources
+                WHERE environment_id = ${resource.environmentId}
+                  AND provider = 'timeweb'
+                  AND resource_kind = 'dns_record'
+                  AND provider_resource_id = ${resource.externalId}
+              )
+            RETURNING id
+          `;
+          if (!released[0]) {
+            throw new LifecycleProviderError(
+              "DNS_RESERVATION_LOST",
+              "DNS allocation не освобождён атомарно.",
+            );
+          }
+        });
+      } else {
+        await markDeleted(this.sql, resource);
+      }
     } catch (error) {
       throw mappedError(error);
     }
@@ -916,6 +1755,7 @@ export async function createInfrastructureLifecycleAdapter(
   options: Readonly<{
     createExecutionToken?: string;
     reserveIpExecutionToken?: string;
+    configureDnsExecutionToken?: string;
   }> = {},
 ): Promise<InfrastructureLifecycleAdapter> {
   const sql = getDatabase();
@@ -935,10 +1775,16 @@ export async function createInfrastructureLifecycleAdapter(
         await fake.reservePublicIp();
       },
       resolvePublicIpAmbiguity: async () => undefined,
+      resolveServerAmbiguity: async () => undefined,
+      resolveDnsAmbiguity: async () => undefined,
       createServer: () => fake.createServer(),
       reconcileServer: async () => undefined,
       configureDns: () => fake.configureDns(),
+      verifyBootstrapReachable: async () => undefined,
+      waitForDns: async () => undefined,
       verifyTls: () => fake.verifyTls(),
+      verifyN8nHealth: async () => undefined,
+      recordReadyInstallation: async () => undefined,
       deleteOwnedResource: (resource) => fake.deleteOwnedResource(resource),
     };
   }
@@ -956,6 +1802,7 @@ export async function createInfrastructureLifecycleAdapter(
     production,
     options.createExecutionToken,
     options.reserveIpExecutionToken,
+    options.configureDnsExecutionToken,
   );
 }
 

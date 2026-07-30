@@ -16,7 +16,7 @@ export class FakeTimewebReadAdapter implements TimewebReadAdapter {
       checkedAt: new Date().toISOString(),
       degraded: false,
       account: { state: "ready" },
-      balance: { amount: 2_500, currency: "RUB" },
+      balance: { amount: 2_500, currency: "RUB", monthlyFeeRoubles: 0 },
       servers: [],
       presets: [
         {
@@ -27,6 +27,7 @@ export class FakeTimewebReadAdapter implements TimewebReadAdapter {
           ramMb: 4_096,
           diskMb: 40_960,
           diskType: "nvme",
+          bandwidthMbps: 200,
         },
       ],
       operatingSystems: [

@@ -28,14 +28,21 @@ const SUPPORTED_STATUSES = new Set<TimewebSupportedStatus>([
   "on",
   "off",
   "installing",
+  "software_install",
   "reinstalling",
-  "starting",
-  "stopping",
+  "turning_on",
+  "turning_off",
+  "hard_turning_off",
   "rebooting",
-  "shutting_down",
   "hard_rebooting",
-  "hard_shutting_down",
+  "removing",
+  "removed",
+  "cloning",
+  "transfer",
   "blocked",
+  "configuring",
+  "no_paid",
+  "permanent_blocked",
 ]);
 
 type FetchLike = typeof fetch;
@@ -297,6 +304,7 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
         ramMb: number(preset.ram),
         diskMb: number(preset.disk),
         diskType: providerValue(preset.disk_type),
+        bandwidthMbps: number(preset.bandwidth),
       };
     });
     const operatingSystems = array(record(osPayload).servers_os).map((value) => {
@@ -344,11 +352,16 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
       checkedAt: new Date().toISOString(),
       degraded,
       account: {
-        state: account.is_blocked === true ? "blocked" : "ready",
+        state:
+          account.is_blocked === true ||
+          account.is_permanent_blocked === true
+            ? "blocked"
+            : "ready",
       },
       balance: {
         amount: number(finances.balance),
         currency: string(finances.currency),
+        monthlyFeeRoubles: number(finances.monthly_fee),
       },
       servers,
       presets,

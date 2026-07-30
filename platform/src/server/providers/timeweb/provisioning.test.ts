@@ -5,7 +5,9 @@ import { getTimewebProvisioningPreview } from "./provisioning";
 function providerPayload(url: string): unknown {
   if (url.endsWith("/account/status")) return { status: { is_blocked: false } };
   if (url.endsWith("/account/finances")) {
-    return { finances: { balance: 2_000, currency: "RUB" } };
+    return {
+      finances: { balance: 2_000, currency: "RUB", monthly_fee: 181 },
+    };
   }
   if (url.endsWith("/api/v1/servers")) return { servers: [] };
   if (url.endsWith("/presets/servers")) {
@@ -19,6 +21,7 @@ function providerPayload(url: string): unknown {
           ram: 2048,
           disk: 30720,
           disk_type: "nvme",
+          bandwidth: 200,
         },
         {
           id: 99,
@@ -28,6 +31,7 @@ function providerPayload(url: string): unknown {
           ram: 4096,
           disk: 51200,
           disk_type: "nvme",
+          bandwidth: 300,
         },
         {
           id: 77,
@@ -37,6 +41,7 @@ function providerPayload(url: string): unknown {
           ram: 2048,
           disk: 30720,
           disk_type: "nvme",
+          bandwidth: 200,
         },
       ],
     };
@@ -74,6 +79,9 @@ function providerPayload(url: string): unknown {
   if (url.endsWith("/api/v1/ssh-keys")) {
     return { ssh_keys: [{ id: 404, name: "Smoke key" }] };
   }
+  if (url.includes("/domains/n8n.neurokurs.ru/dns-records?")) {
+    return { meta: { total: 0 }, dns_records: [] };
+  }
   throw new Error(`Unexpected URL ${url}`);
 }
 
@@ -84,6 +92,7 @@ const productionEnvironment = {
   TIMEWEB_MUTATIONS_ENABLED: "true",
   TIMEWEB_CAPABILITIES_VERIFIED: "true",
   TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT: "true",
+  TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME: "true",
   TIMEWEB_SMOKE_BUDGET_RUB: "1000",
   TIMEWEB_SMOKE_PROJECT_ID: "303",
   TIMEWEB_SMOKE_SSH_KEY_ID: "404",
@@ -128,14 +137,16 @@ describe("getTimewebProvisioningPreview", () => {
         ramMb: 2048,
         diskMb: 30720,
         diskType: "nvme",
+        bandwidthMbps: 200,
         monthlyPublicIpRoubles: 180,
         monthlyTotalRoubles: 880,
+        requiredBalanceRoubles: 1_061,
         balanceRoubles: 2_000,
         projectId: 303,
         sshKeyId: 404,
       }),
     });
-    expect(fetchImpl).toHaveBeenCalledTimes(10);
+    expect(fetchImpl).toHaveBeenCalledTimes(11);
   });
 
   it("fails closed when the owner-approved budget is below provider pricing", async () => {
@@ -150,6 +161,129 @@ describe("getTimewebProvisioningPreview", () => {
       code: "BUDGET_EXCEEDED",
       message: "Актуальная месячная оценка превышает smoke budget.",
     });
+  });
+
+  it("includes existing account services in the documented 30-day balance gate", async () => {
+    const preview = await getTimewebProvisioningPreview(
+      productionEnvironment,
+      vi.fn<typeof fetch>(async (input) => {
+        if (String(input).endsWith("/account/finances")) {
+          return Response.json({
+            finances: {
+              balance: 1_000,
+              currency: "RUB",
+              monthly_fee: 181,
+            },
+          });
+        }
+        return Response.json(providerPayload(String(input)));
+      }),
+    );
+
+    expect(preview).toEqual({
+      ok: false,
+      code: "INSUFFICIENT_FUNDS",
+      message:
+        "Баланса недостаточно для 30 дней текущих услуг и новых VPS/IPv4.",
+    });
+  });
+
+  it("does not count an exact already-billed owned IP twice on repeated preflight", async () => {
+    const ownedIp = {
+      externalId: "11111111-2222-4333-8444-555555555555",
+      address: "203.0.113.10",
+    };
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/account/finances")) {
+        return Response.json({
+          finances: {
+            balance: 1_100,
+            currency: "RUB",
+            monthly_fee: 361,
+          },
+        });
+      }
+      if (url.endsWith("/floating-ips")) {
+        return Response.json({
+          ips: [
+            {
+              id: ownedIp.externalId,
+              ip: ownedIp.address,
+              availability_zone: "spb-3",
+              resource_type: null,
+              resource_id: null,
+            },
+          ],
+        });
+      }
+      return Response.json(providerPayload(url));
+    });
+
+    await expect(
+      getTimewebProvisioningPreview(
+        productionEnvironment,
+        fetchImpl,
+        { approvedOwnedPublicIp: ownedIp },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      mode: "timeweb",
+      plan: { requiredBalanceRoubles: 1_061 },
+    });
+    await expect(
+      getTimewebProvisioningPreview(productionEnvironment, fetchImpl),
+    ).resolves.toMatchObject({
+      ok: false,
+      code: "INSUFFICIENT_FUNDS",
+    });
+  });
+
+  it("fails repeated preflight for an absent, bound or wrong-zone durable IP", async () => {
+    const ownedIp = {
+      externalId: "11111111-2222-4333-8444-555555555555",
+      address: "203.0.113.10",
+    };
+    const candidates = [
+      [],
+      [
+        {
+          id: ownedIp.externalId,
+          ip: ownedIp.address,
+          availability_zone: "spb-4",
+          resource_type: null,
+          resource_id: null,
+        },
+      ],
+      [
+        {
+          id: ownedIp.externalId,
+          ip: ownedIp.address,
+          availability_zone: "spb-3",
+          resource_type: "server",
+          resource_id: 999,
+        },
+      ],
+    ];
+
+    for (const ips of candidates) {
+      const preview = await getTimewebProvisioningPreview(
+        productionEnvironment,
+        vi.fn<typeof fetch>(async (input) => {
+          if (String(input).endsWith("/floating-ips")) {
+            return Response.json({ ips });
+          }
+          return Response.json(providerPayload(String(input)));
+        }),
+        { approvedOwnedPublicIp: ownedIp },
+      );
+      expect(preview).toEqual({
+        ok: false,
+        code: "PUBLIC_IP_OWNERSHIP_INVALID",
+        message:
+          "Owned floating IP отсутствует, перемещён или уже привязан к другому ресурсу.",
+      });
+    }
   });
 
   it("selects the cheapest live preset in an owner-selected region", async () => {
@@ -198,6 +332,120 @@ describe("getTimewebProvisioningPreview", () => {
     expect(preview).toMatchObject({
       ok: false,
       code: "PUBLIC_IP_PRICE_NOT_CONFIGURED",
+    });
+  });
+
+  it("fails closed when the approved hostname already has an A record", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      if (
+        String(input).includes(
+          "/domains/n8n.neurokurs.ru/dns-records?",
+        )
+      ) {
+        return Response.json({
+          meta: { total: 1 },
+          dns_records: [
+            {
+              id: 77,
+              type: "A",
+              data: { subdomain: "n8n", value: "203.0.113.10" },
+              ttl: 600,
+            },
+          ],
+        });
+      }
+      return Response.json(providerPayload(String(input)));
+    });
+    const preview = await getTimewebProvisioningPreview(
+      productionEnvironment,
+      fetchImpl,
+    );
+    expect(preview).toEqual({
+      ok: false,
+      code: "DNS_HOSTNAME_CONFLICT",
+      message: "Approved hostname уже содержит DNS A record.",
+    });
+    await expect(
+      getTimewebProvisioningPreview(
+        productionEnvironment,
+        fetchImpl,
+        {
+          approvedOwnedDns: {
+            environmentId: "11111111-1111-4111-8111-111111111111",
+            externalId: "77",
+            address: "203.0.113.10",
+          },
+        },
+      ),
+    ).resolves.toMatchObject({ ok: true, mode: "timeweb" });
+
+    const approvedOwnedDns = {
+      environmentId: "11111111-1111-4111-8111-111111111111",
+      externalId: "77",
+      address: "203.0.113.10",
+    };
+    await expect(
+      getTimewebProvisioningPreview(
+        productionEnvironment,
+        vi.fn<typeof fetch>(async (input) =>
+          Response.json(providerPayload(String(input))),
+        ),
+        { approvedOwnedDns },
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      code: "DNS_HOSTNAME_CONFLICT",
+    });
+    await expect(
+      getTimewebProvisioningPreview(
+        productionEnvironment,
+        fetchImpl,
+        {
+          approvedOwnedDns: {
+            ...approvedOwnedDns,
+            externalId: "78",
+          },
+        },
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      code: "DNS_HOSTNAME_CONFLICT",
+    });
+    const duplicateFetch = vi.fn<typeof fetch>(async (input) => {
+      if (
+        String(input).includes(
+          "/domains/n8n.neurokurs.ru/dns-records?",
+        )
+      ) {
+        return Response.json({
+          meta: { total: 2 },
+          dns_records: [
+            {
+              id: 77,
+              type: "A",
+              data: { subdomain: "n8n", value: "203.0.113.10" },
+              ttl: 600,
+            },
+            {
+              id: 78,
+              type: "A",
+              data: { subdomain: "n8n", value: "203.0.113.11" },
+              ttl: 600,
+            },
+          ],
+        });
+      }
+      return Response.json(providerPayload(String(input)));
+    });
+    await expect(
+      getTimewebProvisioningPreview(
+        productionEnvironment,
+        duplicateFetch,
+        { approvedOwnedDns },
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      code: "DNS_HOSTNAME_CONFLICT",
     });
   });
 });

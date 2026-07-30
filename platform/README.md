@@ -165,7 +165,7 @@ npm run test:workflow
 
 В development/preview результат всегда приходит из fake adapter. Production
 adapter доступен только server-side; raw Timeweb response отбрасывается до
-формирования DTO `timeweb-read-v1`. Неизвестный status возвращается как
+формирования DTO `timeweb-read-v2`. Неизвестный status возвращается как
 `unsupported/degraded`, а не ломает страницу.
 
 Актуальная schema, точные endpoint и границы token permissions описаны в

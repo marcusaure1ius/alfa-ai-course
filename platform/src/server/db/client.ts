@@ -1,8 +1,9 @@
 import "server-only";
 
-import postgres, { type Sql } from "postgres";
+import postgres, { type Sql, type TransactionSql } from "postgres";
 
 type DatabaseSql = Sql<Record<string, never>>;
+type DatabaseTransactionSql = TransactionSql<Record<string, never>>;
 
 declare global {
   var coursePlatformSql: DatabaseSql | undefined;
@@ -31,4 +32,4 @@ export function getDatabase(): DatabaseSql {
   return globalThis.coursePlatformSql;
 }
 
-export type { DatabaseSql };
+export type { DatabaseSql, DatabaseTransactionSql };

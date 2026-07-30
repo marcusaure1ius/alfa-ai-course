@@ -1,11 +1,17 @@
 import "server-only";
 
 import type { TimewebCatalogSnapshot } from "./contracts";
+import {
+  COURSE_DNS_ZONE,
+  COURSE_HOSTNAME,
+} from "./bootstrap-profile";
+import { createProductionTimewebMutationAdapter } from "./mutation";
+import { TimewebProviderError } from "./read-only";
 import { createTimewebReadAdapter } from "./read-service";
 import { readTimewebMutationRuntimeGate } from "./runtime";
 
 export type TimewebProvisioningPlan = Readonly<{
-  version: "timeweb-provisioning-v1";
+  version: "timeweb-provisioning-v2";
   checkedAt: string;
   presetId: number;
   operatingSystemId: number;
@@ -17,8 +23,10 @@ export type TimewebProvisioningPlan = Readonly<{
   ramMb: number;
   diskMb: number;
   diskType: string;
+  bandwidthMbps: number;
   monthlyPublicIpRoubles: number;
   monthlyTotalRoubles: number;
+  requiredBalanceRoubles: number;
   balanceRoubles: number;
   projectId: number;
   sshKeyId: number;
@@ -41,11 +49,14 @@ export type TimewebProvisioningPreview =
         | "PRESET_UNAVAILABLE"
         | "BUDGET_NOT_CONFIGURED"
         | "PUBLIC_IP_PRICE_NOT_CONFIGURED"
+        | "PUBLIC_IP_OWNERSHIP_INVALID"
         | "SMOKE_REGION_UNAVAILABLE"
         | "SMOKE_PROJECT_NOT_CONFIGURED"
         | "SMOKE_PROJECT_UNAVAILABLE"
         | "SMOKE_SSH_KEY_NOT_CONFIGURED"
         | "SMOKE_SSH_KEY_UNAVAILABLE"
+        | "DNS_ZONE_UNAVAILABLE"
+        | "DNS_HOSTNAME_CONFLICT"
         | "BUDGET_EXCEEDED"
         | "INSUFFICIENT_FUNDS";
       message: string;
@@ -64,6 +75,12 @@ function selectPlan(
   projectId: number | null,
   sshKeyId: number | null,
   preferredRegion: string | null,
+  approvedOwnedPublicIp:
+    | {
+        externalId: string;
+        address: string;
+      }
+    | undefined,
 ): TimewebProvisioningPreview {
   if (catalog.account.state !== "ready") {
     return {
@@ -139,6 +156,29 @@ function selectPlan(
           : "В выбранном smoke region нет совместимого тарифа и зоны.",
     };
   }
+  let ownedPublicIpAlreadyBilled = false;
+  if (approvedOwnedPublicIp) {
+    const matches = catalog.floatingIps.filter(
+      (candidate) => candidate.id === approvedOwnedPublicIp.externalId,
+    );
+    const exact = matches[0];
+    if (
+      matches.length !== 1 ||
+      !exact ||
+      exact.address !== approvedOwnedPublicIp.address ||
+      exact.zone !== selected.zone ||
+      exact.resourceType !== null ||
+      exact.resourceId !== null
+    ) {
+      return {
+        ok: false,
+        code: "PUBLIC_IP_OWNERSHIP_INVALID",
+        message:
+          "Owned floating IP отсутствует, перемещён или уже привязан к другому ресурсу.",
+      };
+    }
+    ownedPublicIpAlreadyBilled = true;
+  }
 
   if (catalog.source === "timeweb" && budgetRoubles == null) {
     return {
@@ -192,6 +232,10 @@ function selectPlan(
   const monthlyPublicIpRoubles = catalog.publicIpMonthlyRoubles ?? 0;
   const monthlyTotalRoubles =
     selected.preset.priceRoubles + monthlyPublicIpRoubles;
+  const requiredBalanceRoubles =
+    catalog.balance.monthlyFeeRoubles +
+    selected.preset.priceRoubles +
+    (ownedPublicIpAlreadyBilled ? 0 : monthlyPublicIpRoubles);
   if (budgetRoubles != null && monthlyTotalRoubles > budgetRoubles) {
     return {
       ok: false,
@@ -199,11 +243,12 @@ function selectPlan(
       message: "Актуальная месячная оценка превышает smoke budget.",
     };
   }
-  if (catalog.balance.amount < monthlyTotalRoubles) {
+  if (catalog.balance.amount < requiredBalanceRoubles) {
     return {
       ok: false,
       code: "INSUFFICIENT_FUNDS",
-      message: "Баланса недостаточно для месячной оценки VPS и IPv4.",
+      message:
+        "Баланса недостаточно для 30 дней текущих услуг и новых VPS/IPv4.",
     };
   }
 
@@ -211,7 +256,7 @@ function selectPlan(
     ok: true,
     mode: catalog.source,
     plan: {
-      version: "timeweb-provisioning-v1",
+      version: "timeweb-provisioning-v2",
       checkedAt: catalog.checkedAt,
       presetId: selected.presetId,
       operatingSystemId,
@@ -223,8 +268,10 @@ function selectPlan(
       ramMb: selected.preset.ramMb,
       diskMb: selected.preset.diskMb,
       diskType: selected.preset.diskType,
+      bandwidthMbps: selected.preset.bandwidthMbps,
       monthlyPublicIpRoubles,
       monthlyTotalRoubles,
+      requiredBalanceRoubles,
       balanceRoubles: catalog.balance.amount,
       projectId: projectId ?? 1,
       sshKeyId: sshKeyId ?? 1,
@@ -235,6 +282,17 @@ function selectPlan(
 export async function getTimewebProvisioningPreview(
   environment: ServerEnvironment = process.env,
   fetchImpl: typeof fetch = fetch,
+  options: Readonly<{
+    approvedOwnedDns?: {
+      environmentId: string;
+      externalId: string;
+      address: string;
+    };
+    approvedOwnedPublicIp?: {
+      externalId: string;
+      address: string;
+    };
+  }> = {},
 ): Promise<TimewebProvisioningPreview> {
   const { gate, adapter } = createTimewebReadAdapter(environment, fetchImpl);
   if (!adapter) {
@@ -282,11 +340,69 @@ export async function getTimewebProvisioningPreview(
     };
   }
   const preferredRegion = configuredRegion || null;
-  return selectPlan(
+  const preview = selectPlan(
     catalog,
     budget,
     projectId,
     sshKeyId,
     preferredRegion,
+    options.approvedOwnedPublicIp,
   );
+  if (!preview.ok || preview.mode !== "timeweb") return preview;
+
+  const mutationAdapter = createProductionTimewebMutationAdapter(
+    environment,
+    fetchImpl,
+  );
+  if (!mutationAdapter) {
+    return {
+      ok: false,
+      code: "MUTATION_GATE_CLOSED",
+      message: "Production mutation gates закрылись во время DNS preflight.",
+    };
+  }
+  try {
+    const environmentId =
+      options.approvedOwnedDns?.environmentId ??
+      "00000000-0000-4000-8000-000000000057";
+    const dnsInput = {
+      environmentId,
+      zone: COURSE_DNS_ZONE,
+      hostname: COURSE_HOSTNAME,
+    };
+    const [hostnames, records] = await Promise.all([
+      mutationAdapter.listDnsConflictingHostnames(dnsInput),
+      options.approvedOwnedDns
+        ? mutationAdapter.listDnsRecords(dnsInput)
+        : Promise.resolve([]),
+    ]);
+    const approvedOwnedDns = options.approvedOwnedDns;
+    const exactOwnedDns =
+      approvedOwnedDns &&
+      hostnames.length === 1 &&
+      hostnames[0] === COURSE_HOSTNAME &&
+      records.length === 1 &&
+      records[0]?.externalId === approvedOwnedDns.externalId &&
+      records[0]?.value === approvedOwnedDns.address;
+    const conflict = approvedOwnedDns
+      ? !exactOwnedDns
+      : hostnames.includes(COURSE_HOSTNAME);
+    if (conflict) {
+      return {
+        ok: false,
+        code: "DNS_HOSTNAME_CONFLICT",
+        message: "Approved hostname уже содержит DNS A record.",
+      };
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      code: "DNS_ZONE_UNAVAILABLE",
+      message:
+        error instanceof TimewebProviderError
+          ? error.message
+          : "Timeweb DNS zone недоступна для preflight.",
+    };
+  }
+  return preview;
 }

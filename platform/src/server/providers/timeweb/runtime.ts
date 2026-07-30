@@ -30,7 +30,8 @@ export type TimewebMutationRuntimeGate =
         | "missing-production-token"
         | "mutations-disabled"
         | "capabilities-unverified"
-        | "exclusive-account-unverified";
+        | "exclusive-account-unverified"
+        | "exclusive-dns-hostname-unverified";
       tokenConfigured: boolean;
     }>
   | Readonly<{
@@ -121,6 +122,13 @@ export function readTimewebMutationRuntimeGate(
     return {
       mode: "blocked",
       reason: "exclusive-account-unverified",
+      tokenConfigured: true,
+    };
+  }
+  if (environment.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME !== "true") {
+    return {
+      mode: "blocked",
+      reason: "exclusive-dns-hostname-unverified",
       tokenConfigured: true,
     };
   }

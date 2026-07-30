@@ -81,7 +81,7 @@ export function ConnectionTest() {
       setResult((await response.json()) as TimewebConnectionCheck);
     } catch {
       setResult({
-        version: "timeweb-read-v1",
+        version: "timeweb-read-v2",
         ok: false,
         mode: "timeweb",
         status: "unavailable",

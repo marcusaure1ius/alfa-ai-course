@@ -26,6 +26,7 @@ async function adapter(
   options: Readonly<{
     createExecutionToken?: string;
     reserveIpExecutionToken?: string;
+    configureDnsExecutionToken?: string;
   }> = {},
 ) {
   return createInfrastructureLifecycleAdapter(command, options);
@@ -66,9 +67,11 @@ async function failProviderStep(
         sql,
         command.operationId,
         "creating",
-        key === "reconcile_server" ||
+        key === "provider_installing" ||
         (key === "reserve_public_ip" &&
-          error.code === "UNKNOWN_PUBLIC_IP_OUTCOME")
+          error.code === "UNKNOWN_PUBLIC_IP_OUTCOME") ||
+        (key === "create_server" &&
+          error.code === "UNKNOWN_SERVER_OUTCOME")
           ? "cleanup_required"
           : "degraded",
       );
@@ -171,6 +174,10 @@ export async function resolvePublicIpAmbiguityStep(
       providerError.code,
       "retryable" in providerError ? providerError.retryable : undefined,
     );
+    const exhausted = retryClass !== "permanent" && step.attempts >= 10;
+    const terminalCode = exhausted
+      ? "PUBLIC_IP_AMBIGUITY_RECONCILE_EXHAUSTED"
+      : providerError.code;
     await finishStep(
       sql,
       command.operationId,
@@ -178,13 +185,15 @@ export async function resolvePublicIpAmbiguityStep(
       executionToken,
       {
         status: "failed",
-        code: providerError.code,
+        code: terminalCode,
         message: providerError.message,
-        retryClass,
+        retryClass: exhausted ? "permanent" : retryClass,
       },
     );
-    if (retryClass !== "permanent") {
-      throw new RetryableError(providerError.message, { retryAfter: 500 });
+    if (retryClass !== "permanent" && !exhausted) {
+      throw new RetryableError(providerError.message, {
+        retryAfter: 5_000,
+      });
     }
     await transitionEnvironment(
       sql,
@@ -194,12 +203,149 @@ export async function resolvePublicIpAmbiguityStep(
     );
     await finishOperation(sql, command.operationId, {
       status: "failed",
-      code: providerError.code,
+      code: terminalCode,
       message: providerError.message,
     });
     return "cleanup_required";
   }
 }
+resolvePublicIpAmbiguityStep.maxRetries = 9;
+
+export async function resolveDnsAmbiguityStep(
+  command: WorkflowCommand,
+): Promise<"resolved" | "cleanup_required"> {
+  "use step";
+  const sql = getDatabase();
+  await guardMutation(command, "delete", "dns_record");
+  const step = await beginStep(
+    sql,
+    command.operationId,
+    "resolve_dns_ambiguity",
+    7,
+  );
+  if (step.alreadyCompleted) return "resolved";
+  const executionToken = requireStepClaim(step);
+  try {
+    await (await adapter(command)).resolveDnsAmbiguity();
+    await finishStep(
+      sql,
+      command.operationId,
+      "resolve_dns_ambiguity",
+      executionToken,
+      { status: "succeeded" },
+    );
+    return "resolved";
+  } catch (error) {
+    const providerError = lifecycleProviderError(error);
+    if (!providerError) throw error;
+    const retryClass = classifyProviderError(
+      providerError.code,
+      "retryable" in providerError ? providerError.retryable : undefined,
+    );
+    const exhausted = retryClass !== "permanent" && step.attempts >= 10;
+    const terminalCode = exhausted
+      ? "DNS_AMBIGUITY_RECONCILE_EXHAUSTED"
+      : providerError.code;
+    await finishStep(
+      sql,
+      command.operationId,
+      "resolve_dns_ambiguity",
+      executionToken,
+      {
+        status: "failed",
+        code: terminalCode,
+        message: providerError.message,
+        retryClass: exhausted ? "permanent" : retryClass,
+      },
+    );
+    if (retryClass !== "permanent" && !exhausted) {
+      throw new RetryableError(providerError.message, {
+        retryAfter: 5_000,
+      });
+    }
+    await transitionEnvironment(
+      sql,
+      command.operationId,
+      "deleting",
+      "cleanup_required",
+    );
+    await finishOperation(sql, command.operationId, {
+      status: "failed",
+      code: terminalCode,
+      message: providerError.message,
+    });
+    return "cleanup_required";
+  }
+}
+resolveDnsAmbiguityStep.maxRetries = 9;
+
+export async function resolveServerAmbiguityStep(
+  command: WorkflowCommand,
+): Promise<"resolved" | "cleanup_required"> {
+  "use step";
+  const sql = getDatabase();
+  await guardMutation(command, "delete", "server");
+  const step = await beginStep(
+    sql,
+    command.operationId,
+    "resolve_server_ambiguity",
+    6,
+  );
+  if (step.alreadyCompleted) return "resolved";
+  const executionToken = requireStepClaim(step);
+  try {
+    await (await adapter(command)).resolveServerAmbiguity();
+    await finishStep(
+      sql,
+      command.operationId,
+      "resolve_server_ambiguity",
+      executionToken,
+      { status: "succeeded" },
+    );
+    return "resolved";
+  } catch (error) {
+    const providerError = lifecycleProviderError(error);
+    if (!providerError) throw error;
+    const retryClass = classifyProviderError(
+      providerError.code,
+      "retryable" in providerError ? providerError.retryable : undefined,
+    );
+    const exhausted = retryClass !== "permanent" && step.attempts >= 10;
+    const terminalCode = exhausted
+      ? "SERVER_AMBIGUITY_RECONCILE_EXHAUSTED"
+      : providerError.code;
+    await finishStep(
+      sql,
+      command.operationId,
+      "resolve_server_ambiguity",
+      executionToken,
+      {
+        status: "failed",
+        code: terminalCode,
+        message: providerError.message,
+        retryClass: exhausted ? "permanent" : retryClass,
+      },
+    );
+    if (retryClass !== "permanent" && !exhausted) {
+      throw new RetryableError(providerError.message, {
+        retryAfter: 5_000,
+      });
+    }
+    await transitionEnvironment(
+      sql,
+      command.operationId,
+      "deleting",
+      "cleanup_required",
+    );
+    await finishOperation(sql, command.operationId, {
+      status: "failed",
+      code: terminalCode,
+      message: providerError.message,
+    });
+    return "cleanup_required";
+  }
+}
+resolveServerAmbiguityStep.maxRetries = 9;
 
 export async function createServerStep(command: WorkflowCommand): Promise<void> {
   "use step";
@@ -245,7 +391,7 @@ export async function reconcileServerStep(
   const step = await beginStep(
     sql,
     command.operationId,
-    "reconcile_server",
+    "provider_installing",
     30,
   );
   if (step.alreadyCompleted) return;
@@ -255,7 +401,7 @@ export async function reconcileServerStep(
     await finishStep(
       sql,
       command.operationId,
-      "reconcile_server",
+      "provider_installing",
       executionToken,
       { status: "succeeded" },
     );
@@ -269,7 +415,7 @@ export async function reconcileServerStep(
         await finishStep(
           sql,
           command.operationId,
-          "reconcile_server",
+          "provider_installing",
           executionToken,
           {
             status: "failed",
@@ -297,7 +443,7 @@ export async function reconcileServerStep(
       }
       await failProviderStep(
         command,
-        "reconcile_server",
+        "provider_installing",
         executionToken,
         providerError,
         15_000,
@@ -314,12 +460,16 @@ export async function configureDnsStep(
   "use step";
   const sql = getDatabase();
   const authorization = await guardMutation(command, "create", "dns_record");
-  const step = await beginStep(sql, command.operationId, "configure_dns", 30);
+  const step = await beginStep(sql, command.operationId, "configure_dns", 15);
   if (step.alreadyCompleted) return "ready";
   const executionToken = requireStepClaim(step);
   try {
     if (authorization.resource.state !== "active") {
-      await (await adapter(command)).configureDns();
+      await (
+        await adapter(command, {
+          configureDnsExecutionToken: executionToken,
+        })
+      ).configureDns();
     }
     await finishStep(
       sql,
@@ -332,21 +482,149 @@ export async function configureDnsStep(
   } catch (error) {
     const providerError = lifecycleProviderError(error);
     if (!providerError) throw error;
+    const retryClass = classifyProviderError(
+      providerError.code,
+      "retryable" in providerError ? providerError.retryable : undefined,
+    );
+    if (retryClass !== "permanent" && step.attempts < 10) {
+      await finishStep(
+        sql,
+        command.operationId,
+        "configure_dns",
+        executionToken,
+        {
+          status: "failed",
+          code: providerError.code,
+          message: providerError.message,
+          retryClass,
+        },
+      );
+      throw new RetryableError(providerError.message, { retryAfter: 5_000 });
+    }
+    const terminalCode =
+      retryClass === "permanent"
+        ? providerError.code
+        : "DNS_RECONCILE_EXHAUSTED";
     await finishStep(sql, command.operationId, "configure_dns", executionToken, {
       status: "failed",
-      code: providerError.code,
+      code: terminalCode,
+      message: providerError.message,
+      retryClass: "permanent",
+    });
+    await transitionEnvironment(
+      sql,
+      command.operationId,
+      "creating",
+      providerError.code === "UNKNOWN_DNS_OUTCOME"
+        ? "cleanup_required"
+        : "degraded",
+    );
+    await finishOperation(sql, command.operationId, {
+      status: "failed",
+      code: terminalCode,
+      message: providerError.message,
+    });
+    return "degraded";
+  }
+}
+configureDnsStep.maxRetries = 9;
+
+type ReadinessAction =
+  | "verifyBootstrapReachable"
+  | "waitForDns"
+  | "verifyTls"
+  | "verifyN8nHealth";
+
+async function runReadinessStage(
+  command: WorkflowCommand,
+  key: string,
+  order: number,
+  action: ReadinessAction,
+): Promise<"ready" | "degraded"> {
+  const sql = getDatabase();
+  const step = await beginStep(sql, command.operationId, key, order);
+  if (step.alreadyCompleted) return "ready";
+  const executionToken = requireStepClaim(step);
+  try {
+    await (await adapter(command))[action]();
+    await finishStep(sql, command.operationId, key, executionToken, {
+      status: "succeeded",
+    });
+    return "ready";
+  } catch (error) {
+    const providerError = lifecycleProviderError(error);
+    if (!providerError) throw error;
+    const retryClass = classifyProviderError(
+      providerError.code,
+      "retryable" in providerError ? providerError.retryable : undefined,
+    );
+    if (retryClass !== "permanent" && step.attempts < 20) {
+      await finishStep(sql, command.operationId, key, executionToken, {
+        status: "failed",
+        code: providerError.code,
+        message: providerError.message,
+        retryClass,
+      });
+      throw new RetryableError(providerError.message, {
+        retryAfter: 15_000,
+      });
+    }
+    const terminalCode =
+      retryClass === "permanent"
+        ? providerError.code
+        : `${key.toUpperCase()}_EXHAUSTED`;
+    await finishStep(sql, command.operationId, key, executionToken, {
+      status: "failed",
+      code: terminalCode,
       message: providerError.message,
       retryClass: "permanent",
     });
     await transitionEnvironment(sql, command.operationId, "creating", "degraded");
     await finishOperation(sql, command.operationId, {
       status: "failed",
-      code: providerError.code,
+      code: terminalCode,
       message: providerError.message,
     });
     return "degraded";
   }
 }
+
+export async function bootstrappingStep(
+  command: WorkflowCommand,
+): Promise<"ready" | "degraded"> {
+  "use step";
+  return runReadinessStage(
+    command,
+    "bootstrapping",
+    40,
+    "verifyBootstrapReachable",
+  );
+}
+bootstrappingStep.maxRetries = 19;
+
+export async function waitingDnsStep(
+  command: WorkflowCommand,
+): Promise<"ready" | "degraded"> {
+  "use step";
+  return runReadinessStage(command, "waiting_dns", 50, "waitForDns");
+}
+waitingDnsStep.maxRetries = 19;
+
+export async function issuingTlsStep(
+  command: WorkflowCommand,
+): Promise<"ready" | "degraded"> {
+  "use step";
+  return runReadinessStage(command, "issuing_tls", 60, "verifyTls");
+}
+issuingTlsStep.maxRetries = 19;
+
+export async function healthCheckStep(
+  command: WorkflowCommand,
+): Promise<"ready" | "degraded"> {
+  "use step";
+  return runReadinessStage(command, "health_check", 70, "verifyN8nHealth");
+}
+healthCheckStep.maxRetries = 19;
 
 export async function verifyTlsStep(
   command: WorkflowCommand,
@@ -388,9 +666,10 @@ export async function verifyTlsStep(
 export async function completeCreateStep(command: WorkflowCommand): Promise<void> {
   "use step";
   const sql = getDatabase();
-  const step = await beginStep(sql, command.operationId, "complete", 50);
+  const step = await beginStep(sql, command.operationId, "complete", 80);
   if (step.alreadyCompleted) return;
   const executionToken = requireStepClaim(step);
+  await (await adapter(command)).recordReadyInstallation();
   await completeOperationStep(
     sql,
     command.operationId,

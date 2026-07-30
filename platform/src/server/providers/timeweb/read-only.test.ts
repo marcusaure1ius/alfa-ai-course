@@ -12,7 +12,14 @@ function successfulPayload(url: string): unknown {
     return { status: { is_blocked: false, company_info: { name: "hidden" } } };
   }
   if (url.endsWith("/api/v1/account/finances")) {
-    return { finances: { balance: 2500, currency: "RUB", total_paid: 99999 } };
+    return {
+      finances: {
+        balance: 2500,
+        currency: "RUB",
+        monthly_fee: 181,
+        total_paid: 99999,
+      },
+    };
   }
   if (url.endsWith("/api/v1/servers")) {
     return {
@@ -42,6 +49,7 @@ function successfulPayload(url: string): unknown {
           ram: 4096,
           disk: 40960,
           disk_type: "nvme",
+          bandwidth: 200,
         },
       ],
     };
@@ -134,10 +142,15 @@ describe("TimewebReadOnlyAdapter", () => {
       })),
     );
     expect(snapshot).toMatchObject({
-      version: "timeweb-read-v1",
+      version: "timeweb-read-v2",
       source: "timeweb",
       account: { state: "ready" },
-      balance: { amount: 2500, currency: "RUB" },
+      balance: {
+        amount: 2500,
+        currency: "RUB",
+        monthlyFeeRoubles: 181,
+      },
+      presets: [{ bandwidthMbps: 200 }],
       servers: [
         {
           id: "101",
@@ -193,6 +206,27 @@ describe("TimewebReadOnlyAdapter", () => {
       state: "unsupported",
       providerValue: "warp_mode___provider_drift",
     });
+  });
+
+  it("fails the account gate for the documented permanent block flag", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/api/v1/account/status")) {
+        return Response.json({
+          status: {
+            is_blocked: false,
+            is_permanent_blocked: true,
+          },
+        });
+      }
+      return Response.json(successfulPayload(String(input)));
+    });
+
+    await expect(
+      new TimewebReadOnlyAdapter(
+        testCredential,
+        fetchMock as typeof fetch,
+      ).discover(),
+    ).resolves.toMatchObject({ account: { state: "blocked" } });
   });
 
   it("returns typed redacted errors without raw provider payload or credential", async () => {

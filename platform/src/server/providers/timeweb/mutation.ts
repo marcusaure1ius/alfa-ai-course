@@ -4,6 +4,7 @@ import {
   TIMEWEB_MUTATION_ADAPTER_VERSION,
   type OwnedProviderResource,
   type TimewebCreateServerInput,
+  type TimewebDnsRecord,
   type TimewebMutationAdapter,
   type TimewebPublicIpCandidate,
   type TimewebPublicIpReconciliation,
@@ -13,6 +14,10 @@ import {
   type TimewebSupportedStatus,
   type TimewebUpdateServerInput,
 } from "./contracts";
+import {
+  buildStarterKitCloudInit,
+  COURSE_SERVER_HOSTNAME,
+} from "./bootstrap-profile";
 import { TimewebProviderError } from "./read-only";
 import { readTimewebMutationRuntimeGate } from "./runtime";
 
@@ -21,6 +26,7 @@ const MUTATION_REQUEST_TIMEOUT_MS = 60_000;
 const RECONCILIATION_REQUEST_TIMEOUT_MS = 8_000;
 const SERVER_COLLECTION_PATH = "/api/v1/servers";
 const PUBLIC_IP_COLLECTION_PATH = "/api/v1/floating-ips";
+const DNS_RECORD_ID = /^[1-9][0-9]{0,18}$/;
 const SERVER_ID = /^[1-9][0-9]{0,18}$/;
 const PUBLIC_IP_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -29,18 +35,29 @@ const ENVIRONMENT_ID =
 const AVAILABILITY_ZONE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 const IPV4 =
   /^(?:(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$/;
+const DNS_NAME =
+  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const SERVER_HOSTNAME =
+  /^(?=.{1,63}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const SUPPORTED_SERVER_STATUSES = new Set<TimewebSupportedStatus>([
   "on",
   "off",
   "installing",
+  "software_install",
   "reinstalling",
-  "starting",
-  "stopping",
+  "turning_on",
+  "turning_off",
+  "hard_turning_off",
   "rebooting",
-  "shutting_down",
   "hard_rebooting",
-  "hard_shutting_down",
+  "removing",
+  "removed",
+  "cloning",
+  "transfer",
   "blocked",
+  "configuring",
+  "no_paid",
+  "permanent_blocked",
 ]);
 type FetchLike = typeof fetch;
 type ServerEnvironment = Readonly<Record<string, string | undefined>>;
@@ -90,6 +107,53 @@ function validIpv4(value: string): string {
     );
   }
   return address;
+}
+
+function validDnsName(value: string, label: string): string {
+  const name = value.trim().toLowerCase().replace(/\.$/, "");
+  if (!DNS_NAME.test(name)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      `${label} не прошло локальную DNS-проверку.`,
+      false,
+    );
+  }
+  return name;
+}
+
+function validServerHostname(value: string): string {
+  const hostname = value.trim().toLowerCase();
+  if (!SERVER_HOSTNAME.test(hostname)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Server hostname не прошёл локальную проверку.",
+      false,
+    );
+  }
+  return hostname;
+}
+
+function dnsRecordListPath(hostname: string): string {
+  const verifiedHostname = validDnsName(hostname, "DNS hostname");
+  return `/api/v1/domains/${encodeURIComponent(verifiedHostname)}/dns-records`;
+}
+
+function dnsRecordMutationPath(
+  hostname: string,
+  recordId?: string,
+): string {
+  const verifiedHostname = validDnsName(hostname, "DNS hostname");
+  const base =
+    `/api/v2/domains/${encodeURIComponent(verifiedHostname)}/dns-records`;
+  if (recordId === undefined) return base;
+  if (!DNS_RECORD_ID.test(recordId)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "DNS record ID не прошёл локальную проверку.",
+      false,
+    );
+  }
+  return `${base}/${recordId}`;
 }
 
 function ownedServer(
@@ -171,6 +235,13 @@ async function providerError(response: Response): Promise<TimewebProviderError> 
       false,
     );
   }
+  if (status === 423) {
+    return new TimewebProviderError(
+      "FORBIDDEN",
+      "Timeweb требует внешний код подтверждения удаления; automatic delete запрещён.",
+      false,
+    );
+  }
   if (status === 429) {
     return new TimewebProviderError(
       "RATE_LIMITED",
@@ -188,7 +259,7 @@ async function providerError(response: Response): Promise<TimewebProviderError> 
   return new TimewebProviderError(
     "UPSTREAM_UNAVAILABLE",
     `Timeweb не подтвердил mutation-запрос (HTTP ${status}${diagnostic}).`,
-    status >= 500 || status === 423,
+    status >= 500,
   );
 }
 
@@ -311,6 +382,113 @@ function publicIpCandidate(
   };
 }
 
+function dnsRecordId(payload: unknown): string {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb не вернул созданную DNS-запись.",
+      false,
+    );
+  }
+  const record = (payload as Record<string, unknown>).dns_record;
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb не вернул созданную DNS-запись.",
+      false,
+    );
+  }
+  const raw = (record as Record<string, unknown>).id;
+  const id =
+    typeof raw === "number" && Number.isSafeInteger(raw) ? String(raw) : raw;
+  if (typeof id !== "string" || !DNS_RECORD_ID.test(id)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb не вернул DNS record ID.",
+      false,
+    );
+  }
+  return id;
+}
+
+function dnsARecord(
+  value: Record<string, unknown>,
+  environmentId: string,
+  zone: string,
+  requestedHostname: string,
+): TimewebDnsRecord | null {
+  if (value.type !== "A") return null;
+  const rawId = value.id;
+  const externalId =
+    typeof rawId === "number" && Number.isSafeInteger(rawId)
+      ? String(rawId)
+      : rawId;
+  const data =
+    value.data && typeof value.data === "object" && !Array.isArray(value.data)
+      ? (value.data as Record<string, unknown>)
+      : null;
+  const subdomain =
+    typeof data?.subdomain === "string"
+      ? data.subdomain.trim().toLowerCase()
+      : null;
+  const hostname =
+    subdomain && subdomain !== "@"
+      ? subdomain.endsWith(`.${zone}`)
+        ? subdomain
+        : `${subdomain}.${zone}`
+      : requestedHostname;
+  const address = typeof data?.value === "string" ? data.value : "";
+  const ttl =
+    typeof value.ttl === "number" && Number.isSafeInteger(value.ttl)
+      ? value.ttl
+      : 600;
+  if (
+    typeof externalId !== "string" ||
+    !DNS_RECORD_ID.test(externalId) ||
+    !ENVIRONMENT_ID.test(environmentId) ||
+    ttl <= 0
+  ) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb вернул некорректную DNS-запись.",
+      false,
+    );
+  }
+  return {
+    externalId,
+    kind: "dns_record",
+    environmentId,
+    zone: validDnsName(zone, "DNS zone"),
+    hostname: validDnsName(hostname, "DNS hostname"),
+    type: "A",
+    value: validIpv4(address),
+    ttl,
+  };
+}
+
+function dnsRecordHostname(
+  value: Record<string, unknown>,
+  zone: string,
+  requestedHostname: string,
+): string {
+  const data =
+    value.data && typeof value.data === "object" && !Array.isArray(value.data)
+      ? (value.data as Record<string, unknown>)
+      : null;
+  const subdomain =
+    typeof data?.subdomain === "string"
+      ? data.subdomain.trim().toLowerCase()
+      : null;
+  return validDnsName(
+    subdomain && subdomain !== "@"
+      ? subdomain.endsWith(`.${zone}`)
+        ? subdomain
+        : `${subdomain}.${zone}`
+      : requestedHostname,
+    "DNS hostname",
+  );
+}
+
 function objectArray(payload: unknown, key: string): Record<string, unknown>[] {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new TimewebProviderError(
@@ -402,6 +580,17 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
         false,
       );
     }
+    const serverHostname = validServerHostname(input.serverHostname);
+    if (
+      serverHostname !== COURSE_SERVER_HOSTNAME ||
+      input.cloudInit !== buildStarterKitCloudInit()
+    ) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Cloud-init не совпадает с approved exact bootstrap profile.",
+        false,
+      );
+    }
     const response = await this.request("POST", SERVER_COLLECTION_PATH, {
       name: validName(input.name),
       comment: `course-platform:${input.environmentId}`,
@@ -411,7 +600,10 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
       project_id: positiveInteger(input.projectId, "Project"),
       ssh_keys_ids: [positiveInteger(input.sshKeyId, "SSH key")],
       is_root_password_required: false,
-      is_local_network: false,
+      bandwidth: positiveInteger(input.bandwidthMbps, "Bandwidth"),
+      network: { floating_ip: validIpv4(input.publicIpv4) },
+      cloud_init: input.cloudInit,
+      hostname: serverHostname,
     });
     const payload = await response.json().catch(() => null);
     return {
@@ -427,6 +619,16 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
       "PATCH",
       `${SERVER_COLLECTION_PATH}/${resource.externalId}`,
       { name: validName(input.name) },
+    );
+  }
+
+  async rebootServer(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<void> {
+    const verified = ownedServer(resource);
+    await this.request(
+      "POST",
+      `${SERVER_COLLECTION_PATH}/${verified.externalId}/reboot`,
     );
   }
 
@@ -476,6 +678,66 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
     }
   }
 
+  private async serverValues(): Promise<Record<string, unknown>[]> {
+    const result: Record<string, unknown>[] = [];
+    const limit = 100;
+    let expectedTotal: number | null = null;
+    for (let offset = 0; offset < 1_000; offset += limit) {
+      const response = await this.request(
+        "GET",
+        `${SERVER_COLLECTION_PATH}?limit=${limit}&offset=${offset}`,
+      );
+      const payload = await response.json().catch(() => null);
+      const page = objectArray(payload, "servers");
+      const meta =
+        payload && typeof payload === "object" && !Array.isArray(payload)
+          ? (payload as { meta?: { total?: unknown } }).meta
+          : undefined;
+      const total = meta?.total;
+      if (
+        typeof total !== "number" ||
+        !Number.isSafeInteger(total) ||
+        total < 0 ||
+        total > 1_000
+      ) {
+        throw new TimewebProviderError(
+          "INVALID_RESPONSE",
+          "Timeweb server pagination metadata не прошла проверку.",
+          false,
+        );
+      }
+      if (expectedTotal !== null && total !== expectedTotal) {
+        throw new TimewebProviderError(
+          "INVALID_RESPONSE",
+          "Timeweb server pagination total изменился между страницами.",
+          false,
+        );
+      }
+      expectedTotal = total;
+      result.push(...page);
+      if (result.length > total) {
+        throw new TimewebProviderError(
+          "INVALID_RESPONSE",
+          "Timeweb server pagination вернула больше записей, чем meta.total.",
+          false,
+        );
+      }
+      if (result.length === total) return result;
+      if (page.length === 0) {
+        throw new TimewebProviderError(
+          "INVALID_RESPONSE",
+          "Timeweb server pagination завершилась неполной страницей.",
+          false,
+        );
+      }
+    }
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb server collection превышает безопасный лимит.",
+      false,
+    );
+  }
+
   async findServerByEnvironmentId(
     environmentId: string,
   ): Promise<(OwnedProviderResource & Readonly<{ kind: "server" }>) | null> {
@@ -486,12 +748,10 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
         false,
       );
     }
-    const response = await this.request("GET", SERVER_COLLECTION_PATH);
     const marker = `course-platform:${environmentId}`;
-    const matches = objectArray(
-      await response.json().catch(() => null),
-      "servers",
-    ).filter((server) => server.comment === marker);
+    const matches = (await this.serverValues()).filter(
+      (server) => server.comment === marker,
+    );
     if (matches.length > 1) {
       throw new TimewebProviderError(
         "INVALID_RESPONSE",
@@ -666,6 +926,217 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
       }
       throw error;
     }
+  }
+
+  private async dnsRecordValues(
+    hostname: string,
+  ): Promise<Record<string, unknown>[]> {
+    const verifiedHostname = validDnsName(hostname, "DNS hostname");
+    const result: Record<string, unknown>[] = [];
+    const limit = 100;
+    let expectedTotal: number | null = null;
+    for (let offset = 0; offset < 1_000; offset += limit) {
+      const response = await this.request(
+        "GET",
+        `${dnsRecordListPath(verifiedHostname)}?limit=${limit}&offset=${offset}`,
+      );
+      const payload = await response.json().catch(() => null);
+      const page = objectArray(payload, "dns_records");
+      const meta =
+        payload && typeof payload === "object" && !Array.isArray(payload)
+          ? (payload as { meta?: { total?: unknown } }).meta
+          : undefined;
+      const total = meta?.total;
+      if (
+        typeof total !== "number" ||
+        !Number.isSafeInteger(total) ||
+        total < 0 ||
+        total > 1_000
+      ) {
+        throw new TimewebProviderError(
+          "INVALID_RESPONSE",
+          "Timeweb DNS pagination metadata не прошла проверку.",
+          false,
+        );
+      }
+      if (expectedTotal !== null && total !== expectedTotal) {
+        throw new TimewebProviderError(
+          "INVALID_RESPONSE",
+          "Timeweb DNS pagination total изменился между страницами.",
+          false,
+        );
+      }
+      expectedTotal = total;
+      result.push(...page);
+      if (result.length > total) {
+        throw new TimewebProviderError(
+          "INVALID_RESPONSE",
+          "Timeweb DNS pagination вернула больше записей, чем meta.total.",
+          false,
+        );
+      }
+      if (result.length === total) return result;
+      if (page.length === 0) {
+        throw new TimewebProviderError(
+          "INVALID_RESPONSE",
+          "Timeweb DNS pagination завершилась неполной страницей.",
+          false,
+        );
+      }
+    }
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb DNS zone превышает безопасный лимит записей.",
+      false,
+    );
+  }
+
+  async listDnsRecords(input: {
+    environmentId: string;
+    zone: string;
+    hostname: string;
+  }): Promise<TimewebDnsRecord[]> {
+    if (!ENVIRONMENT_ID.test(input.environmentId)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Environment не прошёл локальную проверку.",
+        false,
+      );
+    }
+    const zone = validDnsName(input.zone, "DNS zone");
+    const hostname = validDnsName(input.hostname, "DNS hostname");
+    if (!hostname.endsWith(`.${zone}`)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "DNS hostname находится вне approved zone.",
+        false,
+      );
+    }
+    return (await this.dnsRecordValues(hostname))
+      .map((record) =>
+        dnsARecord(record, input.environmentId, zone, hostname),
+      )
+      .filter((record): record is TimewebDnsRecord => record !== null);
+  }
+
+  async listDnsConflictingHostnames(input: {
+    environmentId: string;
+    zone: string;
+    hostname: string;
+  }): Promise<string[]> {
+    if (!ENVIRONMENT_ID.test(input.environmentId)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Environment не прошёл локальную проверку.",
+        false,
+      );
+    }
+    const zone = validDnsName(input.zone, "DNS zone");
+    const hostname = validDnsName(input.hostname, "DNS hostname");
+    if (!hostname.endsWith(`.${zone}`)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "DNS hostname находится вне approved zone.",
+        false,
+      );
+    }
+    return (await this.dnsRecordValues(hostname))
+      .filter((record) => record.type === "A" || record.type === "CNAME")
+      .map((record) => dnsRecordHostname(record, zone, hostname));
+  }
+
+  async createDnsARecord(input: {
+    environmentId: string;
+    zone: string;
+    hostname: string;
+    value: string;
+    ttl: number;
+  }): Promise<TimewebDnsRecord> {
+    if (!ENVIRONMENT_ID.test(input.environmentId)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Environment не прошёл локальную проверку.",
+        false,
+      );
+    }
+    const zone = validDnsName(input.zone, "DNS zone");
+    const hostname = validDnsName(input.hostname, "DNS hostname");
+    if (!hostname.endsWith(`.${zone}`)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "DNS hostname находится вне approved zone.",
+        false,
+      );
+    }
+    const ttl = positiveInteger(input.ttl, "DNS TTL");
+    const address = validIpv4(input.value);
+    const response = await this.request(
+      "POST",
+      dnsRecordMutationPath(hostname),
+      {
+        type: "A",
+        value: address,
+        ttl,
+      },
+    );
+    return {
+      externalId: dnsRecordId(await response.json().catch(() => null)),
+      kind: "dns_record",
+      environmentId: input.environmentId,
+      zone,
+      hostname,
+      type: "A",
+      value: address,
+      ttl,
+    };
+  }
+
+  async deleteDnsRecord(resource: TimewebDnsRecord): Promise<void> {
+    if (
+      resource.kind !== "dns_record" ||
+      !ENVIRONMENT_ID.test(resource.environmentId)
+    ) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Owned DNS resource не прошёл локальную проверку.",
+        false,
+      );
+    }
+    try {
+      await this.request(
+        "DELETE",
+        dnsRecordMutationPath(resource.hostname, resource.externalId),
+      );
+    } catch (error) {
+      if (
+        error instanceof TimewebProviderError &&
+        error.code === "NOT_FOUND"
+      ) {
+        return;
+      }
+      throw error;
+    }
+  }
+
+  async reconcileDnsRecord(
+    resource: TimewebDnsRecord,
+  ): Promise<{ state: "absent" | "present" }> {
+    const records = await this.listDnsRecords({
+      environmentId: resource.environmentId,
+      zone: resource.zone,
+      hostname: resource.hostname,
+    });
+    const exact = records.filter(
+      (record) => record.externalId === resource.externalId,
+    );
+    if (exact.length > 1) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Timeweb вернул duplicate DNS record ID.",
+        false,
+      );
+    }
+    return { state: exact.length === 1 ? "present" : "absent" };
   }
 
 }

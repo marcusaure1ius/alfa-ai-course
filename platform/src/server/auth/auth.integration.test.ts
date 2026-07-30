@@ -332,7 +332,7 @@ describe("database-backed authentication", () => {
     expect(accepted.status).toBe(200);
     const body = await accepted.json();
     expect(body).toMatchObject({
-      version: "timeweb-read-v1",
+      version: "timeweb-read-v2",
       ok: true,
       mode: "fake",
       status: "fake",
@@ -501,8 +501,8 @@ describe("durable fake infrastructure lifecycle", () => {
     expect(timeline?.status).toBe("succeeded");
     expect(timeline?.steps.map((step) => step.key)).toEqual([
       "reserve_public_ip",
-      "create_server",
       "configure_dns",
+      "create_server",
       "verify_tls",
       "complete",
     ]);
@@ -635,7 +635,7 @@ describe("durable fake infrastructure lifecycle", () => {
   });
 
   it.each(["dns_failure", "tls_failure"] as const)(
-    "keeps the server and marks the environment degraded on %s",
+    "stops safely and marks the environment degraded on %s",
     async (scenario) => {
       const { adminLogin } = await provisionUsers();
       const reserved = await reserveCreateOperation(sql, adminLogin.session, {
@@ -662,7 +662,10 @@ describe("durable fake infrastructure lifecycle", () => {
         )
         GROUP BY environments.status
       `;
-      expect(rows[0]).toEqual({ status: "degraded", servers: 1 });
+      expect(rows[0]).toEqual({
+        status: "degraded",
+        servers: scenario === "dns_failure" ? 0 : 1,
+      });
     },
   );
 
@@ -788,6 +791,8 @@ describe("durable fake infrastructure lifecycle", () => {
         process.env.TIMEWEB_CAPABILITIES_VERIFIED,
       TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
         process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
+      TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME:
+        process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME,
     };
     process.env.VERCEL_ENV = "production";
     process.env.PLATFORM_PROVIDER = "timeweb";
@@ -795,6 +800,7 @@ describe("durable fake infrastructure lifecycle", () => {
     process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
     process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
     process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
+    process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME = "true";
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
@@ -842,7 +848,7 @@ describe("durable fake infrastructure lifecycle", () => {
       idempotencyKey: "production-marker-regression-01",
       scenario: "success",
       providerPlan: {
-        version: "timeweb-provisioning-v1",
+        version: "timeweb-provisioning-v2",
         checkedAt: new Date().toISOString(),
         presetId: 101,
         operatingSystemId: 202,
@@ -854,8 +860,10 @@ describe("durable fake infrastructure lifecycle", () => {
         ramMb: 1024,
         diskMb: 15_360,
         diskType: "ssd",
+        bandwidthMbps: 100,
         monthlyPublicIpRoubles: 180,
         monthlyTotalRoubles: 329,
+        requiredBalanceRoubles: 329,
         balanceRoubles: 1_000,
         projectId: 303,
         sshKeyId: 404,
@@ -901,6 +909,8 @@ describe("durable fake infrastructure lifecycle", () => {
         process.env.TIMEWEB_CAPABILITIES_VERIFIED,
       TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
         process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
+      TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME:
+        process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME,
     };
     process.env.VERCEL_ENV = "production";
     process.env.PLATFORM_PROVIDER = "timeweb";
@@ -908,9 +918,12 @@ describe("durable fake infrastructure lifecycle", () => {
     process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
     process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
     process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
+    process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME = "true";
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValue(Response.json({ servers: [] }));
+      .mockResolvedValue(
+        Response.json({ meta: { total: 0 }, servers: [] }),
+      );
     vi.stubGlobal("fetch", fetchMock);
     try {
       const lifecycle = await createInfrastructureLifecycleAdapter(
@@ -941,6 +954,8 @@ describe("durable fake infrastructure lifecycle", () => {
         process.env.TIMEWEB_CAPABILITIES_VERIFIED,
       TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
         process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
+      TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME:
+        process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME,
       AUTH_FACTOR_ENCRYPTION_KEY: process.env.AUTH_FACTOR_ENCRYPTION_KEY,
     };
     const totpSecret = "JBSWY3DPEHPK3PXP";
@@ -951,6 +966,7 @@ describe("durable fake infrastructure lifecycle", () => {
     process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
     process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
     process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
+    process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME = "true";
     process.env.AUTH_FACTOR_ENCRYPTION_KEY = factorEncryptionKey;
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -978,7 +994,7 @@ describe("durable fake infrastructure lifecycle", () => {
         idempotencyKey: "production-ip-retry-regression-01",
         scenario: "success",
         providerPlan: {
-          version: "timeweb-provisioning-v1",
+          version: "timeweb-provisioning-v2",
           checkedAt: new Date().toISOString(),
           presetId: 101,
           operatingSystemId: 202,
@@ -990,8 +1006,10 @@ describe("durable fake infrastructure lifecycle", () => {
           ramMb: 1024,
           diskMb: 15_360,
           diskType: "nvme",
+          bandwidthMbps: 100,
           monthlyPublicIpRoubles: 180,
           monthlyTotalRoubles: 387,
+          requiredBalanceRoubles: 387,
           balanceRoubles: 1_000,
           projectId: 303,
           sshKeyId: 404,
@@ -1037,7 +1055,7 @@ describe("durable fake infrastructure lifecycle", () => {
         SELECT status, retry_class, attempt_count
         FROM operation_steps
         WHERE operation_id = ${create.accepted.operationId}
-          AND logical_key = 'reconcile_server'
+          AND logical_key = 'provider_installing'
       `;
       expect(failed[0]).toEqual({
         status: "failed",
@@ -1047,7 +1065,7 @@ describe("durable fake infrastructure lifecycle", () => {
       const retry = await beginStep(
         sql,
         create.accepted.operationId,
-        "reconcile_server",
+        "provider_installing",
         30,
       );
       expect(retry).toMatchObject({ claimed: true, attempts: 2 });
@@ -1074,6 +1092,8 @@ describe("durable fake infrastructure lifecycle", () => {
         process.env.TIMEWEB_CAPABILITIES_VERIFIED,
       TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
         process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
+      TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME:
+        process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME,
       AUTH_FACTOR_ENCRYPTION_KEY: process.env.AUTH_FACTOR_ENCRYPTION_KEY,
     };
     const totpSecret = "JBSWY3DPEHPK3PXP";
@@ -1084,6 +1104,7 @@ describe("durable fake infrastructure lifecycle", () => {
     process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
     process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
     process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
+    process.env.TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME = "true";
     process.env.AUTH_FACTOR_ENCRYPTION_KEY = factorEncryptionKey;
 
     const baselineId = "11111111-2222-4333-8444-555555555555";
@@ -1129,7 +1150,7 @@ describe("durable fake infrastructure lifecycle", () => {
         idempotencyKey: "production-unresolved-ip-create-01",
         scenario: "success",
         providerPlan: {
-          version: "timeweb-provisioning-v1",
+          version: "timeweb-provisioning-v2",
           checkedAt: new Date().toISOString(),
           presetId: 101,
           operatingSystemId: 202,
@@ -1141,8 +1162,10 @@ describe("durable fake infrastructure lifecycle", () => {
           ramMb: 1024,
           diskMb: 15_360,
           diskType: "nvme",
+          bandwidthMbps: 100,
           monthlyPublicIpRoubles: 180,
           monthlyTotalRoubles: 387,
+          requiredBalanceRoubles: 387,
           balanceRoubles: 1_000,
           projectId: 303,
           sshKeyId: 404,

@@ -15,7 +15,7 @@ describe("checkTimewebConnection", () => {
     );
 
     expect(result).toMatchObject({
-      version: "timeweb-read-v1",
+      version: "timeweb-read-v2",
       ok: true,
       mode: "fake",
       status: "fake",

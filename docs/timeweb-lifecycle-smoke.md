@@ -4,6 +4,8 @@
 - Ресурсы: максимум один disposable VPS и один публичный IPv4
 - Не входит: DNS, cloud-init starter kit, n8n, TLS и student release
 
+Продолжение для среза 1B: [timeweb-n8n-lifecycle-smoke.md](timeweb-n8n-lifecycle-smoke.md).
+
 ## Real Mutation Gate
 
 До включения mutation все пункты должны иметь фактическое evidence:
@@ -12,6 +14,8 @@
 2. Timeweb API `/api/v1/account/services/cost` вернул актуальную однозначную
    стоимость `floating_ip`; если активного ценового источника нет, smoke
    fail-closed и платная mutation запрещена.
+   `/api/v1/account/finances` также обязан подтверждать balance не ниже суммы
+   текущей `monthly_fee` аккаунта и 30-дневной стоимости новых ресурсов.
 3. Подготовлены существующие disposable `TIMEWEB_SMOKE_PROJECT_ID` и
    `TIMEWEB_SMOKE_SSH_KEY_ID`; создание дополнительных project/key в smoke не
    выполняется, root password отключён.
@@ -52,6 +56,7 @@ TIMEWEB_API_TOKEN=<encrypted Vercel Production secret>
 TIMEWEB_MUTATIONS_ENABLED=true
 TIMEWEB_CAPABILITIES_VERIFIED=true
 TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true
+TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME=true
 TIMEWEB_SMOKE_BUDGET_RUB=<целое число рублей>
 TIMEWEB_SMOKE_REGION=<необязательный live region>
 TIMEWEB_SMOKE_PROJECT_ID=<ID disposable проекта>
@@ -61,7 +66,9 @@ AUTH_FACTOR_ENCRYPTION_KEY=<32 random bytes, base64url>
 
 `TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true` — явная аттестация владельца, что во
 время smoke в этом тестовом аккаунте никто другой не создаёт floating IP или
-VPS. Без неё production mutation gate закрыт: recovery определяет новый IP как
+VPS. `TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME=true` отдельно подтверждает, что
+никто другой не меняет A/CNAME для `n8n.neurokurs.ru`. Без этих attestations
+production mutation gate закрыт: recovery определяет новый IP/record как
 единственную разницу относительно hashed baseline и не может безопасно работать
 при параллельных внешних мутациях.
 

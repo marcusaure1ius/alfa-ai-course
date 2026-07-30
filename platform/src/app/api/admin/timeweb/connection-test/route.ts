@@ -8,7 +8,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!verifyCsrfRequest(request)) {
     return Response.json(
       {
-        version: "timeweb-read-v1",
+        version: "timeweb-read-v2",
         error: {
           code: "CSRF",
           message: "Запрос отклонён.",

@@ -1,8 +1,8 @@
 import "server-only";
 
 export const TIMEWEB_ADAPTER_VERSION = "v1" as const;
-export const TIMEWEB_READ_DTO_VERSION = "timeweb-read-v1" as const;
-export const TIMEWEB_MUTATION_ADAPTER_VERSION = "timeweb-mutation-v1" as const;
+export const TIMEWEB_READ_DTO_VERSION = "timeweb-read-v2" as const;
+export const TIMEWEB_MUTATION_ADAPTER_VERSION = "timeweb-mutation-v2" as const;
 
 export type TimewebAdapterVersion = typeof TIMEWEB_ADAPTER_VERSION;
 export type TimewebReadDtoVersion = typeof TIMEWEB_READ_DTO_VERSION;
@@ -27,14 +27,21 @@ export type TimewebSupportedStatus =
   | "on"
   | "off"
   | "installing"
+  | "software_install"
   | "reinstalling"
-  | "starting"
-  | "stopping"
+  | "turning_on"
+  | "turning_off"
+  | "hard_turning_off"
   | "rebooting"
-  | "shutting_down"
   | "hard_rebooting"
-  | "hard_shutting_down"
-  | "blocked";
+  | "removing"
+  | "removed"
+  | "cloning"
+  | "transfer"
+  | "blocked"
+  | "configuring"
+  | "no_paid"
+  | "permanent_blocked";
 
 export type TimewebServerStatus =
   | Readonly<{ state: "supported"; value: TimewebSupportedStatus }>
@@ -69,6 +76,7 @@ export type TimewebCatalogSnapshot = Readonly<{
   balance: Readonly<{
     amount: number;
     currency: string;
+    monthlyFeeRoubles: number;
   }>;
   servers: ReadonlyArray<
     Readonly<{
@@ -89,6 +97,7 @@ export type TimewebCatalogSnapshot = Readonly<{
       ramMb: number;
       diskMb: number;
       diskType: string;
+      bandwidthMbps: number;
     }>
   >;
   operatingSystems: ReadonlyArray<
@@ -168,7 +177,21 @@ export type TimewebCreateServerInput = Readonly<{
   availabilityZone: string;
   projectId: number;
   sshKeyId: number;
+  bandwidthMbps: number;
+  publicIpv4: string;
+  serverHostname: string;
+  cloudInit: string;
 }>;
+
+export type TimewebDnsRecord = OwnedProviderResource &
+  Readonly<{
+    kind: "dns_record";
+    zone: string;
+    hostname: string;
+    type: "A";
+    value: string;
+    ttl: number;
+  }>;
 
 export type TimewebPublicIpResource = OwnedProviderResource &
   Readonly<{
@@ -217,6 +240,9 @@ export interface TimewebMutationAdapter {
     input: TimewebCreateServerInput,
   ): Promise<OwnedProviderResource & Readonly<{ kind: "server" }>>;
   updateServer(input: TimewebUpdateServerInput): Promise<void>;
+  rebootServer(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<void>;
   deleteServer(
     resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
   ): Promise<void>;
@@ -244,6 +270,27 @@ export interface TimewebMutationAdapter {
   reconcilePublicIp(
     resource: TimewebPublicIpResource,
   ): Promise<TimewebPublicIpReconciliation>;
+  listDnsRecords(input: Readonly<{
+    environmentId: string;
+    zone: string;
+    hostname: string;
+  }>): Promise<TimewebDnsRecord[]>;
+  listDnsConflictingHostnames(input: Readonly<{
+    environmentId: string;
+    zone: string;
+    hostname: string;
+  }>): Promise<string[]>;
+  createDnsARecord(input: Readonly<{
+    environmentId: string;
+    zone: string;
+    hostname: string;
+    value: string;
+    ttl: number;
+  }>): Promise<TimewebDnsRecord>;
+  deleteDnsRecord(resource: TimewebDnsRecord): Promise<void>;
+  reconcileDnsRecord(
+    resource: TimewebDnsRecord,
+  ): Promise<Readonly<{ state: "absent" | "present" }>>;
 }
 
 /**

@@ -28,7 +28,7 @@
 
 ID тарифов, ОС, регионов и зон не фиксируются в product configuration: adapter
 получает их из этих endpoint и переводит в внутренний DTO
-`timeweb-read-v1`.
+`timeweb-read-v2`.
 
 ## Важная граница provider response
 
