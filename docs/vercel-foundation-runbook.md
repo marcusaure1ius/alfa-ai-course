@@ -48,10 +48,10 @@ Secret values не копируются в evidence или логи.
 
 Ни один secret не имеет префикс `NEXT_PUBLIC_`. В Neon integration включено
 `Create database branch for deployment: Preview` и обязательная готовность
-resource до deployment. Важно: CLI Preview deployments 2026-07-30 отдельную
-Neon branch не создали и использовали `main`; автоматическая branch-per-preview
-изоляция должна быть повторно подтверждена на первом Git-based Preview до
-работы с несинтетическими данными.
+resource до deployment. Git-triggered Preview получает deployment-specific
+credentials отдельной copy-on-write Neon branch; общие Marketplace variable
+scopes в project inventory не означают, что Preview использует production
+connection string.
 
 ## Безопасный порядок provisioning
 
@@ -62,7 +62,7 @@ Neon branch не создали и использовали `main`; автома
 2. Через Vercel Marketplace создан Neon Postgres 17 в Frankfurt; runtime
    использует pooled URL, migrations — direct URL.
 3. Подключены Production и Preview scopes, включена branch-per-preview
-   настройка с оговоркой для CLI deployment выше.
+   настройка и Git integration.
 4. Добавлены environment variables по inventory. Не добавлен
    `TIMEWEB_API_TOKEN`.
 5. `vercel env ls` проверен только по именам/scopes.
@@ -112,10 +112,16 @@ deployment ID, status и redacted runtime log.
 
 ## Проверки 2026-07-30
 
-- Preview deployment `dpl_5Qmtv99rTc4dX33ct56iFA5Pn5vY` собран без
-  локальных `.env` в build context.
+- Git-triggered Preview deployment `dpl_9y24DnJm9gBa9UdAk2WvtD5ZL6Us` собран
+  из branch `codex/t0055-preview-isolation` без локальных `.env` в build
+  context.
+- Vercel integration создала Neon branch
+  `preview/codex/t0055-preview-isolation`
+  (`br-cold-voice-asc0yh8e`) от `main`.
 - Fake create/delete завершились `succeeded`; проверены 5 create steps и
-  4 delete steps, после удаления environment имеет status `deleted`.
+  4 delete steps, после удаления environment имеет status `deleted`. Synthetic
+  environment существовала в Preview branch и отсутствовала в production
+  `main`, что подтверждает фактическую DB isolation.
 - Operation `44016af0-d13b-4915-b68c-6fcab90a573f` с retry
   `timeout_after_create` доступна и terminal после нового deployment.
 - Preview Cron route вернул `404`.
@@ -128,6 +134,5 @@ deployment ID, status и redacted runtime log.
 - За окно проверки Vercel не показал runtime error/fatal logs; application logs
   не содержали паролей, session tokens или environment values.
 
-Остаётся отдельная проверка branch-per-preview на Git-based deployment.
 Production Timeweb mutation, MFA enrollment и несинтетические пользовательские
 данные не включены в foundation.
