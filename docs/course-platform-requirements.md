@@ -229,7 +229,7 @@ Desktop: сворачиваемая панель шириной около 256 p
 
 `PROV-05` Идентификаторы preset, OS, project, region/zone и стоимость загружаются из API. При недоступности provider UI показывает cached data как устаревшие и запрещает платные mutation, если безопасный preview невозможен.
 
-`PROV-06` Preview и development deployments Vercel не получают production Timeweb tokens. Реальный provider smoke разрешён только из production deployment после отдельного budget gate.
+`PROV-06` Preview и development deployments Vercel не получают production Timeweb tokens. Реальный provider smoke разрешён только из production deployment после явного подтверждения владельца. Клиентский денежный cap не применяется: актуальные provider price, balance и `monthly_fee` показываются как телеметрия, а решение принять или отклонить mutation остаётся за Timeweb.
 
 ### 7.2. Создание VPS
 
@@ -241,7 +241,7 @@ Desktop: сворачиваемая панель шириной около 256 p
 - provider credentials доступны;
 - имя и subdomain уникальны;
 - отсутствует другой активный или создаваемый VPS: hard limit первого этапа равен одному;
-- хватает настроенного бюджета/доступного баланса;
+- актуальные цена и баланс прочитаны для preview, но не блокируют mutation;
 - выбранные IP и сервер находятся в совместимой зоне;
 - образ соответствует Ubuntu 24.04 x86_64;
 - отсутствует другая активная mutation этой среды.
@@ -478,8 +478,8 @@ Append-only audit фиксирует:
 ### 9.4. Стоимость и лимиты
 
 - UI получает цену и баланс из Timeweb, когда API их предоставляет; иначе показывает «нет актуальных данных» и не выдумывает сумму.
-- Конфигурация содержит warning/critical monthly budget, hard limit `1` активная среда и максимальную стоимость одного create preview.
-- При превышении hard limit новые create блокируются; health, cleanup и delete остаются доступны.
+- Конфигурация содержит hard limit `1` активная среда. Денежный warning/critical budget и максимальная стоимость create preview не используются.
+- При превышении resource hard limit новые create блокируются; health, cleanup и delete остаются доступны.
 - Платформа учитывает публичный IP как отдельный ресурс.
 - Provider rate limits, суточный лимит выдачи IPv4 и отсутствие средств классифицируются отдельно и видны admin.
 
@@ -511,8 +511,8 @@ Append-only audit фиксирует:
 ### 10.4. Наблюдаемость
 
 - Structured logs с correlation/operation/environment IDs и без секретов.
-- Метрики: queue depth, step duration, success/failure по шагам, retry count, orphan resources, API latency/error rate, active environments и cost guardrail events.
-- Alert: Workflow не продвигается, deletion partial, provider auth invalid, provisioning failure, budget critical.
+- Метрики: queue depth, step duration, success/failure по шагам, retry count, orphan resources, API latency/error rate, active environments, provider price и billing-status events.
+- Alert: Workflow не продвигается, deletion partial, provider auth invalid, provisioning failure, provider `no_paid` или отсутствие актуальной цены.
 - UI показывает время последней синхронизации и не маскирует stale provider data как актуальные.
 
 ## 11. Проверки
@@ -527,7 +527,7 @@ Append-only audit фиксирует:
 - Accessibility: axe плюс keyboard smoke.
 - Repository regression: platform checks запускаются из `platform/`, root starter-kit checks продолжают проходить; Vercel build не включает root `.env`, Compose volumes, backup archives или runtime secrets.
 
-Timeweb тесты по умолчанию используют mock/fake adapter. Реальный smoke запускается только на disposable project с отдельным budget cap, exact cleanup plan и evidence. Ни mock, ни локальный test не считаются подтверждением реального VPS, DNS или TLS.
+Timeweb тесты по умолчанию используют mock/fake adapter. Реальный smoke запускается только на disposable project после явного подтверждения владельца, с exact cleanup plan и evidence. Денежный cap не применяется. Ни mock, ни локальный test не считаются подтверждением реального VPS, DNS или TLS.
 
 ### 11.2. Приёмочные сценарии
 
@@ -602,7 +602,7 @@ Timeweb тесты по умолчанию используют mock/fake adapte
 
 1. DNS zone `neurokurs.ru` подтверждена в Timeweb account и read-only test проходит;
 2. один Timeweb token создан с минимально доступными service permissions, его фактические capabilities проверены, а secret добавлен только в Vercel production environment;
-3. владелец установил денежный hard limit для smoke, а platform hard limit `1 VPS` включён;
+3. владелец явно подтвердил provider smoke без клиентского денежного cap, а platform hard limit `1 VPS` включён;
 4. disposable cleanup plan и ownership assertions прошли на fake adapter;
 5. production admin использует MFA и свежую re-auth для destructive action;
 6. n8n license gate закрыт до предоставления управляемой среды ученикам;
@@ -633,7 +633,7 @@ Timeweb тесты по умолчанию используют mock/fake adapte
 - добавлены уникальные SSH keys, stable worker egress и ограничение порта 22;
 - зафиксированы ownership-based cleanup и reconciliation после timeout;
 - запрещены hardcoded preset/price IDs и production `releases/latest`;
-- реальный Timeweb smoke отделён от mock tests и требует бюджета/evidence.
+- реальный Timeweb smoke отделён от mock tests и требует явного подтверждения владельца/evidence.
 
 Оставшиеся release gates не скрыты: они перечислены в разделах 13–14 и не должны подменяться предположениями реализации.
 
