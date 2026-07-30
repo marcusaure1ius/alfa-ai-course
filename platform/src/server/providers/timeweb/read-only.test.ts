@@ -48,7 +48,7 @@ function successfulPayload(url: string): unknown {
   }
   if (url.endsWith("/api/v1/os/servers")) {
     return {
-      servers_os: [{ id: 303, family: "ubuntu", name: "Ubuntu", version: "24.04" }],
+      servers_os: [{ id: 303, family: "linux", name: "Ubuntu", version: "24.04" }],
     };
   }
   if (url.endsWith("/api/v2/locations")) {

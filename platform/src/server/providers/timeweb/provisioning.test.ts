@@ -75,6 +75,22 @@ const productionEnvironment = {
 };
 
 describe("getTimewebProvisioningPreview", () => {
+  it("keeps the non-production fake preview aligned with the live OS contract", async () => {
+    const preview = await getTimewebProvisioningPreview({
+      VERCEL_ENV: "preview",
+      PLATFORM_PROVIDER: "timeweb",
+    });
+
+    expect(preview).toMatchObject({
+      ok: true,
+      mode: "fake",
+      plan: {
+        operatingSystemId: 202,
+        operatingSystemLabel: "Ubuntu 24.04 x86_64",
+      },
+    });
+  });
+
   it("selects current Ubuntu 24.04, the cheapest compatible preset and live price", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (input) =>
       Response.json(providerPayload(String(input))),

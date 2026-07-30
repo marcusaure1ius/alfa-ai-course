@@ -32,7 +32,7 @@ export class FakeTimewebReadAdapter implements TimewebReadAdapter {
       operatingSystems: [
         {
           id: "202",
-          family: "ubuntu",
+          family: "linux",
           name: "Ubuntu",
           version: "24.04",
         },
