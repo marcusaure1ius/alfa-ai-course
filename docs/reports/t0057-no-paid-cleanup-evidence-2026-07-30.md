@@ -47,13 +47,15 @@ Cleanup operation:
 - delete DNS/server и возврат baseline IP в unbound — succeeded;
 - final environment status: `deleted`.
 
-Provider resource identities сохранены только как MD5 redaction fingerprints:
+Provider resources обозначены случайными evidence aliases. Raw provider IDs
+остаются только в локальной smoke database и не попадают в Git или Projects
+Control:
 
-| Kind | Ownership | Final lifecycle | Provider ID fingerprint |
+| Alias | Kind | Ownership | Final platform/provider state |
 | --- | --- | --- | --- |
-| `public_ip` temporary lease | platform | deleted | `0deda2d8a3ba679f85a473766b25df58` |
-| `dns_record` | platform | deleted | `b4c77bf27e0d4cb85090fa2565f9c6d1` |
-| `server` | platform | deleted | `7a30a520b476af90be2c5b7513486f3a` |
+| `R-IP-01` | `public_ip` temporary lease | platform | DB record deleted; provider IP preserved/unbound |
+| `R-DNS-01` | `dns_record` | platform | deleted/absent |
+| `R-VPS-01` | `server` | platform | deleted/absent |
 
 ## Независимая финальная read-only проверка
 

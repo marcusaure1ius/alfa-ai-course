@@ -519,7 +519,9 @@ Append-only audit фиксирует:
 
 ### 11.1. Автоматические
 
-- Unit: RBAC policy, state transitions, retry classifier, redaction, cost limits, ownership guard.
+- Unit: RBAC policy, state transitions, retry classifier, redaction, pricing
+  telemetry, provider billing-status classification, resource hard limits и
+  ownership guard.
 - Contract: Timeweb adapter против актуальной schema/SDK; ошибки/неизвестные enum status сохраняются безопасно.
 - Integration: PostgreSQL constraints, duplicate logical step/idempotency key и resume Workflow на каждом критическом шаге.
 - E2E: admin create preview/create/delete; student получает `403`; mobile create flow; typed destructive confirmation.
