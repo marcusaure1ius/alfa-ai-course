@@ -28,8 +28,13 @@ export function canTransitionEnvironment(
 
 export type RetryClass = "transient" | "unknown_outcome" | "permanent";
 
-export function classifyProviderError(code: string): RetryClass {
+export function classifyProviderError(
+  code: string,
+  retryable?: boolean,
+): RetryClass {
   if (code === "TIMEOUT_AFTER_MUTATION") return "unknown_outcome";
+  if (retryable === false) return "permanent";
+  if (retryable === true) return "transient";
   if (
     code === "RATE_LIMIT" ||
     code === "PROVIDER_UNAVAILABLE" ||

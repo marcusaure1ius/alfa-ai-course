@@ -38,11 +38,11 @@ async function failProviderStep(
   command: WorkflowCommand,
   key: string,
   executionToken: string,
-  error: Readonly<{ code: string; message: string }>,
+  error: Readonly<{ code: string; message: string; retryable?: boolean }>,
   retryAfterMs = 1_000,
 ): Promise<never> {
   const sql = getDatabase();
-  const retryClass = classifyProviderError(error.code);
+  const retryClass = classifyProviderError(error.code, error.retryable);
   await finishStep(sql, command.operationId, key, executionToken, {
     status: "failed",
     code: error.code,
@@ -350,7 +350,10 @@ export async function deleteResourceStep(
   } catch (error) {
     const providerError = lifecycleProviderError(error);
     if (!providerError) throw error;
-    const retryClass = classifyProviderError(providerError.code);
+    const retryClass = classifyProviderError(
+      providerError.code,
+      "retryable" in providerError ? providerError.retryable : undefined,
+    );
     await finishStep(sql, command.operationId, key, executionToken, {
       status: "failed",
       code: providerError.code,

@@ -26,14 +26,21 @@
 9. Kill-switches включаются только на время подтверждённого smoke.
 
 Для уже созданного administrator TOTP добавляется одноразовой CLI-командой.
-Значения передаются только через process environment и не выводятся:
+Secret и первый текущий code вводятся скрытыми prompts, не попадают в shell
+history, передаются только дочернему process и сразу удаляются из environment:
 
 ```bash
 cd platform
-ADMIN_TOTP_SECRET='<скрыто>' \
-AUTH_FACTOR_ENCRYPTION_KEY='<скрыто>' \
+read -rsp 'TOTP secret: ' ADMIN_TOTP_SECRET && echo
+read -rsp 'Текущий TOTP code: ' ADMIN_TOTP_CODE && echo
+export ADMIN_TOTP_SECRET ADMIN_TOTP_CODE
 npm run auth:enroll-admin-totp -- --email admin@example.test
+unset ADMIN_TOTP_SECRET ADMIN_TOTP_CODE
 ```
+
+`AUTH_FACTOR_ENCRYPTION_KEY` заранее находится в защищённом `.env.local` с
+правами `0600`. Enrollment помечает factor verified только после успешной
+проверки первого code.
 
 Production environment:
 

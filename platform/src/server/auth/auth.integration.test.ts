@@ -14,6 +14,7 @@ import {
   bootstrapAdmin,
   changeUserRole,
   createUser,
+  enrollAdminTotp,
   getSessionByToken,
   loginWithPassword,
 } from "./service";
@@ -195,6 +196,7 @@ describe("database-backed authentication", () => {
         email: "admin@example.test",
         password: "correct horse battery staple",
         totpSecret,
+        totpCode: createTotpCode(totpSecret),
         factorEncryptionKey,
       });
       await expect(
@@ -223,6 +225,45 @@ describe("database-backed authentication", () => {
       if (previousKey === undefined) delete process.env.AUTH_FACTOR_ENCRYPTION_KEY;
       else process.env.AUTH_FACTOR_ENCRYPTION_KEY = previousKey;
     }
+  });
+
+  it("verifies the first TOTP code before enrolling an admin factor", async () => {
+    const factorEncryptionKey = Buffer.alloc(32, 12).toString("base64url");
+    const totpSecret = "JBSWY3DPEHPK3PXP";
+    await bootstrapAdmin(sql, {
+      email: "admin@example.test",
+      password: "correct horse battery staple",
+    });
+
+    await expect(
+      enrollAdminTotp(sql, {
+        email: "admin@example.test",
+        totpSecret,
+        totpCode: "000000",
+        factorEncryptionKey,
+      }),
+    ).rejects.toThrow("Первый TOTP code не прошёл проверку.");
+    expect(
+      await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM auth_factors
+      `,
+    ).toEqual([{ count: 0 }]);
+
+    await expect(
+      enrollAdminTotp(sql, {
+        email: "admin@example.test",
+        totpSecret,
+        totpCode: createTotpCode(totpSecret),
+        factorEncryptionKey,
+      }),
+    ).resolves.toBeUndefined();
+    expect(
+      await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count
+        FROM auth_factors
+        WHERE verified_at IS NOT NULL
+      `,
+    ).toEqual([{ count: 1 }]);
   });
 
   it("denies student privilege escalation and direct admin requests with 403", async () => {
@@ -401,6 +442,13 @@ describe("durable fake infrastructure lifecycle", () => {
     expect(duplicate.created).toBe(false);
     await expect(
       reserveCreateOperation(sql, adminLogin.session, {
+        name: "Другая payload",
+        idempotencyKey: "create-same-key-0001",
+        scenario: "timeout_after_create",
+      }),
+    ).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    await expect(
+      reserveCreateOperation(sql, adminLogin.session, {
         name: "Вторая среда",
         idempotencyKey: "create-other-key-0002",
         scenario: "success",
@@ -421,6 +469,19 @@ describe("durable fake infrastructure lifecycle", () => {
         scenario: "success",
       }),
     ).resolves.toEqual({ status: "active" });
+
+    await expect(
+      reserveDeleteOperation(sql, adminLogin.session, {
+        environmentId: await operationEnvironmentId(
+          sql,
+          reserved.accepted.operationId,
+        ),
+        confirmationName: "Основная среда",
+        confirmedLoss: true,
+        idempotencyKey: "create-success-key-01",
+        scenario: "success",
+      }),
+    ).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
 
     const resources = await sql<{ count: number }[]>`
       SELECT count(*)::int AS count FROM provider_resources

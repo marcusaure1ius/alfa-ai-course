@@ -521,6 +521,7 @@ export async function bootstrapAdmin(
     email: string;
     password: string;
     totpSecret?: string;
+    totpCode?: string;
     factorEncryptionKey?: string;
   },
 ): Promise<{ id: string; email: string }> {
@@ -543,16 +544,37 @@ export async function bootstrapAdmin(
       INSERT INTO users (id, email, password_hash, role_id)
       VALUES (${userId}, ${email}, ${passwordHash}, 'admin')
     `;
-    if (input.totpSecret && input.factorEncryptionKey) {
+    if (input.totpSecret && input.factorEncryptionKey && input.totpCode) {
+      const ciphertext = sealTotpSecret(
+        input.totpSecret,
+        input.factorEncryptionKey,
+      );
+      if (
+        !verifyTotpCode(
+          ciphertext,
+          input.totpCode,
+          input.factorEncryptionKey,
+        )
+      ) {
+        throw new Error("Первый TOTP code не прошёл проверку.");
+      }
       await transaction`
         INSERT INTO auth_factors (
           id, user_id, factor_type, label, secret_ciphertext, verified_at
         )
         VALUES (
           ${randomUUID()}, ${userId}, 'totp', 'Authenticator',
-          ${sealTotpSecret(input.totpSecret, input.factorEncryptionKey)}, now()
+          ${ciphertext}, now()
         )
       `;
+    } else if (
+      input.totpSecret ||
+      input.totpCode ||
+      input.factorEncryptionKey
+    ) {
+      throw new Error(
+        "TOTP enrollment требует secret, текущий code и encryption key.",
+      );
     }
     await transaction`
       UPDATE auth_bootstrap_state
@@ -582,9 +604,23 @@ export async function enrollAdminTotp(
   input: {
     email: string;
     totpSecret: string;
+    totpCode: string;
     factorEncryptionKey: string;
   },
 ): Promise<void> {
+  const ciphertext = sealTotpSecret(
+    input.totpSecret,
+    input.factorEncryptionKey,
+  );
+  if (
+    !verifyTotpCode(
+      ciphertext,
+      input.totpCode,
+      input.factorEncryptionKey,
+    )
+  ) {
+    throw new Error("Первый TOTP code не прошёл проверку.");
+  }
   await sql.begin(async (transaction) => {
     const users = await transaction<{ id: string }[]>`
       SELECT id
@@ -614,7 +650,7 @@ export async function enrollAdminTotp(
       )
       VALUES (
         ${randomUUID()}, ${user.id}, 'totp', 'Authenticator',
-        ${sealTotpSecret(input.totpSecret, input.factorEncryptionKey)}, now()
+        ${ciphertext}, now()
       )
     `;
     await transaction`

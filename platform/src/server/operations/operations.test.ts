@@ -14,6 +14,8 @@ describe("operation safety primitives", () => {
     expect(classifyProviderError("TIMEOUT_AFTER_MUTATION")).toBe("unknown_outcome");
     expect(classifyProviderError("RATE_LIMIT")).toBe("transient");
     expect(classifyProviderError("INSUFFICIENT_FUNDS")).toBe("permanent");
+    expect(classifyProviderError("PROVIDER_UNAVAILABLE", false)).toBe("permanent");
+    expect(classifyProviderError("UNKNOWN_PROVIDER_CODE", true)).toBe("transient");
   });
 
   it("recursively redacts and bounds provider diagnostics", () => {

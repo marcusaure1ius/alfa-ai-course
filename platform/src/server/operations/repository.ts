@@ -1,6 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import type { AuthSession } from "../auth/service";
 import { hasFreshReauthentication, hasPermission } from "../auth/rbac";
@@ -23,7 +23,13 @@ import {
 } from "./state";
 
 export class OperationConflictError extends Error {
-  constructor(public readonly code: "ACTIVE_ENVIRONMENT" | "ACTIVE_MUTATION" | "INVALID_STATE") {
+  constructor(
+    public readonly code:
+      | "ACTIVE_ENVIRONMENT"
+      | "ACTIVE_MUTATION"
+      | "IDEMPOTENCY_CONFLICT"
+      | "INVALID_STATE",
+  ) {
     super(code);
   }
 }
@@ -58,6 +64,111 @@ function assertFreshAdmin(actor: AuthSession): void {
   }
 }
 
+type ExistingOperation = {
+  id: string;
+  environment_id: string;
+  environment_name: string;
+  kind: string;
+  input_snapshot: Record<string, unknown>;
+};
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function idempotencyFingerprint(value: unknown): string {
+  return createHash("sha256").update(stableJson(value)).digest("hex");
+}
+
+function createFingerprint(input: {
+  name: string;
+  scenario: FakeScenario;
+}): string {
+  return idempotencyFingerprint({
+    kind: "create_environment",
+    name: input.name,
+    scenario: input.scenario,
+  });
+}
+
+function deleteFingerprint(input: {
+  environmentId: string;
+  confirmationName: string;
+  confirmedLoss: true;
+  scenario: FakeScenario;
+}): string {
+  return idempotencyFingerprint({
+    kind: "delete_environment",
+    environmentId: input.environmentId,
+    confirmationName: input.confirmationName,
+    confirmedLoss: input.confirmedLoss,
+    scenario: input.scenario,
+  });
+}
+
+async function existingOperation(
+  sql: DatabaseSql,
+  actorUserId: string,
+  idempotencyKey: string,
+): Promise<ExistingOperation | null> {
+  const rows = await sql<ExistingOperation[]>`
+    SELECT
+      operations.id,
+      operations.environment_id,
+      environments.name AS environment_name,
+      operations.kind,
+      operations.input_snapshot
+    FROM operations
+    JOIN environments ON environments.id = operations.environment_id
+    WHERE operations.requested_by_user_id = ${actorUserId}
+      AND operations.idempotency_key = ${idempotencyKey}
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+function storedCreateFingerprint(operation: ExistingOperation): string {
+  return idempotencyFingerprint({
+    kind: operation.kind,
+    name: operation.environment_name,
+    scenario: operation.input_snapshot.scenario,
+  });
+}
+
+function storedDeleteFingerprint(operation: ExistingOperation): string {
+  return idempotencyFingerprint({
+    kind: operation.kind,
+    environmentId: operation.environment_id,
+    confirmationName: operation.input_snapshot.confirmedName,
+    confirmedLoss: operation.input_snapshot.confirmed,
+    scenario: operation.input_snapshot.scenario,
+  });
+}
+
+function acceptMatchingOperation(
+  operation: ExistingOperation | null,
+  expectedFingerprint: string,
+  storedFingerprint: (operation: ExistingOperation) => string,
+): { accepted: MutationAccepted; created: false } | null {
+  if (!operation) return null;
+  if (storedFingerprint(operation) !== expectedFingerprint) {
+    throw new OperationConflictError("IDEMPOTENCY_CONFLICT");
+  }
+  return {
+    accepted: { version: OPERATIONS_DTO_VERSION, operationId: operation.id },
+    created: false,
+  };
+}
+
 export async function reserveCreateOperation(
   sql: DatabaseSql,
   actor: AuthSession,
@@ -69,18 +180,13 @@ export async function reserveCreateOperation(
   },
 ): Promise<{ accepted: MutationAccepted; created: boolean }> {
   assertFreshAdmin(actor);
-  const existing = await sql<{ id: string }[]>`
-    SELECT id FROM operations
-    WHERE requested_by_user_id = ${actor.userId}
-      AND idempotency_key = ${input.idempotencyKey}
-    LIMIT 1
-  `;
-  if (existing[0]) {
-    return {
-      accepted: { version: OPERATIONS_DTO_VERSION, operationId: existing[0].id },
-      created: false,
-    };
-  }
+  const expectedFingerprint = createFingerprint(input);
+  const existing = acceptMatchingOperation(
+    await existingOperation(sql, actor.userId, input.idempotencyKey),
+    expectedFingerprint,
+    storedCreateFingerprint,
+  );
+  if (existing) return existing;
 
   const environmentId = randomUUID();
   const operationId = randomUUID();
@@ -117,18 +223,12 @@ export async function reserveCreateOperation(
     });
   } catch (error) {
     if ((error as { code?: string }).code === "23505") {
-      const duplicate = await sql<{ id: string }[]>`
-        SELECT id FROM operations
-        WHERE requested_by_user_id = ${actor.userId}
-          AND idempotency_key = ${input.idempotencyKey}
-        LIMIT 1
-      `;
-      if (duplicate[0]) {
-        return {
-          accepted: { version: OPERATIONS_DTO_VERSION, operationId: duplicate[0].id },
-          created: false,
-        };
-      }
+      const duplicate = acceptMatchingOperation(
+        await existingOperation(sql, actor.userId, input.idempotencyKey),
+        expectedFingerprint,
+        storedCreateFingerprint,
+      );
+      if (duplicate) return duplicate;
       throw new OperationConflictError("ACTIVE_ENVIRONMENT");
     }
     throw error;
@@ -152,20 +252,36 @@ export async function reserveDeleteOperation(
   },
 ): Promise<{ accepted: MutationAccepted; created: boolean }> {
   assertFreshAdmin(actor);
+  const expectedFingerprint = deleteFingerprint(input);
   const operationId = randomUUID();
   const reservation = await sql.begin(async (transaction) => {
       const lockKey = `${actor.userId}:${input.idempotencyKey}`;
       await transaction`
         SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
       `;
-      const existing = await transaction<{ id: string }[]>`
-        SELECT id FROM operations
-        WHERE requested_by_user_id = ${actor.userId}
-          AND idempotency_key = ${input.idempotencyKey}
+      const existingRows = await transaction<ExistingOperation[]>`
+        SELECT
+          operations.id,
+          operations.environment_id,
+          environments.name AS environment_name,
+          operations.kind,
+          operations.input_snapshot
+        FROM operations
+        JOIN environments ON environments.id = operations.environment_id
+        WHERE operations.requested_by_user_id = ${actor.userId}
+          AND operations.idempotency_key = ${input.idempotencyKey}
         LIMIT 1
       `;
-      if (existing[0]) {
-        return { operationId: existing[0].id, created: false };
+      const existing = acceptMatchingOperation(
+        existingRows[0] ?? null,
+        expectedFingerprint,
+        storedDeleteFingerprint,
+      );
+      if (existing) {
+        return {
+          operationId: existing.accepted.operationId,
+          created: false,
+        };
       }
       const rows = await transaction<{ id: string }[]>`
         UPDATE environments

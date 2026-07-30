@@ -36,7 +36,7 @@ npm run dev
 
 ```bash
 cd platform
-read -s BOOTSTRAP_ADMIN_PASSWORD
+read -rsp 'Пароль administrator: ' BOOTSTRAP_ADMIN_PASSWORD && echo
 export BOOTSTRAP_ADMIN_PASSWORD
 npm run auth:bootstrap-admin -- --email admin@example.test
 unset BOOTSTRAP_ADMIN_PASSWORD
@@ -48,8 +48,10 @@ unset BOOTSTRAP_ADMIN_PASSWORD
 
 Production admin не сможет завершить password-only вход: gate требует активный
 подтверждённый MFA factor и успешно пройденный challenge. TOTP/WebAuthn
-enrollment и challenge намеренно не имитируются, поэтому до их реализации
-production gate остаётся закрытым.
+challenge не имитируется. Для существующего administrator TOTP enrollment
+выполняется одноразовой CLI-командой с обязательной проверкой первого code;
+production порядок и требования описаны в
+[`docs/timeweb-lifecycle-smoke.md`](../docs/timeweb-lifecycle-smoke.md).
 
 ## Auth и RBAC
 
