@@ -10,10 +10,10 @@ project должен использовать **Root Directory `platform/`**. Ro
 
 1. пользователь вводит email и пароль;
 2. платформа определяет роль аккаунта;
-3. администратор сразу попадает в `/admin/infrastructure`, где видит создание и
-   список серверов;
-4. ученик попадает в отдельный `/student`, который пока показывает пустой
-   кабинет будущих материалов курса.
+3. администратор попадает в `/admin`, где управляет программой, материалами,
+   учениками и учебными инструментами;
+4. ученик попадает в закрытое пространство `/student` и видит только
+   опубликованные материалы доступного ему курса.
 
 Пользователь не выбирает provider mode, не вводит Vercel/cloud credentials и
 не видит внутренние deployment gates. Эти параметры принадлежат только
@@ -24,6 +24,44 @@ server-side окружению проекта. Второй фактор, есл
 и опциональными резервными копиями. Автоматическая установка n8n, DNS и TLS
 остаётся отдельным lifecycle `T-0057`; интерфейс не выдаёт созданный VPS за уже
 готовую n8n-среду.
+
+## Контент и доступ ученика
+
+Миграция `0006_course_content.sql` добавляет минимальную text-first модель:
+
+- `courses` → `course_sections` → `course_materials`;
+- состояния `draft/published`, явный порядок, числовая версия и поля
+  `created/updated/published by`;
+- `course_memberships` для server-side доступа ученика;
+- `material_progress` для позиции чтения и отметки завершения.
+
+Это не полноценная LMS: в модели нет видео-хостинга, оценок, сертификатов,
+платежей и сложного редактора. Материал хранится как Markdown ограниченного
+набора. Raw HTML, исполняемые URL и embedded media отклоняются до записи;
+student UI должен разбирать Markdown в React text nodes без
+`dangerouslySetInnerHTML`.
+
+Admin API:
+
+- `GET/POST /api/admin/courses`;
+- `PATCH /api/admin/courses/:id` — публикация курса;
+- `POST /api/admin/courses/:id/sections`;
+- `PATCH /api/admin/sections/:id` — публикация раздела;
+- `GET/POST /api/admin/courses/:id/materials`;
+- `PATCH /api/admin/materials/:id` — редактирование и публикация материала;
+- `PUT /api/admin/sections/:id/materials/order` — атомарный полный порядок;
+- `PUT /api/admin/students/:id/access` — выдать или отозвать доступ к курсу.
+
+Student API:
+
+- `GET /api/student/courses/:slug`;
+- `GET /api/student/materials/:slug`;
+- `PUT /api/student/materials/:id/progress`.
+
+Все mutation требуют CSRF token. Student-запросы повторно проверяют в
+PostgreSQL активный membership и три уровня публикации: курс, раздел и
+материал. Поэтому отзыв доступа и снятие с публикации применяются немедленно,
+а не зависят от скрытия ссылок в интерфейсе.
 
 ## Локальный запуск без cloud credentials
 
