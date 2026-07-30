@@ -51,19 +51,30 @@ PLATFORM_PROVIDER=timeweb
 TIMEWEB_API_TOKEN=<encrypted Vercel Production secret>
 TIMEWEB_MUTATIONS_ENABLED=true
 TIMEWEB_CAPABILITIES_VERIFIED=true
+TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true
 TIMEWEB_SMOKE_BUDGET_RUB=<целое число рублей>
+TIMEWEB_SMOKE_REGION=<необязательный live region>
 TIMEWEB_SMOKE_PROJECT_ID=<ID disposable проекта>
 TIMEWEB_SMOKE_SSH_KEY_ID=<ID существующего SSH-ключа>
 AUTH_FACTOR_ENCRYPTION_KEY=<32 random bytes, base64url>
 ```
+
+`TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true` — явная аттестация владельца, что во
+время smoke в этом тестовом аккаунте никто другой не создаёт floating IP или
+VPS. Без неё production mutation gate закрыт: recovery определяет новый IP как
+единственную разницу относительно hashed baseline и не может безопасно работать
+при параллельных внешних мутациях.
 
 ## Create / reconcile / delete
 
 1. Открыть `/admin/infrastructure` и проверить provider preview.
 2. Создать среду с уникальным именем. API возвращает `202` и `operationId`.
 3. Дождаться `active`; timeline обязан содержать
-   `reserve_public_ip` (без отдельной mutation), `create_server` (атомарно с
-   IPv4), `reconcile_server`, `complete`.
+   `reserve_public_ip` (отдельный floating IP с hashed baseline recovery),
+   `create_server`, `reconcile_server` (VPS `on` и IP bound), `complete`.
+   Reserve имеет десять durable attempts. Неоднозначный исход сохраняет
+   `cleanup_required`; delete сначала обязан доказать совпадение live catalog с
+   hashed baseline либо восстановить ровно один новый unbound IP и удалить его.
    Повторный preflight выполняется непосредственно перед create, а status
    должен стать ровно `on`; исчерпание bounded polling даёт
    `cleanup_required`.
@@ -91,9 +102,9 @@ AUTH_FACTOR_ENCRYPTION_KEY=<32 random bytes, base64url>
 Raw token, пароль, TOTP secret/code, root password, response bodies и browser
 cookies в evidence запрещены.
 
-## Read-only preflight 2026-07-30
+## Read-only preflight и disposable smoke 2026-07-30
 
-Фактически проверено production adapter без provider mutation:
+Первый read-only preflight подтвердил контракт catalog, но остановил mutation:
 
 - test token принят Timeweb, account имеет состояние `ready`;
 - balance положительный, provider catalog не degraded;
@@ -105,12 +116,26 @@ cookies в evidence запрещены.
   `family=linux`, `name=ubuntu`, `version=24.04`;
 - доступны один project и два SSH keys; их identifiers и names не сохраняются
   в публичном evidence;
-- в account уже существуют один VPS и два public IPv4.
+- в тот момент account содержал один VPS и два public IPv4, поэтому hard limit
+  закрыл create без mutation.
 
-Последний пункт закрывает hard limit 1 VPS, поэтому create fail-closed не
-запускался. До disposable smoke владелец должен освободить account от
-существующего VPS либо предоставить отдельный test account, утвердить числовой
-`TIMEWEB_SMOKE_BUDGET_RUB` и явно выбрать disposable project/SSH key.
-Минимальные token permissions и delete без дополнительного confirmation
-остаются непроверенными до реальной mutation. Новые платные ресурсы этим
-preflight не создавались.
+После очистки владельцем baseline составил 0 VPS и 1 существующий unbound IP.
+Финальный независимо одобренный smoke использовал live region `ru-2`, Ubuntu
+24.04 x86_64 и provider estimate `387 ₽/месяц` при owner cap `500 ₽`.
+
+Фактический результат:
+
+- отдельный floating IPv4 создан и durable ownership записан до server create;
+- создан ровно один VPS, provider status прошёл `installing` → `on`;
+- exact owned IP привязан к VPS и повторно сверен;
+- replay исходного idempotency key вернул ту же create operation;
+- fresh password + TOTP re-auth разрешила delete;
+- VPS удалён первым, затем удалён exact owned floating IP;
+- обе операции завершились `succeeded`, среда — `deleted`, активных owned
+  ресурсов — 0;
+- независимый финальный live catalog снова показал `ready`, 0 VPS и ровно тот
+  же baseline из 1 unbound IP.
+
+Token использовался только из ignored локального `platform/.env` с правами
+`0600`. В Git, logs, evidence и Vercel environment он не переносился; реальный
+Vercel project/deployment не создавался.

@@ -29,6 +29,15 @@ function providerPayload(url: string): unknown {
           disk: 51200,
           disk_type: "nvme",
         },
+        {
+          id: 77,
+          location: "ru-2",
+          price: 750,
+          cpu: 2,
+          ram: 2048,
+          disk: 30720,
+          disk_type: "nvme",
+        },
       ],
     };
   }
@@ -46,6 +55,11 @@ function providerPayload(url: string): unknown {
           location: "ru-1",
           location_code: "RU",
           availability_zones: ["spb-3"],
+        },
+        {
+          location: "ru-2",
+          location_code: "RU",
+          availability_zones: ["nsk-1"],
         },
       ],
     };
@@ -69,6 +83,7 @@ const productionEnvironment = {
   TIMEWEB_API_TOKEN: "synthetic-test-token",
   TIMEWEB_MUTATIONS_ENABLED: "true",
   TIMEWEB_CAPABILITIES_VERIFIED: "true",
+  TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT: "true",
   TIMEWEB_SMOKE_BUDGET_RUB: "1000",
   TIMEWEB_SMOKE_PROJECT_ID: "303",
   TIMEWEB_SMOKE_SSH_KEY_ID: "404",
@@ -134,6 +149,39 @@ describe("getTimewebProvisioningPreview", () => {
       ok: false,
       code: "BUDGET_EXCEEDED",
       message: "Актуальная месячная оценка превышает smoke budget.",
+    });
+  });
+
+  it("selects the cheapest live preset in an owner-selected region", async () => {
+    const preview = await getTimewebProvisioningPreview(
+      { ...productionEnvironment, TIMEWEB_SMOKE_REGION: "ru-2" },
+      vi.fn<typeof fetch>(async (input) =>
+        Response.json(providerPayload(String(input))),
+      ),
+    );
+    expect(preview).toMatchObject({
+      ok: true,
+      mode: "timeweb",
+      plan: {
+        presetId: 77,
+        region: "ru-2",
+        availabilityZone: "nsk-1",
+        monthlyTotalRoubles: 930,
+      },
+    });
+  });
+
+  it("fails closed for an invalid configured region", async () => {
+    const preview = await getTimewebProvisioningPreview(
+      { ...productionEnvironment, TIMEWEB_SMOKE_REGION: "ru_2" },
+      vi.fn<typeof fetch>(async (input) =>
+        Response.json(providerPayload(String(input))),
+      ),
+    );
+    expect(preview).toEqual({
+      ok: false,
+      code: "SMOKE_REGION_UNAVAILABLE",
+      message: "Настроенный smoke region имеет недопустимый формат.",
     });
   });
 

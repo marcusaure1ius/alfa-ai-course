@@ -5,6 +5,7 @@ import {
   type OwnedProviderResource,
   type TimewebCreateServerInput,
   type TimewebMutationAdapter,
+  type TimewebPublicIpCandidate,
   type TimewebPublicIpReconciliation,
   type TimewebPublicIpResource,
   type TimewebServerReconciliation,
@@ -16,6 +17,8 @@ import { TimewebProviderError } from "./read-only";
 import { readTimewebMutationRuntimeGate } from "./runtime";
 
 const API_ORIGIN = "https://api.timeweb.cloud";
+const MUTATION_REQUEST_TIMEOUT_MS = 60_000;
+const RECONCILIATION_REQUEST_TIMEOUT_MS = 8_000;
 const SERVER_COLLECTION_PATH = "/api/v1/servers";
 const PUBLIC_IP_COLLECTION_PATH = "/api/v1/floating-ips";
 const SERVER_ID = /^[1-9][0-9]{0,18}$/;
@@ -123,11 +126,27 @@ function ownedPublicIp(
   return resource;
 }
 
-function providerError(status: number): TimewebProviderError {
+async function safeProviderErrorCode(
+  response: Response,
+): Promise<string | null> {
+  const payload = await response.clone().json().catch(() => null);
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  const value = (payload as Record<string, unknown>).error_code;
+  return typeof value === "string" && /^[a-z0-9_.-]{1,64}$/i.test(value)
+    ? value.toLowerCase()
+    : null;
+}
+
+async function providerError(response: Response): Promise<TimewebProviderError> {
+  const status = response.status;
+  const safeCode = await safeProviderErrorCode(response);
+  const diagnostic = safeCode ? `, code ${safeCode}` : "";
   if (status === 400 || status === 422) {
     return new TimewebProviderError(
       "INVALID_REQUEST",
-      "Timeweb отклонил validated mutation-запрос.",
+      `Timeweb отклонил validated mutation-запрос (HTTP ${status}${diagnostic}).`,
       false,
     );
   }
@@ -159,10 +178,17 @@ function providerError(status: number): TimewebProviderError {
       true,
     );
   }
+  if (status === 409) {
+    return new TimewebProviderError(
+      "INVALID_REQUEST",
+      `Timeweb отклонил конфликтующий mutation-запрос (HTTP 409${diagnostic}).`,
+      false,
+    );
+  }
   return new TimewebProviderError(
     "UPSTREAM_UNAVAILABLE",
-    "Timeweb не подтвердил mutation-запрос.",
-    status >= 500 || status === 409 || status === 423,
+    `Timeweb не подтвердил mutation-запрос (HTTP ${status}${diagnostic}).`,
+    status >= 500 || status === 423,
   );
 }
 
@@ -262,6 +288,29 @@ function responsePublicIp(payload: unknown, environmentId: string): TimewebPubli
   };
 }
 
+function publicIpCandidate(
+  values: Record<string, unknown>,
+  environmentId: string,
+): TimewebPublicIpCandidate {
+  const resource = responsePublicIp({ ip: values }, environmentId);
+  const rawResourceId = values.resource_id;
+  const resourceId =
+    typeof rawResourceId === "number" && Number.isSafeInteger(rawResourceId)
+      ? String(rawResourceId)
+      : typeof rawResourceId === "string"
+        ? rawResourceId
+        : null;
+  return {
+    ...resource,
+    availabilityZone: validZone(String(values.availability_zone ?? "")),
+    resourceType:
+      typeof values.resource_type === "string"
+        ? values.resource_type.trim().toLowerCase().slice(0, 32)
+        : null,
+    resourceId,
+  };
+}
+
 function objectArray(payload: unknown, key: string): Record<string, unknown>[] {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new TimewebProviderError(
@@ -291,7 +340,7 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
   constructor(
     token: string,
     private readonly fetchImpl: FetchLike = fetch,
-    private readonly timeoutMs = 8_000,
+    private readonly mutationTimeoutMs = MUTATION_REQUEST_TIMEOUT_MS,
   ) {
     if (token.length < 8) {
       throw new TimewebProviderError(
@@ -308,6 +357,10 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
     path: string,
     body?: Readonly<Record<string, unknown>>,
   ): Promise<Response> {
+    const timeoutMs =
+      method === "GET"
+        ? RECONCILIATION_REQUEST_TIMEOUT_MS
+        : this.mutationTimeoutMs;
     try {
       const response = await this.fetchImpl(`${API_ORIGIN}${path}`, {
         method,
@@ -318,9 +371,9 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
         cache: "no-store",
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs),
       });
-      if (!response.ok) throw providerError(response.status);
+      if (!response.ok) throw await providerError(response);
       return response;
     } catch (error) {
       if (error instanceof TimewebProviderError) throw error;
@@ -358,7 +411,7 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
       project_id: positiveInteger(input.projectId, "Project"),
       ssh_keys_ids: [positiveInteger(input.sshKeyId, "SSH key")],
       is_root_password_required: false,
-      network: { floating_ip: "create_ip" },
+      is_local_network: false,
     });
     const payload = await response.json().catch(() => null);
     return {
@@ -487,6 +540,70 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
       : null;
   }
 
+  async listPublicIps(
+    environmentId: string,
+  ): Promise<TimewebPublicIpCandidate[]> {
+    if (!ENVIRONMENT_ID.test(environmentId)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Environment не прошёл локальную проверку.",
+        false,
+      );
+    }
+    const response = await this.request("GET", PUBLIC_IP_COLLECTION_PATH);
+    return objectArray(
+      await response.json().catch(() => null),
+      "ips",
+    ).map((ip) => publicIpCandidate(ip, environmentId));
+  }
+
+  async createPublicIp(input: {
+    environmentId: string;
+    availabilityZone: string;
+  }): Promise<TimewebPublicIpResource> {
+    if (!ENVIRONMENT_ID.test(input.environmentId)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Environment не прошёл локальную проверку.",
+        false,
+      );
+    }
+    const response = await this.request("POST", PUBLIC_IP_COLLECTION_PATH, {
+      is_ddos_guard: false,
+      availability_zone: validZone(input.availabilityZone),
+    });
+    try {
+      return responsePublicIp(
+        await response.json().catch(() => null),
+        input.environmentId,
+      );
+    } catch {
+      throw new TimewebProviderError(
+        "TIMEOUT",
+        "Timeweb создал floating IP с ответом, требующим reconciliation.",
+        true,
+      );
+    }
+  }
+
+  async bindPublicIp(
+    resource: TimewebPublicIpResource,
+    server: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<void> {
+    const ip = ownedPublicIp(resource);
+    const verifiedServer = ownedServer(server);
+    const serverId = Number(verifiedServer.externalId);
+    positiveInteger(serverId, "Server");
+    await this.request(
+      "POST",
+      `${PUBLIC_IP_COLLECTION_PATH}/${ip.externalId}/bind`,
+      {
+        resource_type: "server",
+        resource_id: serverId,
+      },
+    );
+  }
+
   async deletePublicIp(
     resource: OwnedProviderResource & Readonly<{ kind: "public_ip" }>,
   ): Promise<void> {
@@ -516,11 +633,30 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
         "GET",
         `${PUBLIC_IP_COLLECTION_PATH}/${verified.externalId}`,
       );
-      const current = responsePublicIp(
-        await response.json().catch(() => null),
+      const payload = await response.json().catch(() => null);
+      const values =
+        payload && typeof payload === "object" && !Array.isArray(payload)
+          ? (payload as Record<string, unknown>).ip
+          : null;
+      if (!values || typeof values !== "object" || Array.isArray(values)) {
+        throw new TimewebProviderError(
+          "INVALID_RESPONSE",
+          "Timeweb не вернул состояние публичного IP.",
+          false,
+        );
+      }
+      const current = publicIpCandidate(
+        values as Record<string, unknown>,
         verified.environmentId,
       );
-      return { state: "present", resource: current };
+      return {
+        state: "present",
+        resource: current,
+        binding: {
+          resourceType: current.resourceType,
+          resourceId: current.resourceId,
+        },
+      };
     } catch (error) {
       if (
         error instanceof TimewebProviderError &&

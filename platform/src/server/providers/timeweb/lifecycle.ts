@@ -1,6 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { getDatabase, type DatabaseSql } from "@/server/db/client";
 import type { WorkflowCommand } from "@/server/operations/contracts";
@@ -8,6 +8,7 @@ import { operationEnvironmentId } from "@/server/operations/repository";
 
 import type {
   OwnedProviderResource,
+  TimewebPublicIpCandidate,
   TimewebPublicIpResource,
   TimewebResourceKind,
 } from "./contracts";
@@ -33,6 +34,7 @@ export class LifecycleProviderError extends Error {
 
 export type InfrastructureLifecycleAdapter = Readonly<{
   reservePublicIp(): Promise<void>;
+  resolvePublicIpAmbiguity(): Promise<void>;
   createServer(): Promise<OwnedProviderResource>;
   reconcileServer(): Promise<void>;
   configureDns(): Promise<OwnedProviderResource | void>;
@@ -198,15 +200,227 @@ async function markDeleted(
   }
 }
 
-async function stepAttempts(
+const PROVIDER_MUTATION_STARTED_LOG =
+  "provider mutation started; response outcome may be ambiguous";
+const PUBLIC_IP_MUTATION_LOG_VERSION = "public-ip-create-v1";
+
+export async function providerMutationStarted(
   sql: DatabaseSql,
   operationId: string,
-  key: string,
+): Promise<boolean> {
+  const rows = await sql<{ logs_redacted: string | null }[]>`
+    SELECT logs_redacted
+    FROM operation_steps
+    WHERE operation_id = ${operationId} AND logical_key = 'create_server'
+  `;
+  return rows[0]?.logs_redacted === PROVIDER_MUTATION_STARTED_LOG;
+}
+
+export async function markProviderMutationStarted(
+  sql: DatabaseSql,
+  operationId: string,
+  executionToken: string,
+): Promise<void> {
+  const rows = await sql<{ id: string }[]>`
+    UPDATE operation_steps
+    SET logs_redacted = ${PROVIDER_MUTATION_STARTED_LOG}, updated_at = now()
+    WHERE operation_id = ${operationId}
+      AND logical_key = 'create_server'
+      AND status = 'running'
+      AND execution_token = ${executionToken}
+    RETURNING id
+  `;
+  if (!rows[0]) {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "Create step потерял durable lease до provider mutation.",
+      true,
+    );
+  }
+}
+
+function providerIdHash(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function parsePublicIpMutationBaseline(value: string): ReadonlySet<string> {
+  let parsed: { version?: unknown; baselineHashes?: unknown };
+  try {
+    parsed = JSON.parse(value) as typeof parsed;
+  } catch {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "Public IP mutation marker повреждён.",
+    );
+  }
+  if (
+    parsed.version !== PUBLIC_IP_MUTATION_LOG_VERSION ||
+    !Array.isArray(parsed.baselineHashes) ||
+    !parsed.baselineHashes.every(
+      (hash) => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash),
+    )
+  ) {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "Public IP mutation marker повреждён.",
+    );
+  }
+  return new Set(parsed.baselineHashes);
+}
+
+async function publicIpMutationBaseline(
+  sql: DatabaseSql,
+  operationId: string,
+): Promise<ReadonlySet<string> | null> {
+  const rows = await sql<{ logs_redacted: string | null }[]>`
+    SELECT logs_redacted
+    FROM operation_steps
+    WHERE operation_id = ${operationId} AND logical_key = 'reserve_public_ip'
+  `;
+  const value = rows[0]?.logs_redacted;
+  if (!value) return null;
+  return parsePublicIpMutationBaseline(value);
+}
+
+async function markPublicIpMutationStarted(
+  sql: DatabaseSql,
+  operationId: string,
+  executionToken: string,
+  baselineIds: readonly string[],
+): Promise<void> {
+  const logs = JSON.stringify({
+    version: PUBLIC_IP_MUTATION_LOG_VERSION,
+    baselineHashes: baselineIds.map(providerIdHash).sort(),
+  });
+  const rows = await sql<{ id: string }[]>`
+    UPDATE operation_steps
+    SET logs_redacted = ${logs}, updated_at = now()
+    WHERE operation_id = ${operationId}
+      AND logical_key = 'reserve_public_ip'
+      AND status = 'running'
+      AND execution_token = ${executionToken}
+    RETURNING id
+  `;
+  if (!rows[0]) {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "Public IP step потерял durable lease до provider mutation.",
+      true,
+    );
+  }
+}
+
+export function recoverPublicIpCandidate(
+  candidates: readonly TimewebPublicIpCandidate[],
+  baseline: ReadonlySet<string>,
+  availabilityZone: string,
+  attemptCount = 10,
+): TimewebPublicIpCandidate {
+  const nonBaseline = candidates.filter(
+    (candidate) => !baseline.has(providerIdHash(candidate.externalId)),
+  );
+  if (nonBaseline.length === 0 && attemptCount < 10) {
+    throw new LifecycleProviderError(
+      "PUBLIC_IP_NOT_READY",
+      "Timeweb ещё не показывает созданный floating IP.",
+      true,
+    );
+  }
+  if (nonBaseline.length !== 1) {
+    throw new LifecycleProviderError(
+      nonBaseline.length > 1
+        ? "DUPLICATE_OWNED_RESOURCE"
+        : "UNKNOWN_PUBLIC_IP_OUTCOME",
+      "Не удалось однозначно восстановить созданный floating IP.",
+    );
+  }
+  const recovered = nonBaseline[0]!;
+  if (
+    recovered.availabilityZone !== availabilityZone ||
+    recovered.resourceType !== null ||
+    recovered.resourceId !== null
+  ) {
+    throw new LifecycleProviderError(
+      "UNKNOWN_PUBLIC_IP_OUTCOME",
+      "Новый floating IP не прошёл ownership-проверку.",
+    );
+  }
+  return recovered;
+}
+
+export function resolvePublicIpAmbiguityCandidate(
+  candidates: readonly TimewebPublicIpCandidate[],
+  baseline: ReadonlySet<string>,
+  availabilityZone: string,
+): TimewebPublicIpCandidate | null {
+  const currentHashes = new Set(
+    candidates.map((candidate) => providerIdHash(candidate.externalId)),
+  );
+  if (
+    currentHashes.size === baseline.size &&
+    [...baseline].every((hash) => currentHashes.has(hash))
+  ) {
+    return null;
+  }
+  return recoverPublicIpCandidate(
+    candidates,
+    baseline,
+    availabilityZone,
+    10,
+  );
+}
+
+async function unresolvedPublicIpMutation(
+  sql: DatabaseSql,
+  environmentId: string,
+): Promise<{
+  baseline: ReadonlySet<string>;
+  availabilityZone: string;
+} | null> {
+  const resources = await sql<{ id: string }[]>`
+    SELECT id
+    FROM provider_resources
+    WHERE environment_id = ${environmentId}
+      AND provider = 'timeweb'
+      AND resource_kind = 'public_ip'
+    LIMIT 1
+  `;
+  if (resources[0]) return null;
+
+  const rows = await sql<
+    {
+      logs_redacted: string;
+      input_snapshot: Record<string, unknown>;
+    }[]
+  >`
+    SELECT operation_steps.logs_redacted, operations.input_snapshot
+    FROM operation_steps
+    JOIN operations ON operations.id = operation_steps.operation_id
+    WHERE operations.environment_id = ${environmentId}
+      AND operations.kind = 'create_environment'
+      AND operation_steps.logical_key = 'reserve_public_ip'
+      AND operation_steps.logs_redacted IS NOT NULL
+    ORDER BY operations.created_at DESC
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return null;
+  const plan = safePlan(row.input_snapshot.providerPlan);
+  return {
+    baseline: parsePublicIpMutationBaseline(row.logs_redacted),
+    availabilityZone: plan.availabilityZone,
+  };
+}
+
+async function operationStepAttempts(
+  sql: DatabaseSql,
+  operationId: string,
+  logicalKey: string,
 ): Promise<number> {
   const rows = await sql<{ attempt_count: number }[]>`
     SELECT attempt_count
     FROM operation_steps
-    WHERE operation_id = ${operationId} AND logical_key = ${key}
+    WHERE operation_id = ${operationId} AND logical_key = ${logicalKey}
   `;
   return rows[0]?.attempt_count ?? 0;
 }
@@ -253,6 +467,8 @@ class ProductionTimewebLifecycleAdapter
     private readonly adapter: NonNullable<
       ReturnType<typeof createProductionTimewebMutationAdapter>
     >,
+    private readonly createExecutionToken?: string,
+    private readonly reserveIpExecutionToken?: string,
   ) {}
 
   private requirePlan(): TimewebProvisioningPlan {
@@ -266,14 +482,6 @@ class ProductionTimewebLifecycleAdapter
   }
 
   async reservePublicIp(): Promise<void> {
-    // Production creates the IPv4 atomically with the marked server. A
-    // standalone IP has no provider-side ownership marker and cannot be
-    // reconciled safely after an ambiguous POST timeout.
-  }
-
-  private async ensureAttachedPublicIp(
-    server: OwnedProviderResource & Readonly<{ kind: "server" }>,
-  ): Promise<void> {
     const plan = this.requirePlan();
     const existing = await activeResource(
       this.sql,
@@ -281,19 +489,142 @@ class ProductionTimewebLifecycleAdapter
       "public_ip",
     );
     if (existing) return;
-    const resource = await this.adapter.findPublicIpByServer(server);
-    if (!resource) {
+    try {
+      const candidates = await this.adapter.listPublicIps(
+        this.context.environmentId,
+      );
+      const baseline = await publicIpMutationBaseline(
+        this.sql,
+        this.command.operationId,
+      );
+      if (baseline) {
+        const attempts = await operationStepAttempts(
+          this.sql,
+          this.command.operationId,
+          "reserve_public_ip",
+        );
+        const recovered = recoverPublicIpCandidate(
+          candidates,
+          baseline,
+          plan.availabilityZone,
+          attempts,
+        );
+        await recordResource(this.sql, this.command, recovered, {
+          address: recovered.address,
+          availabilityZone: plan.availabilityZone,
+          monthlyRoubles: plan.monthlyPublicIpRoubles,
+        });
+        return;
+      }
+      await this.assertFreshProviderPlan();
+      if (!this.reserveIpExecutionToken) {
+        throw new LifecycleProviderError(
+          "STEP_STATE_INVALID",
+          "Public IP execution token отсутствует до provider mutation.",
+        );
+      }
+      await markPublicIpMutationStarted(
+        this.sql,
+        this.command.operationId,
+        this.reserveIpExecutionToken,
+        candidates.map((candidate) => candidate.externalId),
+      );
+      const resource = await this.adapter.createPublicIp({
+        environmentId: this.context.environmentId,
+        availabilityZone: plan.availabilityZone,
+      });
+      await recordResource(this.sql, this.command, resource, {
+        address: resource.address,
+        availabilityZone: plan.availabilityZone,
+        monthlyRoubles: plan.monthlyPublicIpRoubles,
+      });
+    } catch (error) {
+      throw mappedError(error);
+    }
+  }
+
+  async resolvePublicIpAmbiguity(): Promise<void> {
+    try {
+      const unresolved = await unresolvedPublicIpMutation(
+        this.sql,
+        this.context.environmentId,
+      );
+      if (!unresolved) return;
+      const candidates = await this.adapter.listPublicIps(
+        this.context.environmentId,
+      );
+      const recovered = resolvePublicIpAmbiguityCandidate(
+        candidates,
+        unresolved.baseline,
+        unresolved.availabilityZone,
+      );
+      if (!recovered) return;
+      await recordResource(this.sql, this.command, recovered, {
+        address: recovered.address,
+        availabilityZone: recovered.availabilityZone,
+      });
+    } catch (error) {
+      throw mappedError(error);
+    }
+  }
+
+  private async ensureAttachedPublicIp(
+    server: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<void> {
+    const existing = await activeResource(
+      this.sql,
+      this.context.environmentId,
+      "public_ip",
+    );
+    if (!existing || typeof existing.publicMetadata.address !== "string") {
       throw new LifecycleProviderError(
         "PUBLIC_IP_NOT_READY",
-        "Timeweb ещё не привязал атомарно созданный публичный IP к VPS.",
+        "Owned floating IP отсутствует в durable state.",
         true,
       );
     }
-    await recordResource(this.sql, this.command, resource, {
-      address: resource.address,
-      availabilityZone: plan.availabilityZone,
-      monthlyRoubles: plan.monthlyPublicIpRoubles,
-    });
+    const resource: TimewebPublicIpResource = {
+      externalId: existing.externalId,
+      kind: "public_ip",
+      environmentId: existing.environmentId,
+      address: existing.publicMetadata.address,
+    };
+    let current = await this.adapter.reconcilePublicIp(resource);
+    if (current.state === "absent") {
+      throw new LifecycleProviderError(
+        "PUBLIC_IP_NOT_READY",
+        "Owned floating IP отсутствует в Timeweb.",
+        true,
+      );
+    }
+    if (
+      current.binding.resourceType === "server" &&
+      current.binding.resourceId === server.externalId
+    ) {
+      return;
+    }
+    if (
+      current.binding.resourceType !== null ||
+      current.binding.resourceId !== null
+    ) {
+      throw new LifecycleProviderError(
+        "WRONG_OWNERSHIP",
+        "Owned floating IP уже привязан к другому ресурсу.",
+      );
+    }
+    await this.adapter.bindPublicIp(resource, server);
+    current = await this.adapter.reconcilePublicIp(resource);
+    if (
+      current.state !== "present" ||
+      current.binding.resourceType !== "server" ||
+      current.binding.resourceId !== server.externalId
+    ) {
+      throw new LifecycleProviderError(
+        "PUBLIC_IP_NOT_READY",
+        "Timeweb ещё не подтвердил привязку floating IP к VPS.",
+        true,
+      );
+    }
   }
 
   private async assertFreshProviderPlan(): Promise<void> {
@@ -330,9 +661,7 @@ class ProductionTimewebLifecycleAdapter
       "server",
     );
     if (existing) {
-      const server = { ...existing, kind: "server" as const };
-      await this.ensureAttachedPublicIp(server);
-      return server;
+      return { ...existing, kind: "server" as const };
     }
     try {
       const recovered = await this.adapter.findServerByEnvironmentId(
@@ -347,15 +676,10 @@ class ProductionTimewebLifecycleAdapter
           projectId: plan.projectId,
           passwordAuthentication: false,
         });
-        await this.ensureAttachedPublicIp(recovered);
         return recovered;
       }
       if (
-        (await stepAttempts(
-          this.sql,
-          this.command.operationId,
-          "create_server",
-        )) > 1
+        await providerMutationStarted(this.sql, this.command.operationId)
       ) {
         throw new LifecycleProviderError(
           "UNKNOWN_SERVER_OUTCOME",
@@ -363,6 +687,17 @@ class ProductionTimewebLifecycleAdapter
         );
       }
       await this.assertFreshProviderPlan();
+      if (!this.createExecutionToken) {
+        throw new LifecycleProviderError(
+          "STEP_STATE_INVALID",
+          "Create execution token отсутствует до provider mutation.",
+        );
+      }
+      await markProviderMutationStarted(
+        this.sql,
+        this.command.operationId,
+        this.createExecutionToken,
+      );
       const resource = await this.adapter.createServer({
         environmentId: this.context.environmentId,
         name: this.context.environmentName,
@@ -380,7 +715,6 @@ class ProductionTimewebLifecycleAdapter
         projectId: plan.projectId,
         passwordAuthentication: false,
       });
-      await this.ensureAttachedPublicIp(resource);
       return resource;
     } catch (error) {
       throw mappedError(error);
@@ -430,6 +764,10 @@ class ProductionTimewebLifecycleAdapter
           true,
         );
       }
+      await this.ensureAttachedPublicIp({
+        ...resource,
+        kind: "server",
+      });
     } catch (error) {
       throw mappedError(error);
     }
@@ -533,6 +871,12 @@ async function operationRequiresTimeweb(
       OR operations.input_snapshot->>'providerMode' = 'timeweb'
       OR EXISTS (
         SELECT 1
+        FROM operations AS environment_operations
+        WHERE environment_operations.environment_id = operations.environment_id
+          AND environment_operations.input_snapshot ? 'providerPlan'
+      )
+      OR EXISTS (
+        SELECT 1
         FROM provider_resources
         WHERE provider_resources.environment_id = operations.environment_id
           AND provider_resources.provider = 'timeweb'
@@ -569,6 +913,10 @@ export async function operationUsesProductionTimeweb(
 
 export async function createInfrastructureLifecycleAdapter(
   command: WorkflowCommand,
+  options: Readonly<{
+    createExecutionToken?: string;
+    reserveIpExecutionToken?: string;
+  }> = {},
 ): Promise<InfrastructureLifecycleAdapter> {
   const sql = getDatabase();
   const requiresTimeweb = await operationRequiresTimeweb(
@@ -586,6 +934,7 @@ export async function createInfrastructureLifecycleAdapter(
       reservePublicIp: async () => {
         await fake.reservePublicIp();
       },
+      resolvePublicIpAmbiguity: async () => undefined,
       createServer: () => fake.createServer(),
       reconcileServer: async () => undefined,
       configureDns: () => fake.configureDns(),
@@ -605,6 +954,8 @@ export async function createInfrastructureLifecycleAdapter(
     command,
     await operationContext(sql, command),
     production,
+    options.createExecutionToken,
+    options.reserveIpExecutionToken,
   );
 }
 

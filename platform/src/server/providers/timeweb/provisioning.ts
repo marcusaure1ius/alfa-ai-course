@@ -41,6 +41,7 @@ export type TimewebProvisioningPreview =
         | "PRESET_UNAVAILABLE"
         | "BUDGET_NOT_CONFIGURED"
         | "PUBLIC_IP_PRICE_NOT_CONFIGURED"
+        | "SMOKE_REGION_UNAVAILABLE"
         | "SMOKE_PROJECT_NOT_CONFIGURED"
         | "SMOKE_PROJECT_UNAVAILABLE"
         | "SMOKE_SSH_KEY_NOT_CONFIGURED"
@@ -62,6 +63,7 @@ function selectPlan(
   budgetRoubles: number | null,
   projectId: number | null,
   sshKeyId: number | null,
+  preferredRegion: string | null,
 ): TimewebProvisioningPreview {
   if (catalog.account.state !== "ready") {
     return {
@@ -103,6 +105,10 @@ function selectPlan(
   }
 
   const options = catalog.presets
+    .filter(
+      (preset) =>
+        preferredRegion === null || preset.region === preferredRegion,
+    )
     .map((preset) => {
       const location = catalog.locations.find(
         (candidate) =>
@@ -123,8 +129,14 @@ function selectPlan(
   if (!selected) {
     return {
       ok: false,
-      code: "PRESET_UNAVAILABLE",
-      message: "Нет совместимого тарифа и зоны для disposable smoke.",
+      code:
+        preferredRegion === null
+          ? "PRESET_UNAVAILABLE"
+          : "SMOKE_REGION_UNAVAILABLE",
+      message:
+        preferredRegion === null
+          ? "Нет совместимого тарифа и зоны для disposable smoke."
+          : "В выбранном smoke region нет совместимого тарифа и зоны.",
     };
   }
 
@@ -255,10 +267,26 @@ export async function getTimewebProvisioningPreview(
     gate.mode === "timeweb"
       ? positiveInteger(environment.TIMEWEB_SMOKE_SSH_KEY_ID ?? "")
       : 1;
+  const configuredRegion =
+    gate.mode === "timeweb"
+      ? environment.TIMEWEB_SMOKE_REGION?.trim() ?? ""
+      : "";
+  if (
+    configuredRegion &&
+    !/^[a-z]{2}-[1-9][0-9]*$/.test(configuredRegion)
+  ) {
+    return {
+      ok: false,
+      code: "SMOKE_REGION_UNAVAILABLE",
+      message: "Настроенный smoke region имеет недопустимый формат.",
+    };
+  }
+  const preferredRegion = configuredRegion || null;
   return selectPlan(
     catalog,
     budget,
     projectId,
     sshKeyId,
+    preferredRegion,
   );
 }

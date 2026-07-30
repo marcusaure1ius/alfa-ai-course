@@ -54,6 +54,9 @@ describe("TimewebMutationHttpAdapter", () => {
           ip: {
             id: publicIpResource.externalId,
             ip: publicIpResource.address,
+            availability_zone: "spb-3",
+            resource_type: "server",
+            resource_id: 54321,
           },
         }),
       );
@@ -88,7 +91,16 @@ describe("TimewebMutationHttpAdapter", () => {
       adapter.reconcilePublicIp(publicIpResource),
     ).resolves.toEqual({
       state: "present",
-      resource: publicIpResource,
+      resource: {
+        ...publicIpResource,
+        availabilityZone: "spb-3",
+        resourceType: "server",
+        resourceId: "54321",
+      },
+      binding: {
+        resourceType: "server",
+        resourceId: "54321",
+      },
     });
 
     expect(
@@ -110,7 +122,7 @@ describe("TimewebMutationHttpAdapter", () => {
           project_id: 303,
           ssh_keys_ids: [404],
           is_root_password_required: false,
-          network: { floating_ip: "create_ip" },
+          is_local_network: false,
         }),
       },
       {
@@ -161,6 +173,92 @@ describe("TimewebMutationHttpAdapter", () => {
         externalId: "../account/status",
       }),
     ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("creates, lists and binds a floating IP through fixed allowlisted endpoints", async () => {
+    const candidate = {
+      id: publicIpResource.externalId,
+      ip: publicIpResource.address,
+      availability_zone: "spb-3",
+      resource_type: null,
+      resource_id: null,
+    };
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ ips: [candidate] }))
+      .mockResolvedValueOnce(Response.json({ ip: candidate }, { status: 201 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const adapter = new TimewebMutationHttpAdapter(
+      "synthetic-test-token",
+      fetchImpl,
+    );
+
+    await expect(adapter.listPublicIps(environmentId)).resolves.toEqual([
+      {
+        ...publicIpResource,
+        availabilityZone: "spb-3",
+        resourceType: null,
+        resourceId: null,
+      },
+    ]);
+    await expect(
+      adapter.createPublicIp({
+        environmentId,
+        availabilityZone: "spb-3",
+      }),
+    ).resolves.toEqual(publicIpResource);
+    await adapter.bindPublicIp(publicIpResource, resource);
+
+    expect(
+      fetchImpl.mock.calls.map(([url, init]) => ({
+        url,
+        method: init?.method,
+        body: init?.body,
+      })),
+    ).toEqual([
+      {
+        url: "https://api.timeweb.cloud/api/v1/floating-ips",
+        method: "GET",
+        body: undefined,
+      },
+      {
+        url: "https://api.timeweb.cloud/api/v1/floating-ips",
+        method: "POST",
+        body: JSON.stringify({
+          is_ddos_guard: false,
+          availability_zone: "spb-3",
+        }),
+      },
+      {
+        url:
+          `https://api.timeweb.cloud/api/v1/floating-ips/` +
+          `${publicIpResource.externalId}/bind`,
+        method: "POST",
+        body: JSON.stringify({
+          resource_type: "server",
+          resource_id: 54321,
+        }),
+      },
+    ]);
+  });
+
+  it("rejects an unsafe provider server ID before binding a floating IP", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    const adapter = new TimewebMutationHttpAdapter(
+      "synthetic-test-token",
+      fetchImpl,
+    );
+
+    await expect(
+      adapter.bindPublicIp(publicIpResource, {
+        ...resource,
+        externalId: "9999999999999999999",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+      retryable: false,
+    });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -237,6 +335,38 @@ describe("TimewebMutationHttpAdapter", () => {
       code: "INVALID_REQUEST",
       retryable: false,
     });
+  });
+
+  it("retains only a bounded provider error code for conflict diagnostics", async () => {
+    const adapter = new TimewebMutationHttpAdapter(
+      "synthetic-test-token",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json(
+          {
+            error_code: "server_configuration_conflict",
+            message: "secret provider diagnostic",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+    const error = await adapter
+      .createServer({
+        environmentId,
+        name: "Disposable smoke",
+        presetId: 101,
+        operatingSystemId: 202,
+        availabilityZone: "spb-3",
+        projectId: 303,
+        sshKeyId: 404,
+      })
+      .catch((caught) => caught);
+    expect(error).toMatchObject({
+      code: "INVALID_REQUEST",
+      retryable: false,
+    });
+    expect(error.message).toContain("code server_configuration_conflict");
+    expect(error.message).not.toContain("secret provider diagnostic");
   });
 });
 

@@ -78,6 +78,7 @@ describe("authorizeReconciliationCron", () => {
         TIMEWEB_API_TOKEN: "synthetic-test-token",
         TIMEWEB_MUTATIONS_ENABLED: "true",
         TIMEWEB_CAPABILITIES_VERIFIED: "true",
+        TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT: "true",
         CRON_SECRET: secret,
       }),
     ).toEqual({ ok: true });

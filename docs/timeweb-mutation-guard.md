@@ -12,14 +12,15 @@
 Public IP DTO и endpoints дополнительно сверены с официальным
 [Python SDK](https://github.com/timeweb-cloud/sdk-python/tree/1927c2e2894cd37f86d3e42c3590bbeb9e77e139)
 на commit `1927c2e2894cd37f86d3e42c3590bbeb9e77e139`, а server
-`network.floating_ip` — с официальным
-[Timeweb Cloud CLI](https://github.com/timeweb-cloud/twc/tree/45315c2a008e5490580d0b5c429059a4a90c74a8)
-на commit `45315c2a008e5490580d0b5c429059a4a90c74a8`.
+server и floating-IP request schemas — с актуальной официальной
+[Timeweb OpenAPI](https://timeweb.cloud/api-docs-data/bundle.json).
 Для server adapter разрешены только фиксированные вызовы:
 
 | Операция adapter | HTTP-вызов |
 |---|---|
-| Найти IP, атомарно созданный с owned server | `GET /api/v1/floating-ips` |
+| Получить baseline/reconcile floating IP | `GET /api/v1/floating-ips` |
+| Создать floating IP | `POST /api/v1/floating-ips` |
+| Привязать IP к owned server | `POST /api/v1/floating-ips/{floating_ip_id}/bind` |
 | Сверить public IP | `GET /api/v1/floating-ips/{floating_ip_id}` |
 | Удалить public IP | `DELETE /api/v1/floating-ips/{floating_ip_id}` |
 | Создать server | `POST /api/v1/servers` |
@@ -30,10 +31,16 @@ Public IP DTO и endpoints дополнительно сверены с офиц
 Create body строится внутри adapter только из validated provider plan:
 `name`, `comment`, `preset_id`, `os_id`, `availability_zone` и
 `project_id`, один `ssh_keys_ids`, `is_root_password_required=false` и
-`network.floating_ip=create_ip`. IP создаётся атомарно с server, затем
-принимается в ownership только по точному `resource_type=server` и
-`resource_id` созданного owned server. Отдельный `POST /floating-ips` запрещён:
-его неоднозначный timeout нельзя безопасно отличить от чужого concurrent IP.
+`is_local_network=false`. Сначала отдельный floating IP создаётся в зоне plan
+через schema `is_ddos_guard=false, availability_zone`, затем привязывается к
+owned server через `resource_type=server, resource_id=<owned server>`.
+До POST workflow сохраняет только SHA-256 baseline provider IDs. После
+неоднозначного timeout ownership допускается лишь для ровно одного нового
+свободного IP в ожидаемой зоне; исходные IP не принимаются и не удаляются.
+Ноль кандидатов повторяется в десяти bounded durable attempts. Permanent
+ambiguity сохраняет `cleanup_required`: delete не может завершиться как
+`deleted`, пока resolution step не подтвердит точное совпадение live catalog с
+hashed baseline либо не восстановит и не удалит единственный созданный IP.
 Update body содержит только `name`. `server_id` обязан быть
 положительным числовым ID из PostgreSQL. У adapter нет метода, который принимает
 произвольный URL, HTTP method или raw payload.
@@ -118,7 +125,9 @@ PLATFORM_PROVIDER=timeweb
 TIMEWEB_API_TOKEN=<encrypted production environment variable>
 TIMEWEB_MUTATIONS_ENABLED=true
 TIMEWEB_CAPABILITIES_VERIFIED=true
+TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true
 TIMEWEB_SMOKE_BUDGET_RUB=<owner-approved integer>
+TIMEWEB_SMOKE_REGION=<optional live region>
 TIMEWEB_SMOKE_PROJECT_ID=<existing disposable Timeweb project>
 TIMEWEB_SMOKE_SSH_KEY_ID=<existing smoke SSH key>
 ```
@@ -130,6 +139,9 @@ token. `TIMEWEB_API_TOKEN` не получает placeholder/value в `.env.exam
 Значения kill-switch в репозитории намеренно не включены. Перед production
 подключением владелец обязан отдельно:
 
+- включать `TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true` только для выделенного
+  тестового аккаунта без параллельных внешних VPS/IP mutation; иначе hashed
+  baseline recovery не имеет права присваивать новый IP этой операции;
 - проверить service scope и срок token по
   [официальной инструкции Timeweb](https://timeweb.cloud/docs/account-management/token);
 - осознанно настроить отдельное permission удаления без Telegram;

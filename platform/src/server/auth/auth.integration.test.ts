@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -26,20 +28,27 @@ import {
 import { runMigrations } from "../db/migrate";
 import {
   beginStep,
+  finishOperation,
   finishStep,
   getOperationTimeline,
   operationEnvironmentId,
   OperationConflictError,
   reserveCreateOperation,
   reserveDeleteOperation,
+  transitionEnvironment,
 } from "../operations/repository";
 import { FakeTimewebAdapter } from "../providers/timeweb/fake";
-import { createInfrastructureLifecycleAdapter } from "../providers/timeweb/lifecycle";
+import {
+  createInfrastructureLifecycleAdapter,
+  markProviderMutationStarted,
+  providerMutationStarted,
+} from "../providers/timeweb/lifecycle";
 import { createEnvironmentWorkflow } from "@/workflows/infrastructure/create";
 import { deleteEnvironmentWorkflow } from "@/workflows/infrastructure/delete";
 import { proxy as adminPagePolicy } from "@/proxy";
 import {
   createServerStep,
+  reconcileServerStep,
   reserveIpStep,
 } from "@/workflows/infrastructure/steps";
 
@@ -777,12 +786,15 @@ describe("durable fake infrastructure lifecycle", () => {
       TIMEWEB_MUTATIONS_ENABLED: process.env.TIMEWEB_MUTATIONS_ENABLED,
       TIMEWEB_CAPABILITIES_VERIFIED:
         process.env.TIMEWEB_CAPABILITIES_VERIFIED,
+      TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
+        process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
     };
     process.env.VERCEL_ENV = "production";
     process.env.PLATFORM_PROVIDER = "timeweb";
     process.env.TIMEWEB_API_TOKEN = "synthetic-test-token";
     process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
     process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
+    process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
@@ -814,6 +826,421 @@ describe("durable fake infrastructure lifecycle", () => {
         environmentId: environment[0]!.id,
       });
       expect(fetchMock).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.unstubAllGlobals();
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  it("distinguishes a retryable preflight failure from an ambiguous provider mutation", async () => {
+    const { adminLogin } = await provisionUsers();
+    const create = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "t0056-marker-regression",
+      idempotencyKey: "production-marker-regression-01",
+      scenario: "success",
+      providerPlan: {
+        version: "timeweb-provisioning-v1",
+        checkedAt: new Date().toISOString(),
+        presetId: 101,
+        operatingSystemId: 202,
+        operatingSystemLabel: "ubuntu 24.04 x86_64",
+        region: "ru-1",
+        availabilityZone: "spb-1",
+        monthlyServerRoubles: 149,
+        cpu: 1,
+        ramMb: 1024,
+        diskMb: 15_360,
+        diskType: "ssd",
+        monthlyPublicIpRoubles: 180,
+        monthlyTotalRoubles: 329,
+        balanceRoubles: 1_000,
+        projectId: 303,
+        sshKeyId: 404,
+      },
+    });
+    const operationId = create.accepted.operationId;
+    const first = await beginStep(sql, operationId, "create_server", 20);
+    expect(first.claimed).toBe(true);
+    expect(await providerMutationStarted(sql, operationId)).toBe(false);
+    await finishStep(sql, operationId, "create_server", first.executionToken!, {
+      status: "failed",
+      code: "PROVIDER_PREFLIGHT_RETRY",
+      message: "redacted preflight failure",
+      retryClass: "transient",
+    });
+
+    const retry = await beginStep(sql, operationId, "create_server", 20);
+    expect(retry.claimed).toBe(true);
+    expect(await providerMutationStarted(sql, operationId)).toBe(false);
+    await expect(
+      markProviderMutationStarted(sql, operationId, first.executionToken!),
+    ).rejects.toMatchObject({ code: "STEP_STATE_INVALID" });
+    await markProviderMutationStarted(
+      sql,
+      operationId,
+      retry.executionToken!,
+    );
+    expect(await providerMutationStarted(sql, operationId)).toBe(true);
+    await finishStep(sql, operationId, "create_server", retry.executionToken!, {
+      status: "failed",
+      code: "TIMEOUT_AFTER_MUTATION",
+      message: "redacted ambiguous outcome",
+      retryClass: "unknown_outcome",
+    });
+    const replay = await beginStep(sql, operationId, "create_server", 20);
+
+    const previous = {
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      PLATFORM_PROVIDER: process.env.PLATFORM_PROVIDER,
+      TIMEWEB_API_TOKEN: process.env.TIMEWEB_API_TOKEN,
+      TIMEWEB_MUTATIONS_ENABLED: process.env.TIMEWEB_MUTATIONS_ENABLED,
+      TIMEWEB_CAPABILITIES_VERIFIED:
+        process.env.TIMEWEB_CAPABILITIES_VERIFIED,
+      TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
+        process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
+    };
+    process.env.VERCEL_ENV = "production";
+    process.env.PLATFORM_PROVIDER = "timeweb";
+    process.env.TIMEWEB_API_TOKEN = "synthetic-test-token";
+    process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
+    process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
+    process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ servers: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const lifecycle = await createInfrastructureLifecycleAdapter(
+        { operationId, scenario: "success" },
+        { createExecutionToken: replay.executionToken! },
+      );
+      await expect(lifecycle.createServer()).rejects.toMatchObject({
+        code: "UNKNOWN_SERVER_OUTCOME",
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0]?.[1]?.method).toBe("GET");
+    } finally {
+      vi.unstubAllGlobals();
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  it("releases reconcile after a transient owned-IP lookup failure", async () => {
+    const previous = {
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      PLATFORM_PROVIDER: process.env.PLATFORM_PROVIDER,
+      TIMEWEB_API_TOKEN: process.env.TIMEWEB_API_TOKEN,
+      TIMEWEB_MUTATIONS_ENABLED: process.env.TIMEWEB_MUTATIONS_ENABLED,
+      TIMEWEB_CAPABILITIES_VERIFIED:
+        process.env.TIMEWEB_CAPABILITIES_VERIFIED,
+      TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
+        process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
+      AUTH_FACTOR_ENCRYPTION_KEY: process.env.AUTH_FACTOR_ENCRYPTION_KEY,
+    };
+    const totpSecret = "JBSWY3DPEHPK3PXP";
+    const factorEncryptionKey = Buffer.alloc(32, 7).toString("base64url");
+    process.env.VERCEL_ENV = "production";
+    process.env.PLATFORM_PROVIDER = "timeweb";
+    process.env.TIMEWEB_API_TOKEN = "synthetic-test-token";
+    process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
+    process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
+    process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
+    process.env.AUTH_FACTOR_ENCRYPTION_KEY = factorEncryptionKey;
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ server: { id: 54321, status: "on" } }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const admin = await bootstrapAdmin(sql, {
+        email: "production-admin@example.test",
+        password: "correct horse battery staple",
+        totpSecret,
+        totpCode: createTotpCode(totpSecret),
+        factorEncryptionKey,
+      });
+      const login = await loginWithPassword(sql, {
+        email: admin.email,
+        password: "correct horse battery staple",
+        mfaCode: createTotpCode(totpSecret),
+      });
+      if (!login.ok) throw new Error("Production MFA login failed.");
+      const create = await reserveCreateOperation(sql, login.session, {
+        name: "t0056-ip-retry-regression",
+        idempotencyKey: "production-ip-retry-regression-01",
+        scenario: "success",
+        providerPlan: {
+          version: "timeweb-provisioning-v1",
+          checkedAt: new Date().toISOString(),
+          presetId: 101,
+          operatingSystemId: 202,
+          operatingSystemLabel: "ubuntu 24.04 x86_64",
+          region: "ru-2",
+          availabilityZone: "nsk-1",
+          monthlyServerRoubles: 207,
+          cpu: 1,
+          ramMb: 1024,
+          diskMb: 15_360,
+          diskType: "nvme",
+          monthlyPublicIpRoubles: 180,
+          monthlyTotalRoubles: 387,
+          balanceRoubles: 1_000,
+          projectId: 303,
+          sshKeyId: 404,
+        },
+      });
+      const environmentId = await operationEnvironmentId(
+        sql,
+        create.accepted.operationId,
+      );
+      await sql`
+        INSERT INTO provider_resources (
+          id, environment_id, operation_id, provider, resource_kind,
+          provider_resource_id, ownership, lifecycle_status, public_metadata
+        )
+        VALUES (
+          '11111111-2222-4333-8444-555555555555',
+          ${environmentId}, ${create.accepted.operationId}, 'timeweb', 'server',
+          '54321', 'platform', 'active', '{}'::jsonb
+        )
+      `;
+      await sql`
+        INSERT INTO provider_resources (
+          id, environment_id, operation_id, provider, resource_kind,
+          provider_resource_id, ownership, lifecycle_status, public_metadata
+        )
+        VALUES (
+          '22222222-3333-4444-8555-666666666666',
+          ${environmentId}, ${create.accepted.operationId}, 'timeweb', 'public_ip',
+          '33333333-4444-4555-8666-777777777777',
+          'platform', 'active', '{"address":"203.0.113.11"}'::jsonb
+        )
+      `;
+
+      await expect(
+        reconcileServerStep({
+          operationId: create.accepted.operationId,
+          scenario: "success",
+        }),
+      ).rejects.toThrow("Timeweb");
+      const failed = await sql<
+        { status: string; retry_class: string; attempt_count: number }[]
+      >`
+        SELECT status, retry_class, attempt_count
+        FROM operation_steps
+        WHERE operation_id = ${create.accepted.operationId}
+          AND logical_key = 'reconcile_server'
+      `;
+      expect(failed[0]).toEqual({
+        status: "failed",
+        retry_class: "transient",
+        attempt_count: 1,
+      });
+      const retry = await beginStep(
+        sql,
+        create.accepted.operationId,
+        "reconcile_server",
+        30,
+      );
+      expect(retry).toMatchObject({ claimed: true, attempts: 2 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(
+        fetchMock.mock.calls.map(([, init]) => init?.method),
+      ).toEqual(["GET", "GET"]);
+    } finally {
+      vi.unstubAllGlobals();
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  it("blocks delete completion while a floating-IP mutation stays unresolved", async () => {
+    const previous = {
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      PLATFORM_PROVIDER: process.env.PLATFORM_PROVIDER,
+      TIMEWEB_API_TOKEN: process.env.TIMEWEB_API_TOKEN,
+      TIMEWEB_MUTATIONS_ENABLED: process.env.TIMEWEB_MUTATIONS_ENABLED,
+      TIMEWEB_CAPABILITIES_VERIFIED:
+        process.env.TIMEWEB_CAPABILITIES_VERIFIED,
+      TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT:
+        process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT,
+      AUTH_FACTOR_ENCRYPTION_KEY: process.env.AUTH_FACTOR_ENCRYPTION_KEY,
+    };
+    const totpSecret = "JBSWY3DPEHPK3PXP";
+    const factorEncryptionKey = Buffer.alloc(32, 9).toString("base64url");
+    process.env.VERCEL_ENV = "production";
+    process.env.PLATFORM_PROVIDER = "timeweb";
+    process.env.TIMEWEB_API_TOKEN = "synthetic-test-token";
+    process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
+    process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
+    process.env.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT = "true";
+    process.env.AUTH_FACTOR_ENCRYPTION_KEY = factorEncryptionKey;
+
+    const baselineId = "11111111-2222-4333-8444-555555555555";
+    const unknownId = "22222222-3333-4444-8555-666666666666";
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        ips: [
+          {
+            id: baselineId,
+            ip: "203.0.113.10",
+            availability_zone: "nsk-1",
+            resource_type: null,
+            resource_id: null,
+          },
+          {
+            id: unknownId,
+            ip: "203.0.113.11",
+            availability_zone: "nsk-1",
+            resource_type: "server",
+            resource_id: 98765,
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const admin = await bootstrapAdmin(sql, {
+        email: "ambiguity-admin@example.test",
+        password: "correct horse battery staple",
+        totpSecret,
+        totpCode: createTotpCode(totpSecret),
+        factorEncryptionKey,
+      });
+      const login = await loginWithPassword(sql, {
+        email: admin.email,
+        password: "correct horse battery staple",
+        mfaCode: createTotpCode(totpSecret),
+      });
+      if (!login.ok) throw new Error("Production MFA login failed.");
+
+      const create = await reserveCreateOperation(sql, login.session, {
+        name: "t0056-unresolved-ip",
+        idempotencyKey: "production-unresolved-ip-create-01",
+        scenario: "success",
+        providerPlan: {
+          version: "timeweb-provisioning-v1",
+          checkedAt: new Date().toISOString(),
+          presetId: 101,
+          operatingSystemId: 202,
+          operatingSystemLabel: "ubuntu 24.04 x86_64",
+          region: "ru-2",
+          availabilityZone: "nsk-1",
+          monthlyServerRoubles: 207,
+          cpu: 1,
+          ramMb: 1024,
+          diskMb: 15_360,
+          diskType: "nvme",
+          monthlyPublicIpRoubles: 180,
+          monthlyTotalRoubles: 387,
+          balanceRoubles: 1_000,
+          projectId: 303,
+          sshKeyId: 404,
+        },
+      });
+      const createOperationId = create.accepted.operationId;
+      const environmentId = await operationEnvironmentId(
+        sql,
+        createOperationId,
+      );
+      const reserve = await beginStep(
+        sql,
+        createOperationId,
+        "reserve_public_ip",
+        10,
+      );
+      await sql`
+        UPDATE operation_steps
+        SET logs_redacted = ${JSON.stringify({
+          version: "public-ip-create-v1",
+          baselineHashes: [
+            createHash("sha256").update(baselineId).digest("hex"),
+          ],
+        })}
+        WHERE operation_id = ${createOperationId}
+          AND logical_key = 'reserve_public_ip'
+      `;
+      await finishStep(
+        sql,
+        createOperationId,
+        "reserve_public_ip",
+        reserve.executionToken!,
+        {
+          status: "failed",
+          code: "UNKNOWN_PUBLIC_IP_OUTCOME",
+          message: "Ambiguous provider response.",
+          retryClass: "permanent",
+        },
+      );
+      await finishOperation(sql, createOperationId, {
+        status: "failed",
+        code: "UNKNOWN_PUBLIC_IP_OUTCOME",
+        message: "Ambiguous provider response.",
+      });
+      await transitionEnvironment(
+        sql,
+        createOperationId,
+        "creating",
+        "cleanup_required",
+      );
+
+      const deletion = await reserveDeleteOperation(sql, login.session, {
+        environmentId,
+        confirmationName: "t0056-unresolved-ip",
+        confirmedLoss: true,
+        idempotencyKey: "production-unresolved-ip-delete-01",
+        scenario: "success",
+      });
+      await expect(
+        deleteEnvironmentWorkflow({
+          operationId: deletion.accepted.operationId,
+          scenario: "success",
+        }),
+      ).resolves.toEqual({ status: "cleanup_required" });
+
+      const state = await sql<
+        {
+          environment_status: string;
+          operation_status: string;
+          complete_steps: number;
+          resources: number;
+        }[]
+      >`
+        SELECT
+          environments.status AS environment_status,
+          operations.status AS operation_status,
+          (
+            SELECT count(*)::int
+            FROM operation_steps
+            WHERE operation_id = operations.id
+              AND logical_key = 'complete_delete'
+          ) AS complete_steps,
+          (
+            SELECT count(*)::int
+            FROM provider_resources
+            WHERE environment_id = environments.id
+          ) AS resources
+        FROM operations
+        JOIN environments ON environments.id = operations.environment_id
+        WHERE operations.id = ${deletion.accepted.operationId}
+      `;
+      expect(state[0]).toEqual({
+        environment_status: "cleanup_required",
+        operation_status: "failed",
+        complete_steps: 0,
+        resources: 0,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.unstubAllGlobals();
       for (const [key, value] of Object.entries(previous)) {

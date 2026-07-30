@@ -1,8 +1,17 @@
 import type { WorkflowCommand } from "@/server/operations/contracts";
-import { completeDeleteStep, deleteResourceStep } from "./steps";
+import {
+  completeDeleteStep,
+  deleteResourceStep,
+  resolvePublicIpAmbiguityStep,
+} from "./steps";
 
 export async function deleteEnvironmentWorkflow(command: WorkflowCommand) {
   "use workflow";
+  if (
+    (await resolvePublicIpAmbiguityStep(command)) === "cleanup_required"
+  ) {
+    return { status: "cleanup_required" as const };
+  }
   if ((await deleteResourceStep(command, "dns_record", 10)) === "cleanup_required") {
     return { status: "cleanup_required" as const };
   }

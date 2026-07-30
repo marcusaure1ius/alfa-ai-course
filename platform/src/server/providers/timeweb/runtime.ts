@@ -29,7 +29,8 @@ export type TimewebMutationRuntimeGate =
       reason:
         | "missing-production-token"
         | "mutations-disabled"
-        | "capabilities-unverified";
+        | "capabilities-unverified"
+        | "exclusive-account-unverified";
       tokenConfigured: boolean;
     }>
   | Readonly<{
@@ -113,6 +114,13 @@ export function readTimewebMutationRuntimeGate(
     return {
       mode: "blocked",
       reason: "capabilities-unverified",
+      tokenConfigured: true,
+    };
+  }
+  if (environment.TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT !== "true") {
+    return {
+      mode: "blocked",
+      reason: "exclusive-account-unverified",
       tokenConfigured: true,
     };
   }

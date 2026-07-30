@@ -176,6 +176,13 @@ export type TimewebPublicIpResource = OwnedProviderResource &
     address: string;
   }>;
 
+export type TimewebPublicIpCandidate = TimewebPublicIpResource &
+  Readonly<{
+    availabilityZone: string;
+    resourceType: string | null;
+    resourceId: string | null;
+  }>;
+
 export type TimewebUpdateServerInput = Readonly<{
   resource: OwnedProviderResource & Readonly<{ kind: "server" }>;
   name: string;
@@ -194,6 +201,10 @@ export type TimewebPublicIpReconciliation =
   | Readonly<{
       state: "present";
       resource: TimewebPublicIpResource;
+      binding: Readonly<{
+        resourceType: string | null;
+        resourceId: string | null;
+      }>;
     }>;
 
 /**
@@ -218,6 +229,15 @@ export interface TimewebMutationAdapter {
   findPublicIpByServer(
     resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
   ): Promise<TimewebPublicIpResource | null>;
+  listPublicIps(environmentId: string): Promise<TimewebPublicIpCandidate[]>;
+  createPublicIp(input: Readonly<{
+    environmentId: string;
+    availabilityZone: string;
+  }>): Promise<TimewebPublicIpResource>;
+  bindPublicIp(
+    resource: TimewebPublicIpResource,
+    server: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<void>;
   deletePublicIp(
     resource: OwnedProviderResource & Readonly<{ kind: "public_ip" }>,
   ): Promise<void>;

@@ -21,8 +21,14 @@ import {
   operationUsesProductionTimeweb,
 } from "@/server/providers/timeweb/lifecycle";
 
-async function adapter(command: WorkflowCommand) {
-  return createInfrastructureLifecycleAdapter(command);
+async function adapter(
+  command: WorkflowCommand,
+  options: Readonly<{
+    createExecutionToken?: string;
+    reserveIpExecutionToken?: string;
+  }> = {},
+) {
+  return createInfrastructureLifecycleAdapter(command, options);
 }
 
 export async function providerSliceStep(
@@ -60,7 +66,11 @@ async function failProviderStep(
         sql,
         command.operationId,
         "creating",
-        key === "reconcile_server" ? "cleanup_required" : "degraded",
+        key === "reconcile_server" ||
+        (key === "reserve_public_ip" &&
+          error.code === "UNKNOWN_PUBLIC_IP_OUTCOME")
+          ? "cleanup_required"
+          : "degraded",
       );
     } catch {
       // A replay may already have moved the environment to its terminal state.
@@ -104,7 +114,9 @@ export async function reserveIpStep(command: WorkflowCommand): Promise<void> {
   const executionToken = requireStepClaim(step);
   try {
     if (authorization.resource.state !== "active") {
-      await (await adapter(command)).reservePublicIp();
+      await (
+        await adapter(command, { reserveIpExecutionToken: executionToken })
+      ).reservePublicIp();
     }
     await finishStep(
       sql,
@@ -126,18 +138,82 @@ export async function reserveIpStep(command: WorkflowCommand): Promise<void> {
     throw error;
   }
 }
+reserveIpStep.maxRetries = 9;
+
+export async function resolvePublicIpAmbiguityStep(
+  command: WorkflowCommand,
+): Promise<"resolved" | "cleanup_required"> {
+  "use step";
+  const sql = getDatabase();
+  await guardMutation(command, "delete", "public_ip");
+  const step = await beginStep(
+    sql,
+    command.operationId,
+    "resolve_public_ip_ambiguity",
+    5,
+  );
+  if (step.alreadyCompleted) return "resolved";
+  const executionToken = requireStepClaim(step);
+  try {
+    await (await adapter(command)).resolvePublicIpAmbiguity();
+    await finishStep(
+      sql,
+      command.operationId,
+      "resolve_public_ip_ambiguity",
+      executionToken,
+      { status: "succeeded" },
+    );
+    return "resolved";
+  } catch (error) {
+    const providerError = lifecycleProviderError(error);
+    if (!providerError) throw error;
+    const retryClass = classifyProviderError(
+      providerError.code,
+      "retryable" in providerError ? providerError.retryable : undefined,
+    );
+    await finishStep(
+      sql,
+      command.operationId,
+      "resolve_public_ip_ambiguity",
+      executionToken,
+      {
+        status: "failed",
+        code: providerError.code,
+        message: providerError.message,
+        retryClass,
+      },
+    );
+    if (retryClass !== "permanent") {
+      throw new RetryableError(providerError.message, { retryAfter: 500 });
+    }
+    await transitionEnvironment(
+      sql,
+      command.operationId,
+      "deleting",
+      "cleanup_required",
+    );
+    await finishOperation(sql, command.operationId, {
+      status: "failed",
+      code: providerError.code,
+      message: providerError.message,
+    });
+    return "cleanup_required";
+  }
+}
 
 export async function createServerStep(command: WorkflowCommand): Promise<void> {
   "use step";
   const sql = getDatabase();
-  const authorization = await guardMutation(command, "create", "server");
+  await guardMutation(command, "create", "server");
   const step = await beginStep(sql, command.operationId, "create_server", 20);
   if (step.alreadyCompleted) return;
   const executionToken = requireStepClaim(step);
   try {
-    if (authorization.resource.state !== "active") {
-      await (await adapter(command)).createServer();
-    }
+    // The adapter is idempotent. Re-entering it for an already recorded server
+    // completes pending public-IP discovery without issuing another POST.
+    await (
+      await adapter(command, { createExecutionToken: executionToken })
+    ).createServer();
     await finishStep(
       sql,
       command.operationId,

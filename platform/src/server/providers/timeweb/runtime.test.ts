@@ -57,6 +57,7 @@ describe("readTimewebMutationRuntimeGate", () => {
         TIMEWEB_API_TOKEN: "synthetic-test-token",
         TIMEWEB_MUTATIONS_ENABLED: "true",
         TIMEWEB_CAPABILITIES_VERIFIED: "true",
+        TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT: "true",
       }),
     ).toEqual({
       mode: "fake",
@@ -89,6 +90,19 @@ describe("readTimewebMutationRuntimeGate", () => {
       reason: "capabilities-unverified",
       tokenConfigured: true,
     });
+    expect(
+      readTimewebMutationRuntimeGate({
+        VERCEL_ENV: "production",
+        PLATFORM_PROVIDER: "timeweb",
+        TIMEWEB_API_TOKEN: "synthetic-test-token",
+        TIMEWEB_MUTATIONS_ENABLED: "true",
+        TIMEWEB_CAPABILITIES_VERIFIED: "true",
+      }),
+    ).toEqual({
+      mode: "blocked",
+      reason: "exclusive-account-unverified",
+      tokenConfigured: true,
+    });
   });
 
   it("returns only safe metadata after every production gate passes", () => {
@@ -98,6 +112,7 @@ describe("readTimewebMutationRuntimeGate", () => {
       TIMEWEB_API_TOKEN: "synthetic-test-token",
       TIMEWEB_MUTATIONS_ENABLED: "true",
       TIMEWEB_CAPABILITIES_VERIFIED: "true",
+      TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT: "true",
     });
     expect(result).toEqual({ mode: "timeweb", tokenConfigured: true });
     expect(JSON.stringify(result)).not.toContain("synthetic-test-token");
