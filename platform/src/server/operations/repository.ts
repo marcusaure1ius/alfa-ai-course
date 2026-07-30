@@ -89,6 +89,20 @@ function idempotencyFingerprint(value: unknown): string {
   return createHash("sha256").update(stableJson(value)).digest("hex");
 }
 
+function providerPlanIntent(value: unknown): unknown {
+  if (value == null) return null;
+  const plan = value as Record<string, unknown>;
+  return {
+    version: plan.version,
+    deploymentMode: plan.deploymentMode,
+    region: plan.region,
+    presetId: plan.presetId,
+    operatingSystemId: plan.operatingSystemId,
+    backupsEnabled: plan.backupsEnabled,
+    publicIpv4: plan.publicIpv4,
+  };
+}
+
 function createFingerprint(input: {
   name: string;
   scenario: FakeScenario;
@@ -98,7 +112,7 @@ function createFingerprint(input: {
     kind: "create_environment",
     name: input.name,
     scenario: input.scenario,
-    providerPlan: input.providerPlan ?? null,
+    providerPlan: providerPlanIntent(input.providerPlan),
   });
 }
 
@@ -143,7 +157,7 @@ function storedCreateFingerprint(operation: ExistingOperation): string {
     kind: operation.kind,
     name: operation.environment_name,
     scenario: operation.input_snapshot.scenario,
-    providerPlan: operation.input_snapshot.providerPlan ?? null,
+    providerPlan: providerPlanIntent(operation.input_snapshot.providerPlan),
   });
 }
 

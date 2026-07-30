@@ -38,6 +38,7 @@ import {
   transitionEnvironment,
 } from "../operations/repository";
 import { FakeTimewebAdapter } from "../providers/timeweb/fake";
+import type { TimewebProvisioningPlan } from "../providers/timeweb/provisioning";
 import {
   createInfrastructureLifecycleAdapter,
   markProviderMutationStarted,
@@ -463,6 +464,66 @@ describe("durable fake infrastructure lifecycle", () => {
         scenario: "success",
       }),
     ).rejects.toBeInstanceOf(OperationConflictError);
+  });
+
+  it("deduplicates the same deploy intent across refreshed provider telemetry", async () => {
+    const { adminLogin } = await provisionUsers();
+    const originalPlan = {
+      version: "timeweb-provisioning-v3",
+      deploymentMode: "plain-vps",
+      checkedAt: "2026-07-30T10:00:00.000Z",
+      presetId: 4_801,
+      operatingSystemId: 145,
+      operatingSystemLabel: "Ubuntu 26.04 x86_64",
+      region: "ru-3",
+      regionLabel: "Москва",
+      availabilityZone: "msk-1",
+      monthlyServerRoubles: 1_000,
+      hourlyServerRoubles: 1.37,
+      cpu: 2,
+      ramMb: 4_096,
+      diskMb: 51_200,
+      diskType: "nvme",
+      bandwidthMbps: 1_000,
+      backupsEnabled: true,
+      backupInterval: "week",
+      backupCopyCount: 1,
+      publicIpv4: true,
+      monthlyPublicIpRoubles: 180,
+      monthlyTotalRoubles: 1_180,
+      projectId: 303,
+      sshKeyId: 404,
+    } satisfies TimewebProvisioningPlan;
+    const first = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Стабильный deploy",
+      idempotencyKey: "create-stable-provider-intent-01",
+      scenario: "success",
+      providerPlan: originalPlan,
+    });
+    const duplicate = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Стабильный deploy",
+      idempotencyKey: "create-stable-provider-intent-01",
+      scenario: "success",
+      providerPlan: {
+        ...originalPlan,
+        checkedAt: "2026-07-30T10:05:00.000Z",
+        monthlyServerRoubles: 1_010,
+        hourlyServerRoubles: 1.38,
+        monthlyTotalRoubles: 1_190,
+      },
+    });
+    expect(duplicate).toEqual({
+      accepted: first.accepted,
+      created: false,
+    });
+    await expect(
+      reserveCreateOperation(sql, adminLogin.session, {
+        name: "Стабильный deploy",
+        idempotencyKey: "create-stable-provider-intent-01",
+        scenario: "success",
+        providerPlan: { ...originalPlan, presetId: 4_803 },
+      }),
+    ).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
   });
 
   it("runs the successful fake create state machine and exposes a safe timeline", async () => {
