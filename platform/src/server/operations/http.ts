@@ -8,6 +8,7 @@ const scenarios = new Set<FakeScenario>([
   "insufficient_funds",
   "dns_failure",
   "tls_failure",
+  "backup_unavailable",
   "partial_cleanup",
 ]);
 

@@ -13,8 +13,10 @@ export class FakeProviderError extends Error {
       | "INSUFFICIENT_FUNDS"
       | "DNS_FAILED"
       | "TLS_FAILED"
+      | "BACKUP_UNAVAILABLE"
       | "PARTIAL_CLEANUP",
     message: string,
+    public readonly retryable = false,
   ) {
     super(message);
   }
@@ -116,6 +118,16 @@ export class FakeTimewebAdapter {
   async verifyTls(): Promise<void> {
     if (this.scenario === "tls_failure") {
       throw new FakeProviderError("TLS_FAILED", "TLS не подтверждён.");
+    }
+  }
+
+  async configureBackups(): Promise<void> {
+    if (this.scenario === "backup_unavailable") {
+      throw new FakeProviderError(
+        "BACKUP_UNAVAILABLE",
+        "Timeweb временно не применил настройки автобэкапа.",
+        true,
+      );
     }
   }
 

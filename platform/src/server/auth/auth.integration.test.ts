@@ -48,6 +48,7 @@ import { createEnvironmentWorkflow } from "@/workflows/infrastructure/create";
 import { deleteEnvironmentWorkflow } from "@/workflows/infrastructure/delete";
 import { proxy as adminPagePolicy } from "@/proxy";
 import {
+  configureBackupsStep,
   createServerStep,
   reconcileServerStep,
   reserveIpStep,
@@ -524,6 +525,58 @@ describe("durable fake infrastructure lifecycle", () => {
         providerPlan: { ...originalPlan, presetId: 4_803 },
       }),
     ).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+  });
+
+  it("marks paid resources cleanup_required when backup retries are exhausted", async () => {
+    const { adminLogin } = await provisionUsers();
+    const reserved = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Backup exhaustion",
+      idempotencyKey: "create-backup-exhaustion-01",
+      scenario: "backup_unavailable",
+    });
+    const command = {
+      operationId: reserved.accepted.operationId,
+      scenario: "backup_unavailable",
+    } as const;
+
+    for (let attempt = 1; attempt < 4; attempt += 1) {
+      await expect(configureBackupsStep(command)).rejects.toThrow(
+        "Timeweb временно не применил настройки автобэкапа.",
+      );
+    }
+    await expect(configureBackupsStep(command)).rejects.toThrow(
+      "требуется cleanup",
+    );
+
+    await expect(
+      sql<{ operation_status: string; environment_status: string }[]>`
+        SELECT
+          operations.status AS operation_status,
+          environments.status AS environment_status
+        FROM operations
+        JOIN environments ON environments.id = operations.environment_id
+        WHERE operations.id = ${reserved.accepted.operationId}
+      `,
+    ).resolves.toEqual([
+      {
+        operation_status: "failed",
+        environment_status: "cleanup_required",
+      },
+    ]);
+    const timeline = await getOperationTimeline(
+      sql,
+      reserved.accepted.operationId,
+    );
+    expect(timeline?.steps).toEqual([
+      expect.objectContaining({
+        key: "configure_backups",
+        status: "failed",
+        attempts: 4,
+        error: expect.objectContaining({
+          code: "BACKUP_CONFIGURATION_EXHAUSTED",
+        }),
+      }),
+    ]);
   });
 
   it("runs the successful fake create state machine and exposes a safe timeline", async () => {

@@ -9,6 +9,7 @@ export type FakeScenario =
   | "insufficient_funds"
   | "dns_failure"
   | "tls_failure"
+  | "backup_unavailable"
   | "partial_cleanup";
 
 export type OperationKind = "create_environment" | "delete_environment";

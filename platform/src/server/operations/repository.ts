@@ -543,6 +543,7 @@ const fakeScenarios = new Set<FakeScenario>([
   "insufficient_funds",
   "dns_failure",
   "tls_failure",
+  "backup_unavailable",
   "partial_cleanup",
 ]);
 
@@ -577,6 +578,7 @@ export async function claimOrphanedWorkflowOperations(
           'insufficient_funds',
           'dns_failure',
           'tls_failure',
+          'backup_unavailable',
           'partial_cleanup'
         )
         AND (

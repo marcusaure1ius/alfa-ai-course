@@ -1799,7 +1799,7 @@ export async function createInfrastructureLifecycleAdapter(
       resolveDnsAmbiguity: async () => undefined,
       createServer: () => fake.createServer(),
       reconcileServer: async () => undefined,
-      configureBackups: async () => undefined,
+      configureBackups: () => fake.configureBackups(),
       configureDns: () => fake.configureDns(),
       verifyBootstrapReachable: async () => undefined,
       waitForDns: async () => undefined,

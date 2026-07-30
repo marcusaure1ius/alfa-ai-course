@@ -475,6 +475,40 @@ export async function configureBackupsStep(
   } catch (error) {
     const providerError = lifecycleProviderError(error);
     if (providerError) {
+      const retryClass = classifyProviderError(
+        providerError.code,
+        "retryable" in providerError ? providerError.retryable : undefined,
+      );
+      if (retryClass !== "permanent" && step.attempts >= 4) {
+        await finishStep(
+          sql,
+          command.operationId,
+          "configure_backups",
+          executionToken,
+          {
+            status: "failed",
+            code: "BACKUP_CONFIGURATION_EXHAUSTED",
+            message:
+              "Timeweb не применил настройки автобэкапа за ограниченное окно.",
+            retryClass: "permanent",
+          },
+        );
+        await finishOperation(sql, command.operationId, {
+          status: "failed",
+          code: "BACKUP_CONFIGURATION_EXHAUSTED",
+          message:
+            "VPS и IPv4 требуют cleanup после исчерпания настройки автобэкапа.",
+        });
+        await transitionEnvironment(
+          sql,
+          command.operationId,
+          "creating",
+          "cleanup_required",
+        );
+        throw new FatalError(
+          "Настройки автобэкапа не применены; требуется cleanup.",
+        );
+      }
       await failProviderStep(
         command,
         "configure_backups",
