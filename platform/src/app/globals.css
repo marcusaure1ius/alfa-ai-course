@@ -179,6 +179,79 @@
     line-height: 1.25;
   }
 
+  .student-prose {
+    max-width: 45rem;
+    color: var(--foreground);
+    font-size: 1.0625rem;
+    line-height: 1.78;
+  }
+
+  .student-prose h2 {
+    scroll-margin-top: 6rem;
+    margin-top: 2.75rem;
+    margin-bottom: 1rem;
+    font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+    font-size: 1.75rem;
+    font-weight: 650;
+    line-height: 1.25;
+    letter-spacing: -0.03em;
+  }
+
+  .student-prose h3 {
+    scroll-margin-top: 6rem;
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+    font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+    font-size: 1.25rem;
+    font-weight: 650;
+    line-height: 1.35;
+    letter-spacing: -0.02em;
+  }
+
+  .student-prose p,
+  .student-prose ul,
+  .student-prose ol,
+  .student-prose blockquote,
+  .student-prose pre {
+    margin-block: 1.15rem;
+  }
+
+  .student-prose ul,
+  .student-prose ol {
+    padding-left: 1.4rem;
+  }
+
+  .student-prose ul {
+    list-style: disc;
+  }
+
+  .student-prose ol {
+    list-style: decimal;
+  }
+
+  .student-prose li {
+    padding-left: 0.35rem;
+    margin-block: 0.45rem;
+  }
+
+  .student-prose blockquote {
+    border-block: 1px solid var(--border);
+    padding-block: 1rem;
+    color: var(--muted-foreground);
+  }
+
+  .student-prose pre {
+    max-width: 100%;
+    overflow-x: auto;
+    border-radius: 0.75rem;
+    background: var(--foreground);
+    padding: 1.25rem;
+    color: var(--background);
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-size: 0.875rem;
+    line-height: 1.65;
+  }
+
   @media (min-width: 40rem) {
     .page-container {
       padding-inline: 1.5rem;

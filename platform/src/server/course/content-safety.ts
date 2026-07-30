@@ -1,4 +1,4 @@
-const RAW_HTML = /[<>]/;
+const RAW_HTML = /</;
 const DANGEROUS_PROTOCOL = /(?:javascript|vbscript|data)\s*:/i;
 const EMBEDDED_CONTENT = /!\[[^\]]*\]\([^)]*\)/;
 

@@ -11,6 +11,7 @@ import {
   createSection,
   getStudentCourse,
   getStudentMaterial,
+  getStudentWorkspaceCourse,
   reorderSectionMaterials,
   saveMaterialProgress,
   setCoursePublication,
@@ -104,6 +105,26 @@ describe("course content repository", () => {
     await expect(
       getStudentMaterial(sql, studentId, "first-step"),
     ).resolves.toBeNull();
+  });
+
+  it("returns an accessible published course before its first section is published", async () => {
+    const courseId = await createCourse(sql, admin, {
+      slug: "empty-course",
+      title: "Курс без опубликованных разделов",
+    });
+    await setCoursePublication(sql, admin, courseId, "published");
+    await setStudentCourseAccess(sql, admin, {
+      courseId,
+      studentUserId: studentId,
+      granted: true,
+    });
+    await expect(getStudentWorkspaceCourse(sql, studentId)).resolves.toEqual({
+      id: courseId,
+      slug: "empty-course",
+      title: "Курс без опубликованных разделов",
+      description: "",
+      sections: [],
+    });
   });
 
   it("publishes an edited material with an incremented version and audit", async () => {

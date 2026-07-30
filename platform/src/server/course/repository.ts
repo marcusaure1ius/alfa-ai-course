@@ -360,10 +360,10 @@ type StudentCourseRow = {
   course_slug: string;
   course_title: string;
   course_description: string;
-  section_id: string;
-  section_slug: string;
-  section_title: string;
-  section_position: number;
+  section_id: string | null;
+  section_slug: string | null;
+  section_title: string | null;
+  section_position: number | null;
   material_id: string | null;
   material_slug: string | null;
   material_kind: MaterialKind | null;
@@ -394,7 +394,7 @@ export async function getStudentCourse(
       ON membership.course_id = course.id
       AND membership.user_id = ${studentUserId}
       AND membership.status = 'active'
-    JOIN course_sections AS section
+    LEFT JOIN course_sections AS section
       ON section.course_id = course.id AND section.status = 'published'
     LEFT JOIN course_materials AS material
       ON material.section_id = section.id AND material.status = 'published'
@@ -407,6 +407,14 @@ export async function getStudentCourse(
   if (!first) return null;
   const sections = new Map<string, StudentCourse["sections"][number]>();
   for (const row of rows) {
+    if (
+      !row.section_id ||
+      !row.section_slug ||
+      row.section_title === null ||
+      row.section_position === null
+    ) {
+      continue;
+    }
     let section = sections.get(row.section_id);
     if (!section) {
       section = {
@@ -445,6 +453,26 @@ export async function getStudentCourse(
     description: first.course_description,
     sections: [...sections.values()],
   };
+}
+
+export async function getStudentWorkspaceCourse(
+  sql: DatabaseSql,
+  studentUserId: string,
+): Promise<StudentCourse | null> {
+  const rows = await sql<Array<{ slug: string }>>`
+    SELECT course.slug
+    FROM courses AS course
+    JOIN course_memberships AS membership
+      ON membership.course_id = course.id
+      AND membership.user_id = ${studentUserId}
+      AND membership.status = 'active'
+    WHERE course.status = 'published'
+    ORDER BY membership.granted_at, course.created_at
+    LIMIT 1
+  `;
+  return rows[0]
+    ? getStudentCourse(sql, studentUserId, rows[0].slug)
+    : null;
 }
 
 type StudentMaterialRow = {

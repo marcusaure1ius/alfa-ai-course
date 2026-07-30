@@ -9,10 +9,10 @@ describe("course Markdown boundary", () => {
   it("keeps the text-first Markdown used by Neurokurs", () => {
     expect(
       assertSafeCourseMarkdown(
-        "# Сначала понять\n\n- Затем сделать\n\n[Документация](https://example.com)",
+        "# Сначала понять\n\n> Важный контекст\n\n- Затем сделать\n\n[Документация](https://example.com)",
       ),
     ).toBe(
-      "# Сначала понять\n\n- Затем сделать\n\n[Документация](https://example.com)",
+      "# Сначала понять\n\n> Важный контекст\n\n- Затем сделать\n\n[Документация](https://example.com)",
     );
   });
 
