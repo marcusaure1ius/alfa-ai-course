@@ -87,7 +87,8 @@ function selectPlan(
 
   const operatingSystem = catalog.operatingSystems.find(
     (candidate) =>
-      candidate.family.toLowerCase() === "ubuntu" &&
+      candidate.family.toLowerCase() === "linux" &&
+      candidate.name.trim().toLowerCase() === "ubuntu" &&
       candidate.version.trim().startsWith("24.04"),
   );
   const operatingSystemId = operatingSystem

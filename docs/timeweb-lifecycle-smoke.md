@@ -90,3 +90,27 @@ AUTH_FACTOR_ENCRYPTION_KEY=<32 random bytes, base64url>
 
 Raw token, пароль, TOTP secret/code, root password, response bodies и browser
 cookies в evidence запрещены.
+
+## Read-only preflight 2026-07-30
+
+Фактически проверено production adapter без provider mutation:
+
+- test token принят Timeweb, account имеет состояние `ready`;
+- balance положительный, provider catalog не degraded;
+- `/api/v1/account/services/cost` вернул одну актуальную цену public IPv4:
+  `180 ₽/месяц`;
+- минимальный доступный preset на момент проверки: 1 vCPU, 1 GiB RAM,
+  15 GiB SSD, `149 ₽/месяц`; суммарная оценка с IPv4 — `329 ₽/месяц`;
+- Ubuntu 24.04 присутствует в provider catalog как
+  `family=linux`, `name=ubuntu`, `version=24.04`;
+- доступны один project и два SSH keys; их identifiers и names не сохраняются
+  в публичном evidence;
+- в account уже существуют один VPS и два public IPv4.
+
+Последний пункт закрывает hard limit 1 VPS, поэтому create fail-closed не
+запускался. До disposable smoke владелец должен освободить account от
+существующего VPS либо предоставить отдельный test account, утвердить числовой
+`TIMEWEB_SMOKE_BUDGET_RUB` и явно выбрать disposable project/SSH key.
+Минимальные token permissions и delete без дополнительного confirmation
+остаются непроверенными до реальной mutation. Новые платные ресурсы этим
+preflight не создавались.

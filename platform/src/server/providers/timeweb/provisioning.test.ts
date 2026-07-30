@@ -35,7 +35,7 @@ function providerPayload(url: string): unknown {
   if (url.endsWith("/os/servers")) {
     return {
       servers_os: [
-        { id: 24, family: "ubuntu", name: "Ubuntu", version: "24.04 LTS" },
+        { id: 24, family: "linux", name: "Ubuntu", version: "24.04 LTS" },
       ],
     };
   }
