@@ -43,7 +43,7 @@ function printHelp(): void {
 Требования:
   - отдельная пустая PostgreSQL database ${EXPECTED_DATABASE};
   - VERCEL_ENV=production и PLATFORM_PROVIDER=timeweb;
-  - открытые mutation gates, budget, project и SSH key;
+  - открытые mutation gates, project и SSH key;
   - Timeweb account без VPS;
   - test token, который будет отозван после smoke.
 
@@ -79,7 +79,6 @@ function requireRuntime(): void {
     throw new Error("TIMEWEB_API_TOKEN не настроен.");
   }
   for (const key of [
-    "TIMEWEB_SMOKE_BUDGET_RUB",
     "TIMEWEB_SMOKE_PROJECT_ID",
     "TIMEWEB_SMOKE_SSH_KEY_ID",
   ]) {

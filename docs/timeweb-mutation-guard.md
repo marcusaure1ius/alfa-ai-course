@@ -108,7 +108,7 @@ ownership record считается согласованным состояни�
 ресурс active и переводит среду в `cleanup_required`.
 
 Перед первой production mutation workflow повторяет полный read-only preflight:
-balance, hard limit, catalog IDs, project, SSH key и provider price обязаны
+hard limit, catalog IDs, project, SSH key и provider price обязаны
 совпасть с сохранённым plan. VPS получает `active` только при status `on`;
 installing/starting сверяются с интервалом 15 секунд в ограниченном окне.
 Unknown/blocked status или исчерпание окна переводит среду в
@@ -126,7 +126,6 @@ TIMEWEB_API_TOKEN=<encrypted production environment variable>
 TIMEWEB_MUTATIONS_ENABLED=true
 TIMEWEB_CAPABILITIES_VERIFIED=true
 TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true
-TIMEWEB_SMOKE_BUDGET_RUB=<owner-approved integer>
 TIMEWEB_SMOKE_REGION=<optional live region>
 TIMEWEB_SMOKE_PROJECT_ID=<existing disposable Timeweb project>
 TIMEWEB_SMOKE_SSH_KEY_ID=<existing smoke SSH key>
@@ -145,7 +144,7 @@ token. `TIMEWEB_API_TOKEN` не получает placeholder/value в `.env.exam
 - проверить service scope и срок token по
   [официальной инструкции Timeweb](https://timeweb.cloud/docs/account-management/token);
 - осознанно настроить отдельное permission удаления без Telegram;
-- подтвердить budget, один VPS, ownership и cleanup policy;
+- подтвердить один VPS, ownership и cleanup policy;
 - убедиться, что `/api/v1/account/services/cost` возвращает однозначную
   стоимость `floating_ip`; при отсутствии данных mutation запрещена;
 - подготовить отдельный disposable project и SSH key; root password отключён;

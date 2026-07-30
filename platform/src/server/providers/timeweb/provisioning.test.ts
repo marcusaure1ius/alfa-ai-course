@@ -93,7 +93,6 @@ const productionEnvironment = {
   TIMEWEB_CAPABILITIES_VERIFIED: "true",
   TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT: "true",
   TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME: "true",
-  TIMEWEB_SMOKE_BUDGET_RUB: "1000",
   TIMEWEB_SMOKE_PROJECT_ID: "303",
   TIMEWEB_SMOKE_SSH_KEY_ID: "404",
 };
@@ -149,21 +148,7 @@ describe("getTimewebProvisioningPreview", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(11);
   });
 
-  it("fails closed when the owner-approved budget is below provider pricing", async () => {
-    const preview = await getTimewebProvisioningPreview(
-      { ...productionEnvironment, TIMEWEB_SMOKE_BUDGET_RUB: "800" },
-      vi.fn<typeof fetch>(async (input) =>
-        Response.json(providerPayload(String(input))),
-      ),
-    );
-    expect(preview).toEqual({
-      ok: false,
-      code: "BUDGET_EXCEEDED",
-      message: "Актуальная месячная оценка превышает smoke budget.",
-    });
-  });
-
-  it("includes existing account services in the documented 30-day balance gate", async () => {
+  it("keeps provider pricing and balance informational instead of blocking mutation", async () => {
     const preview = await getTimewebProvisioningPreview(
       productionEnvironment,
       vi.fn<typeof fetch>(async (input) => {
@@ -180,11 +165,13 @@ describe("getTimewebProvisioningPreview", () => {
       }),
     );
 
-    expect(preview).toEqual({
-      ok: false,
-      code: "INSUFFICIENT_FUNDS",
-      message:
-        "Баланса недостаточно для 30 дней текущих услуг и новых VPS/IPv4.",
+    expect(preview).toMatchObject({
+      ok: true,
+      mode: "timeweb",
+      plan: {
+        balanceRoubles: 1_000,
+        requiredBalanceRoubles: 1_061,
+      },
     });
   });
 
@@ -234,8 +221,9 @@ describe("getTimewebProvisioningPreview", () => {
     await expect(
       getTimewebProvisioningPreview(productionEnvironment, fetchImpl),
     ).resolves.toMatchObject({
-      ok: false,
-      code: "INSUFFICIENT_FUNDS",
+      ok: true,
+      mode: "timeweb",
+      plan: { requiredBalanceRoubles: 1_241 },
     });
   });
 

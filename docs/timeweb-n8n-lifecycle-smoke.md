@@ -30,12 +30,11 @@ volumes.
 
 ## Порядок create
 
-1. Read-only preflight проверяет account, budget, Ubuntu, project, SSH key,
-   DNS zone и отсутствие `n8n.neurokurs.ru`. Balance gate использует
-   документированное требование Timeweb на 30 дней: текущая `monthly_fee`
-   аккаунта плюс стоимость новых VPS и IPv4. Повторный preflight после создания
-   exact owned IP не считает этот уже оплачиваемый IP второй раз только после
-   проверки ID, адреса, expected zone и состояния `unbound`.
+1. Read-only preflight проверяет account, Ubuntu, project, SSH key, DNS zone и
+   отсутствие `n8n.neurokurs.ru`. Цена, баланс и `monthly_fee` отображаются
+   только как телеметрия: клиентский budget/balance gate отсутствует, а решение
+   о допустимости списания принимает Timeweb. Повторный preflight после создания
+   exact owned IP проверяет ID, адрес, expected zone и состояние `unbound`.
 2. Platform транзакционно резервирует hostname.
 3. Создаётся floating IPv4 с durable ambiguity marker.
 4. До DNS POST сохраняются hash целевого `hostname:IPv4` и hash всех baseline
@@ -78,7 +77,7 @@ Terraform provider. В частности, fresh VPS проходит transient
 ## Реальный disposable E2E
 
 Локальный `.env` должен иметь права `0600` и содержать те же production-shaped
-gates, budget/project/SSH key и test token, что описаны в срезе 1A. Отдельный
+gates, project/SSH key и test token, что описаны в срезе 1A. Отдельный
 gate `TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME=true` подтверждает отсутствие
 параллельных A/CNAME mutations для approved hostname. База должна быть отдельной
 и пустой:
@@ -145,11 +144,18 @@ VPS как owned и удаляет его; поздний или недоказ�
 - delete HTTP 423 трактуется как permanent confirmation gate, а не transient
   provider outage.
 
-Первопричина неуспешных `no_paid` smoke была в preflight: он сравнивал balance
-только с новыми VPS+IPv4 и не включал уже оплачиваемую `monthly_fee` baseline
-аккаунта. На момент проверки balance составлял 508,72 ₽, текущая monthly fee —
-181 ₽, новые VPS+IPv4 — 387 ₽; документированный 30-дневный порог был около
-568 ₽. После исправления такой запуск блокируется до provider mutation.
+Ранее клиентский preflight блокировал запуск по расчётному 30-дневному порогу.
+По решению владельца этот gate удалён: balance и `monthly_fee` остаются
+наблюдаемыми полями, но не останавливают mutation. Provider status `no_paid`
+по-прежнему считается terminal и запускает обязательный guarded cleanup.
+
+После удаления gate выполнены три разрешённые production-shaped попытки.
+Каждая дошла до Timeweb mutation, сам provider сохранил terminal
+`server.status=no_paid`, после чего guarded recovery завершил environment как
+`deleted`. Финальный read-only baseline: account `ready`, 0 VPS, один исходный
+unbound IP и отсутствие `n8n.neurokurs.ru`. Это provider rejection, а не
+клиентский лимит; успешный fresh-VPS E2E требует изменения состояния account у
+Timeweb.
 
 В evidence сохраняются только operation IDs, commit SHA, redacted timeline,
 результаты проверок и итоговые количества ресурсов. Secrets и raw provider

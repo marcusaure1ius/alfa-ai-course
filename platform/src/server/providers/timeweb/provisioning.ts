@@ -47,7 +47,6 @@ export type TimewebProvisioningPreview =
         | "ACTIVE_SERVER_LIMIT"
         | "UBUNTU_2404_UNAVAILABLE"
         | "PRESET_UNAVAILABLE"
-        | "BUDGET_NOT_CONFIGURED"
         | "PUBLIC_IP_PRICE_NOT_CONFIGURED"
         | "PUBLIC_IP_OWNERSHIP_INVALID"
         | "SMOKE_REGION_UNAVAILABLE"
@@ -56,9 +55,7 @@ export type TimewebProvisioningPreview =
         | "SMOKE_SSH_KEY_NOT_CONFIGURED"
         | "SMOKE_SSH_KEY_UNAVAILABLE"
         | "DNS_ZONE_UNAVAILABLE"
-        | "DNS_HOSTNAME_CONFLICT"
-        | "BUDGET_EXCEEDED"
-        | "INSUFFICIENT_FUNDS";
+        | "DNS_HOSTNAME_CONFLICT";
       message: string;
     }>;
 
@@ -71,7 +68,6 @@ function positiveInteger(value: string): number | null {
 
 function selectPlan(
   catalog: TimewebCatalogSnapshot,
-  budgetRoubles: number | null,
   projectId: number | null,
   sshKeyId: number | null,
   preferredRegion: string | null,
@@ -180,13 +176,6 @@ function selectPlan(
     ownedPublicIpAlreadyBilled = true;
   }
 
-  if (catalog.source === "timeweb" && budgetRoubles == null) {
-    return {
-      ok: false,
-      code: "BUDGET_NOT_CONFIGURED",
-      message: "Не задан owner-approved TIMEWEB_SMOKE_BUDGET_RUB.",
-    };
-  }
   if (catalog.source === "timeweb" && catalog.publicIpMonthlyRoubles == null) {
     return {
       ok: false,
@@ -236,22 +225,6 @@ function selectPlan(
     catalog.balance.monthlyFeeRoubles +
     selected.preset.priceRoubles +
     (ownedPublicIpAlreadyBilled ? 0 : monthlyPublicIpRoubles);
-  if (budgetRoubles != null && monthlyTotalRoubles > budgetRoubles) {
-    return {
-      ok: false,
-      code: "BUDGET_EXCEEDED",
-      message: "Актуальная месячная оценка превышает smoke budget.",
-    };
-  }
-  if (catalog.balance.amount < requiredBalanceRoubles) {
-    return {
-      ok: false,
-      code: "INSUFFICIENT_FUNDS",
-      message:
-        "Баланса недостаточно для 30 дней текущих услуг и новых VPS/IPv4.",
-    };
-  }
-
   return {
     ok: true,
     mode: catalog.source,
@@ -313,10 +286,6 @@ export async function getTimewebProvisioningPreview(
     };
   }
   const catalog = await adapter.discover();
-  const budget =
-    gate.mode === "timeweb"
-      ? positiveInteger(environment.TIMEWEB_SMOKE_BUDGET_RUB ?? "")
-      : 10_000;
   const projectId =
     gate.mode === "timeweb"
       ? positiveInteger(environment.TIMEWEB_SMOKE_PROJECT_ID ?? "")
@@ -342,7 +311,6 @@ export async function getTimewebProvisioningPreview(
   const preferredRegion = configuredRegion || null;
   const preview = selectPlan(
     catalog,
-    budget,
     projectId,
     sshKeyId,
     preferredRegion,

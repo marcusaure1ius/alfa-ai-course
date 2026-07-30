@@ -10,24 +10,22 @@
 
 До включения mutation все пункты должны иметь фактическое evidence:
 
-1. Владелец подтвердил числовой `TIMEWEB_SMOKE_BUDGET_RUB`.
-2. Timeweb API `/api/v1/account/services/cost` вернул актуальную однозначную
+1. Timeweb API `/api/v1/account/services/cost` вернул актуальную однозначную
    стоимость `floating_ip`; если активного ценового источника нет, smoke
-   fail-closed и платная mutation запрещена.
-   `/api/v1/account/finances` также обязан подтверждать balance не ниже суммы
-   текущей `monthly_fee` аккаунта и 30-дневной стоимости новых ресурсов.
-3. Подготовлены существующие disposable `TIMEWEB_SMOKE_PROJECT_ID` и
+   fail-closed и платная mutation запрещена. Баланс и `monthly_fee` сохраняются
+   только как телеметрия; решение о допустимости списания принимает Timeweb.
+2. Подготовлены существующие disposable `TIMEWEB_SMOKE_PROJECT_ID` и
    `TIMEWEB_SMOKE_SSH_KEY_ID`; создание дополнительных project/key в smoke не
    выполняется, root password отключён.
-4. Read-only connection показывает готовый account, актуальный баланс, Ubuntu
+3. Read-only connection показывает готовый account, актуальный баланс, Ubuntu
    24.04, preset, регион и availability zone.
-5. В Timeweb account нет другого VPS; platform database не содержит live среды.
-6. Production admin имеет verified TOTP factor и выполняет свежую re-auth.
-7. Token ограничен минимально доступными service permissions и разрешает
+4. В Timeweb account нет другого VPS; platform database не содержит live среды.
+5. Production admin имеет verified TOTP factor и выполняет свежую re-auth.
+6. Token ограничен минимально доступными service permissions и разрешает
    automatic delete без Telegram-кода.
-8. Token и `AUTH_FACTOR_ENCRYPTION_KEY` находятся только в Vercel Production;
+7. Token и `AUTH_FACTOR_ENCRYPTION_KEY` находятся только в Vercel Production;
    Preview и Development не содержат их.
-9. Kill-switches включаются только на время подтверждённого smoke.
+8. Kill-switches включаются только на время подтверждённого smoke.
 
 Для уже созданного administrator TOTP добавляется одноразовой CLI-командой.
 Secret и первый текущий code вводятся скрытыми prompts, не попадают в shell
@@ -57,7 +55,6 @@ TIMEWEB_MUTATIONS_ENABLED=true
 TIMEWEB_CAPABILITIES_VERIFIED=true
 TIMEWEB_SMOKE_EXCLUSIVE_ACCOUNT=true
 TIMEWEB_SMOKE_EXCLUSIVE_DNS_HOSTNAME=true
-TIMEWEB_SMOKE_BUDGET_RUB=<целое число рублей>
 TIMEWEB_SMOKE_REGION=<необязательный live region>
 TIMEWEB_SMOKE_PROJECT_ID=<ID disposable проекта>
 TIMEWEB_SMOKE_SSH_KEY_ID=<ID существующего SSH-ключа>

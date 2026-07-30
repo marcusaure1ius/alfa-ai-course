@@ -69,7 +69,8 @@ self-introspection token и не описан action-level выбор отдел
 - token ограничен минимальным набором сервисов;
 - срок действия подходит эксплуатационной политике;
 - delete-bypass настроен осознанно;
-- budget и cleanup gates выполнены.
+- provider price наблюдаема, ownership и cleanup gates выполнены; balance не
+  используется как клиентский блокирующий лимит.
 
 ## Runtime gate
 

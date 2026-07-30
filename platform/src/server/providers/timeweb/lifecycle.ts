@@ -1582,7 +1582,7 @@ class ProductionTimewebLifecycleAdapter
           "public_ip",
         );
         const address = current?.publicMetadata.address;
-        if (typeof address !== "string") {
+        if (!current || typeof address !== "string") {
           throw new LifecycleProviderError(
             "PUBLIC_IP_NOT_FOUND",
             "Metadata публичного IP недоступна для cleanup.",
