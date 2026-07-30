@@ -24,17 +24,6 @@ describe("TimewebMutationHttpAdapter", () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
-        Response.json(
-          {
-            ip: {
-              id: publicIpResource.externalId,
-              ip: publicIpResource.address,
-            },
-          },
-          { status: 201 },
-        ),
-      )
-      .mockResolvedValueOnce(
         new Response(JSON.stringify({ server: { id: 54321 } }), {
           status: 201,
           headers: { "content-type": "application/json" },
@@ -43,8 +32,20 @@ describe("TimewebMutationHttpAdapter", () => {
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ server: { id: 54321 } }), {
+        new Response(JSON.stringify({ server: { id: 54321, status: "on" } }), {
           status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          ips: [
+            {
+              id: publicIpResource.externalId,
+              ip: publicIpResource.address,
+              resource_type: "server",
+              resource_id: 54321,
+            },
+          ],
         }),
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
@@ -62,19 +63,14 @@ describe("TimewebMutationHttpAdapter", () => {
     );
 
     await expect(
-      adapter.createPublicIp({
-        environmentId,
-        availabilityZone: "spb-3",
-      }),
-    ).resolves.toEqual(publicIpResource);
-    await expect(
       adapter.createServer({
         environmentId,
         name: "Основная среда",
         presetId: 101,
         operatingSystemId: 202,
         availabilityZone: "spb-3",
-        publicIpAddress: publicIpResource.address,
+        projectId: 303,
+        sshKeyId: 404,
       }),
     ).resolves.toEqual(resource);
     await adapter.updateServer({ resource, name: "Переименованная среда" });
@@ -82,7 +78,11 @@ describe("TimewebMutationHttpAdapter", () => {
     await expect(adapter.reconcileServer(resource)).resolves.toEqual({
       state: "present",
       resource,
+      status: { state: "supported", value: "on" },
     });
+    await expect(adapter.findPublicIpByServer(resource)).resolves.toEqual(
+      publicIpResource,
+    );
     await adapter.deletePublicIp(publicIpResource);
     await expect(
       adapter.reconcilePublicIp(publicIpResource),
@@ -99,14 +99,6 @@ describe("TimewebMutationHttpAdapter", () => {
       })),
     ).toEqual([
       {
-        url: "https://api.timeweb.cloud/api/v1/floating-ips",
-        method: "POST",
-        body: JSON.stringify({
-          availability_zone: "spb-3",
-          is_ddos_guard: false,
-        }),
-      },
-      {
         url: "https://api.timeweb.cloud/api/v1/servers",
         method: "POST",
         body: JSON.stringify({
@@ -115,7 +107,10 @@ describe("TimewebMutationHttpAdapter", () => {
           preset_id: 101,
           os_id: 202,
           availability_zone: "spb-3",
-          network: { floating_ip: "203.0.113.10" },
+          project_id: 303,
+          ssh_keys_ids: [404],
+          is_root_password_required: false,
+          network: { floating_ip: "create_ip" },
         }),
       },
       {
@@ -130,6 +125,11 @@ describe("TimewebMutationHttpAdapter", () => {
       },
       {
         url: "https://api.timeweb.cloud/api/v1/servers/54321",
+        method: "GET",
+        body: undefined,
+      },
+      {
+        url: "https://api.timeweb.cloud/api/v1/floating-ips",
         method: "GET",
         body: undefined,
       },
@@ -182,6 +182,22 @@ describe("TimewebMutationHttpAdapter", () => {
     ).rejects.toMatchObject({ code: "UPSTREAM_UNAVAILABLE", retryable: true });
   });
 
+  it("preserves a non-ready provider status during reconciliation", async () => {
+    const adapter = new TimewebMutationHttpAdapter(
+      "synthetic-test-token",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          Response.json({ server: { id: 54321, status: "installing" } }),
+        ),
+    );
+    await expect(adapter.reconcileServer(resource)).resolves.toEqual({
+      state: "present",
+      resource,
+      status: { state: "supported", value: "installing" },
+    });
+  });
+
   it("redacts provider bodies and tokens from typed errors", async () => {
     const adapter = new TimewebMutationHttpAdapter(
       "synthetic-test-token",
@@ -200,6 +216,27 @@ describe("TimewebMutationHttpAdapter", () => {
     expect(JSON.stringify(error)).not.toMatch(
       /synthetic-test-token|secret provider diagnostic|leaked-token/,
     );
+  });
+
+  it("classifies provider validation errors as permanent", async () => {
+    const adapter = new TimewebMutationHttpAdapter(
+      "synthetic-test-token",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({ message: "validation details" }, { status: 400 }),
+      ),
+    );
+    await expect(adapter.createServer({
+      environmentId,
+      name: "Disposable smoke",
+      presetId: 101,
+      operatingSystemId: 202,
+      availabilityZone: "spb-3",
+      projectId: 303,
+      sshKeyId: 404,
+    })).rejects.toMatchObject({
+      code: "INVALID_REQUEST",
+      retryable: false,
+    });
   });
 });
 

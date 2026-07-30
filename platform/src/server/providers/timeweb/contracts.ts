@@ -48,6 +48,9 @@ export type TimewebReadCapabilities = Readonly<{
   balance: true;
   accountStatus: true;
   floatingIps: true;
+  serviceCosts: true;
+  projects: true;
+  sshKeys: true;
   tokenPermissions: Readonly<{
     serviceScope: "manual-verification-required";
     deleteWithoutConfirmation: "manual-verification-required";
@@ -112,6 +115,9 @@ export type TimewebCatalogSnapshot = Readonly<{
       resourceId: string | null;
     }>
   >;
+  publicIpMonthlyRoubles: number | null;
+  projects: ReadonlyArray<Readonly<{ id: string; name: string }>>;
+  sshKeys: ReadonlyArray<Readonly<{ id: string; name: string }>>;
   capabilities: TimewebReadCapabilities;
 }>;
 
@@ -146,6 +152,7 @@ export type TimewebProviderErrorCode =
   | "RATE_LIMITED"
   | "UPSTREAM_UNAVAILABLE"
   | "TIMEOUT"
+  | "INVALID_REQUEST"
   | "INVALID_RESPONSE";
 
 export interface TimewebReadAdapter {
@@ -159,12 +166,8 @@ export type TimewebCreateServerInput = Readonly<{
   presetId: number;
   operatingSystemId: number;
   availabilityZone: string;
-  publicIpAddress: string;
-}>;
-
-export type TimewebCreatePublicIpInput = Readonly<{
-  environmentId: string;
-  availabilityZone: string;
+  projectId: number;
+  sshKeyId: number;
 }>;
 
 export type TimewebPublicIpResource = OwnedProviderResource &
@@ -183,6 +186,7 @@ export type TimewebServerReconciliation =
   | Readonly<{
       state: "present";
       resource: OwnedProviderResource & Readonly<{ kind: "server" }>;
+      status: TimewebServerStatus;
     }>;
 
 export type TimewebPublicIpReconciliation =
@@ -198,7 +202,6 @@ export type TimewebPublicIpReconciliation =
  */
 export interface TimewebMutationAdapter {
   readonly version: TimewebMutationAdapterVersion;
-  createPublicIp(input: TimewebCreatePublicIpInput): Promise<TimewebPublicIpResource>;
   createServer(
     input: TimewebCreateServerInput,
   ): Promise<OwnedProviderResource & Readonly<{ kind: "server" }>>;
@@ -212,17 +215,15 @@ export interface TimewebMutationAdapter {
   findServerByEnvironmentId(
     environmentId: string,
   ): Promise<(OwnedProviderResource & Readonly<{ kind: "server" }>) | null>;
+  findPublicIpByServer(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<TimewebPublicIpResource | null>;
   deletePublicIp(
     resource: OwnedProviderResource & Readonly<{ kind: "public_ip" }>,
   ): Promise<void>;
   reconcilePublicIp(
     resource: TimewebPublicIpResource,
   ): Promise<TimewebPublicIpReconciliation>;
-  findNewPublicIp(
-    environmentId: string,
-    availabilityZone: string,
-    excludedIds: readonly string[],
-  ): Promise<TimewebPublicIpResource | null>;
 }
 
 /**

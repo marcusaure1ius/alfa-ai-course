@@ -3,12 +3,13 @@ import "server-only";
 import {
   TIMEWEB_MUTATION_ADAPTER_VERSION,
   type OwnedProviderResource,
-  type TimewebCreatePublicIpInput,
   type TimewebCreateServerInput,
   type TimewebMutationAdapter,
   type TimewebPublicIpReconciliation,
   type TimewebPublicIpResource,
   type TimewebServerReconciliation,
+  type TimewebServerStatus,
+  type TimewebSupportedStatus,
   type TimewebUpdateServerInput,
 } from "./contracts";
 import { TimewebProviderError } from "./read-only";
@@ -25,6 +26,19 @@ const ENVIRONMENT_ID =
 const AVAILABILITY_ZONE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 const IPV4 =
   /^(?:(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$/;
+const SUPPORTED_SERVER_STATUSES = new Set<TimewebSupportedStatus>([
+  "on",
+  "off",
+  "installing",
+  "reinstalling",
+  "starting",
+  "stopping",
+  "rebooting",
+  "shutting_down",
+  "hard_rebooting",
+  "hard_shutting_down",
+  "blocked",
+]);
 type FetchLike = typeof fetch;
 type ServerEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -110,6 +124,13 @@ function ownedPublicIp(
 }
 
 function providerError(status: number): TimewebProviderError {
+  if (status === 400 || status === 422) {
+    return new TimewebProviderError(
+      "INVALID_REQUEST",
+      "Timeweb отклонил validated mutation-запрос.",
+      false,
+    );
+  }
   if (status === 404) {
     return new TimewebProviderError(
       "NOT_FOUND",
@@ -172,6 +193,39 @@ function responseServerId(payload: unknown): string {
     );
   }
   return value;
+}
+
+function responseServerStatus(payload: unknown): TimewebServerStatus {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb не вернул состояние сервера.",
+      false,
+    );
+  }
+  const server = (payload as Record<string, unknown>).server;
+  if (!server || typeof server !== "object" || Array.isArray(server)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb не вернул состояние сервера.",
+      false,
+    );
+  }
+  const raw = (server as Record<string, unknown>).status;
+  const normalized =
+    typeof raw === "string"
+      ? raw.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_").slice(0, 64)
+      : "";
+  if (SUPPORTED_SERVER_STATUSES.has(normalized as TimewebSupportedStatus)) {
+    return {
+      state: "supported",
+      value: normalized as TimewebSupportedStatus,
+    };
+  }
+  return {
+    state: "unsupported",
+    providerValue: normalized || "unknown",
+  };
 }
 
 function responsePublicIp(payload: unknown, environmentId: string): TimewebPublicIpResource {
@@ -285,26 +339,6 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
     }
   }
 
-  async createPublicIp(
-    input: TimewebCreatePublicIpInput,
-  ): Promise<TimewebPublicIpResource> {
-    if (!ENVIRONMENT_ID.test(input.environmentId)) {
-      throw new TimewebProviderError(
-        "INVALID_RESPONSE",
-        "Environment не прошёл локальную проверку.",
-        false,
-      );
-    }
-    const response = await this.request("POST", PUBLIC_IP_COLLECTION_PATH, {
-      availability_zone: validZone(input.availabilityZone),
-      is_ddos_guard: false,
-    });
-    return responsePublicIp(
-      await response.json().catch(() => null),
-      input.environmentId,
-    );
-  }
-
   async createServer(
     input: TimewebCreateServerInput,
   ): Promise<OwnedProviderResource & Readonly<{ kind: "server" }>> {
@@ -321,7 +355,10 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
       preset_id: positiveInteger(input.presetId, "Preset"),
       os_id: positiveInteger(input.operatingSystemId, "Operating system"),
       availability_zone: validZone(input.availabilityZone),
-      network: { floating_ip: validIpv4(input.publicIpAddress) },
+      project_id: positiveInteger(input.projectId, "Project"),
+      ssh_keys_ids: [positiveInteger(input.sshKeyId, "SSH key")],
+      is_root_password_required: false,
+      network: { floating_ip: "create_ip" },
     });
     const payload = await response.json().catch(() => null);
     return {
@@ -365,11 +402,16 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
   ): Promise<TimewebServerReconciliation> {
     const verified = ownedServer(resource);
     try {
-      await this.request(
+      const response = await this.request(
         "GET",
         `${SERVER_COLLECTION_PATH}/${verified.externalId}`,
       );
-      return { state: "present", resource: verified };
+      const payload = await response.json().catch(() => null);
+      return {
+        state: "present",
+        resource: verified,
+        status: responseServerStatus(payload),
+      };
     } catch (error) {
       if (
         error instanceof TimewebProviderError &&
@@ -418,6 +460,33 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
     return { externalId, kind: "server", environmentId };
   }
 
+  async findPublicIpByServer(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<TimewebPublicIpResource | null> {
+    const server = ownedServer(resource);
+    const response = await this.request("GET", PUBLIC_IP_COLLECTION_PATH);
+    const matches = objectArray(
+      await response.json().catch(() => null),
+      "ips",
+    ).filter((ip) => {
+      const resourceId =
+        typeof ip.resource_id === "number" && Number.isSafeInteger(ip.resource_id)
+          ? String(ip.resource_id)
+          : ip.resource_id;
+      return ip.resource_type === "server" && resourceId === server.externalId;
+    });
+    if (matches.length > 1) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Timeweb вернул несколько IP для disposable server.",
+        false,
+      );
+    }
+    return matches[0]
+      ? responsePublicIp({ ip: matches[0] }, server.environmentId)
+      : null;
+  }
+
   async deletePublicIp(
     resource: OwnedProviderResource & Readonly<{ kind: "public_ip" }>,
   ): Promise<void> {
@@ -463,36 +532,6 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
     }
   }
 
-  async findNewPublicIp(
-    environmentId: string,
-    availabilityZone: string,
-    excludedIds: readonly string[],
-  ): Promise<TimewebPublicIpResource | null> {
-    if (!ENVIRONMENT_ID.test(environmentId)) {
-      throw new TimewebProviderError(
-        "INVALID_RESPONSE",
-        "Environment не прошёл локальную проверку.",
-        false,
-      );
-    }
-    const excluded = new Set(
-      excludedIds.filter((id) => PUBLIC_IP_ID.test(id)),
-    );
-    const zone = validZone(availabilityZone);
-    const response = await this.request("GET", PUBLIC_IP_COLLECTION_PATH);
-    const candidates = objectArray(
-      await response.json().catch(() => null),
-      "ips",
-    ).filter(
-      (ip) =>
-        typeof ip.id === "string" &&
-        !excluded.has(ip.id) &&
-        ip.availability_zone === zone &&
-        ip.resource_id == null,
-    );
-    if (candidates.length !== 1) return null;
-    return responsePublicIp({ ip: candidates[0] }, environmentId);
-  }
 }
 
 /**

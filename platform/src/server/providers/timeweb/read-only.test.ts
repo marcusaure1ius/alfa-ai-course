@@ -76,6 +76,19 @@ function successfulPayload(url: string): unknown {
       ],
     };
   }
+  if (url.endsWith("/api/v1/account/services/cost")) {
+    return {
+      services_costs: [
+        { type: "floating_ip", cost: 180, service_id: "hidden" },
+      ],
+    };
+  }
+  if (url.endsWith("/api/v1/projects")) {
+    return { projects: [{ id: 303, name: "Disposable smoke" }] };
+  }
+  if (url.endsWith("/api/v1/ssh-keys")) {
+    return { ssh_keys: [{ id: 404, name: "Smoke key", body: "must-not-leave" }] };
+  }
   throw new Error(`Unexpected test URL: ${url}`);
 }
 
@@ -95,7 +108,7 @@ describe("TimewebReadOnlyAdapter", () => {
     );
     const snapshot = await adapter.discover();
 
-    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect(fetchMock).toHaveBeenCalledTimes(10);
     expect(
       fetchMock.mock.calls.map(([url, init]) => ({
         url,
@@ -111,6 +124,9 @@ describe("TimewebReadOnlyAdapter", () => {
         "/api/v1/os/servers",
         "/api/v2/locations",
         "/api/v1/floating-ips",
+        "/api/v1/account/services/cost",
+        "/api/v1/projects",
+        "/api/v1/ssh-keys",
       ].map((path) => ({
         url: `https://api.timeweb.cloud${path}`,
         method: "GET",
@@ -138,12 +154,16 @@ describe("TimewebReadOnlyAdapter", () => {
           resourceId: "101",
         },
       ],
+      publicIpMonthlyRoubles: 180,
+      projects: [{ id: "303", name: "Disposable smoke" }],
+      sshKeys: [{ id: "404", name: "Smoke key" }],
     });
     const serialized = JSON.stringify(snapshot);
     expect(serialized).not.toContain(testCredential);
     expect(serialized).not.toContain("must-not-leave-adapter");
     expect(serialized).not.toContain("company_info");
     expect(serialized).not.toContain("total_paid");
+    expect(serialized).not.toContain("must-not-leave");
     expect(JSON.stringify(adapter)).not.toContain(testCredential);
   });
 

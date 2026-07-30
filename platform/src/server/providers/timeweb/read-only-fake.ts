@@ -45,6 +45,9 @@ export class FakeTimewebReadAdapter implements TimewebReadAdapter {
         },
       ],
       floatingIps: [],
+      publicIpMonthlyRoubles: 180,
+      projects: [{ id: "1", name: "Fake disposable project" }],
+      sshKeys: [{ id: "1", name: "Fake smoke SSH key" }],
       capabilities: {
         servers: true,
         presets: true,
@@ -53,6 +56,9 @@ export class FakeTimewebReadAdapter implements TimewebReadAdapter {
         balance: true,
         accountStatus: true,
         floatingIps: true,
+        serviceCosts: true,
+        projects: true,
+        sshKeys: true,
         tokenPermissions: {
           serviceScope: "manual-verification-required",
           deleteWithoutConfirmation: "manual-verification-required",

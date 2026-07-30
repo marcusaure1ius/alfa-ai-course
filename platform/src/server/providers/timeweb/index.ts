@@ -11,7 +11,6 @@ export {
   type TimewebAdapter,
   type TimewebAdapterVersion,
   type TimewebCreateServerInput,
-  type TimewebCreatePublicIpInput,
   type TimewebMutationAdapter,
   type TimewebMutationAdapterVersion,
   type TimewebProviderErrorCode,

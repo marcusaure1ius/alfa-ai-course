@@ -55,6 +55,18 @@ export async function requireFreshAdmin(request: Request): Promise<AccessResult>
     };
   }
   if (process.env.VERCEL_ENV === "production") {
+    if (
+      !result.session.mfaAuthenticatedAt ||
+      !hasFreshReauthentication(result.session.mfaAuthenticatedAt)
+    ) {
+      return {
+        ok: false,
+        response: Response.json(
+          { error: "Для production mutation требуется свежий MFA challenge." },
+          { status: 403, headers: { "cache-control": "no-store" } },
+        ),
+      };
+    }
     const factors = await getDatabase()<{ present: boolean }[]>`
       SELECT EXISTS (
         SELECT 1

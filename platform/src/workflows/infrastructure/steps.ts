@@ -17,17 +17,21 @@ import {
 import { classifyProviderError } from "@/server/operations/state";
 import {
   createInfrastructureLifecycleAdapter,
-  isProductionTimewebWorkflow,
   lifecycleProviderError,
+  operationUsesProductionTimeweb,
 } from "@/server/providers/timeweb/lifecycle";
 
 async function adapter(command: WorkflowCommand) {
   return createInfrastructureLifecycleAdapter(command);
 }
 
-export async function providerSliceStep(): Promise<"production-1a" | "fake-foundation"> {
+export async function providerSliceStep(
+  command: WorkflowCommand,
+): Promise<"production-1a" | "fake-foundation"> {
   "use step";
-  return isProductionTimewebWorkflow() ? "production-1a" : "fake-foundation";
+  return (await operationUsesProductionTimeweb(command))
+    ? "production-1a"
+    : "fake-foundation";
 }
 
 async function failProviderStep(
@@ -35,6 +39,7 @@ async function failProviderStep(
   key: string,
   executionToken: string,
   error: Readonly<{ code: string; message: string }>,
+  retryAfterMs = 1_000,
 ): Promise<never> {
   const sql = getDatabase();
   const retryClass = classifyProviderError(error.code);
@@ -51,13 +56,18 @@ async function failProviderStep(
       message: error.message,
     });
     try {
-      await transitionEnvironment(sql, command.operationId, "creating", "degraded");
+      await transitionEnvironment(
+        sql,
+        command.operationId,
+        "creating",
+        key === "reconcile_server" ? "cleanup_required" : "degraded",
+      );
     } catch {
       // A replay may already have moved the environment to its terminal state.
     }
     throw new FatalError(error.message);
   }
-  throw new RetryableError(error.message, { retryAfter: 50 });
+  throw new RetryableError(error.message, { retryAfter: retryAfterMs });
 }
 
 function requireStepClaim(step: {
@@ -176,17 +186,51 @@ export async function reconcileServerStep(
   } catch (error) {
     const providerError = lifecycleProviderError(error);
     if (providerError) {
+      if (
+        providerError.code === "SERVER_NOT_READY" &&
+        step.attempts >= 20
+      ) {
+        await finishStep(
+          sql,
+          command.operationId,
+          "reconcile_server",
+          executionToken,
+          {
+            status: "failed",
+            code: "RECONCILE_EXHAUSTED",
+            message:
+              "Timeweb VPS не перешёл в ready за ограниченное окно reconciliation.",
+            retryClass: "permanent",
+          },
+        );
+        await finishOperation(sql, command.operationId, {
+          status: "failed",
+          code: "RECONCILE_EXHAUSTED",
+          message:
+            "Timeweb VPS требует cleanup после исчерпания reconciliation.",
+        });
+        await transitionEnvironment(
+          sql,
+          command.operationId,
+          "creating",
+          "cleanup_required",
+        );
+        throw new FatalError(
+          "Timeweb VPS не перешёл в ready; требуется cleanup.",
+        );
+      }
       await failProviderStep(
         command,
         "reconcile_server",
         executionToken,
         providerError,
+        15_000,
       );
     }
     throw error;
   }
 }
-reconcileServerStep.maxRetries = 8;
+reconcileServerStep.maxRetries = 20;
 
 export async function configureDnsStep(
   command: WorkflowCommand,

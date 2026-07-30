@@ -51,6 +51,15 @@ function providerPayload(url: string): unknown {
     };
   }
   if (url.endsWith("/floating-ips")) return { ips: [] };
+  if (url.endsWith("/account/services/cost")) {
+    return { services_costs: [{ type: "floating_ip", cost: 180 }] };
+  }
+  if (url.endsWith("/api/v1/projects")) {
+    return { projects: [{ id: 303, name: "Disposable smoke" }] };
+  }
+  if (url.endsWith("/api/v1/ssh-keys")) {
+    return { ssh_keys: [{ id: 404, name: "Smoke key" }] };
+  }
   throw new Error(`Unexpected URL ${url}`);
 }
 
@@ -61,6 +70,8 @@ const productionEnvironment = {
   TIMEWEB_MUTATIONS_ENABLED: "true",
   TIMEWEB_CAPABILITIES_VERIFIED: "true",
   TIMEWEB_SMOKE_BUDGET_RUB: "1000",
+  TIMEWEB_SMOKE_PROJECT_ID: "303",
+  TIMEWEB_SMOKE_SSH_KEY_ID: "404",
 };
 
 describe("getTimewebProvisioningPreview", () => {
@@ -89,9 +100,11 @@ describe("getTimewebProvisioningPreview", () => {
         monthlyPublicIpRoubles: 180,
         monthlyTotalRoubles: 880,
         balanceRoubles: 2_000,
+        projectId: 303,
+        sshKeyId: 404,
       }),
     });
-    expect(fetchImpl).toHaveBeenCalledTimes(7);
+    expect(fetchImpl).toHaveBeenCalledTimes(10);
   });
 
   it("fails closed when the owner-approved budget is below provider pricing", async () => {
@@ -105,6 +118,22 @@ describe("getTimewebProvisioningPreview", () => {
       ok: false,
       code: "BUDGET_EXCEEDED",
       message: "Актуальная месячная оценка превышает smoke budget.",
+    });
+  });
+
+  it("fails closed when Timeweb API has no current public IPv4 price", async () => {
+    const preview = await getTimewebProvisioningPreview(
+      productionEnvironment,
+      vi.fn<typeof fetch>(async (input) => {
+        if (String(input).endsWith("/account/services/cost")) {
+          return Response.json({ services_costs: [] });
+        }
+        return Response.json(providerPayload(String(input)));
+      }),
+    );
+    expect(preview).toMatchObject({
+      ok: false,
+      code: "PUBLIC_IP_PRICE_NOT_CONFIGURED",
     });
   });
 });

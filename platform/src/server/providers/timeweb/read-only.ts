@@ -20,6 +20,9 @@ const READ_ENDPOINTS = {
   operatingSystems: "/api/v1/os/servers",
   locations: "/api/v2/locations",
   floatingIps: "/api/v1/floating-ips",
+  serviceCosts: "/api/v1/account/services/cost",
+  projects: "/api/v1/projects",
+  sshKeys: "/api/v1/ssh-keys",
 } as const;
 const SUPPORTED_STATUSES = new Set<TimewebSupportedStatus>([
   "on",
@@ -121,6 +124,30 @@ function invalidResponse(): TimewebProviderError {
     "Timeweb вернул ответ неизвестного формата.",
     false,
   );
+}
+
+function publicIpMonthlyPrice(payload: unknown): number | null {
+  const root = record(payload);
+  const costs = array(root.services_costs);
+  const prices = new Set<number>();
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const entry = value as JsonRecord;
+    const kind =
+      typeof entry.type === "string"
+        ? entry.type.toLowerCase().replace(/-/g, "_")
+        : "";
+    if (kind === "floating_ip" && typeof entry.cost === "number" && entry.cost > 0) {
+      prices.add(entry.cost);
+    }
+    if (entry.services !== undefined) visit(entry.services);
+  };
+  visit(costs);
+  return prices.size === 1 ? [...prices][0]! : null;
 }
 
 function errorForStatus(
@@ -230,6 +257,9 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
       osPayload,
       locationsPayload,
       floatingIpsPayload,
+      serviceCostsPayload,
+      projectsPayload,
+      sshKeysPayload,
     ] =
       await Promise.all([
         this.get(READ_ENDPOINTS.account),
@@ -239,6 +269,9 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
         this.get(READ_ENDPOINTS.operatingSystems),
         this.get(READ_ENDPOINTS.locations),
         this.get(READ_ENDPOINTS.floatingIps),
+        this.get(READ_ENDPOINTS.serviceCosts),
+        this.get(READ_ENDPOINTS.projects),
+        this.get(READ_ENDPOINTS.sshKeys),
       ]);
 
     const account = record(record(accountPayload).status);
@@ -295,6 +328,14 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
           ip.resource_id == null ? null : identifier(ip.resource_id),
       };
     });
+    const projects = array(record(projectsPayload).projects).map((value) => {
+      const project = record(value);
+      return { id: identifier(project.id), name: string(project.name) };
+    });
+    const sshKeys = array(record(sshKeysPayload).ssh_keys).map((value) => {
+      const key = record(value);
+      return { id: identifier(key.id), name: string(key.name) };
+    });
     const degraded = servers.some((server) => server.status.state === "unsupported");
 
     return {
@@ -314,6 +355,9 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
       operatingSystems,
       locations,
       floatingIps,
+      publicIpMonthlyRoubles: publicIpMonthlyPrice(serviceCostsPayload),
+      projects,
+      sshKeys,
       capabilities: {
         servers: true,
         presets: true,
@@ -322,6 +366,9 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
         balance: true,
         accountStatus: true,
         floatingIps: true,
+        serviceCosts: true,
+        projects: true,
+        sshKeys: true,
         tokenPermissions: {
           serviceScope: "manual-verification-required",
           deleteWithoutConfirmation: "manual-verification-required",

@@ -31,6 +31,12 @@ export async function GET(request: Request): Promise<Response> {
       updated_at: Date;
       public_ip: string | null;
       monthly_roubles: number;
+      owned_resources: Array<{
+        kind: string;
+        providerResourceId: string;
+        status: string;
+        monthlyRoubles: number;
+      }>;
     }[]
   >`
     SELECT
@@ -58,7 +64,27 @@ export async function GET(request: Request): Promise<Response> {
         FROM provider_resources
         WHERE provider_resources.environment_id = environments.id
           AND provider_resources.lifecycle_status <> 'deleted'
-      ), 0)::float8 AS monthly_roubles
+      ), 0)::float8 AS monthly_roubles,
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'kind', provider_resources.resource_kind,
+            'providerResourceId', provider_resources.provider_resource_id,
+            'status', provider_resources.lifecycle_status,
+            'monthlyRoubles',
+              CASE
+                WHEN jsonb_typeof(provider_resources.public_metadata->'monthlyRoubles') = 'number'
+                THEN (provider_resources.public_metadata->>'monthlyRoubles')::numeric
+                ELSE 0
+              END
+          )
+          ORDER BY provider_resources.resource_kind
+        )
+        FROM provider_resources
+        WHERE provider_resources.environment_id = environments.id
+          AND provider_resources.ownership = 'platform'
+          AND provider_resources.lifecycle_status <> 'deleted'
+      ), '[]'::jsonb) AS owned_resources
     FROM environments
     ORDER BY environments.created_at DESC
   `;
@@ -72,6 +98,7 @@ export async function GET(request: Request): Promise<Response> {
         updatedAt: row.updated_at.toISOString(),
         publicIp: row.public_ip,
         monthlyRoubles: row.monthly_roubles,
+        ownedResources: row.owned_resources,
       })),
     },
     { headers: { "cache-control": "no-store" } },

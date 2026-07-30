@@ -9,15 +9,21 @@
 До включения mutation все пункты должны иметь фактическое evidence:
 
 1. Владелец подтвердил числовой `TIMEWEB_SMOKE_BUDGET_RUB`.
-2. Read-only connection показывает готовый account, актуальный баланс, Ubuntu
+2. Timeweb API `/api/v1/account/services/cost` вернул актуальную однозначную
+   стоимость `floating_ip`; если активного ценового источника нет, smoke
+   fail-closed и платная mutation запрещена.
+3. Подготовлены существующие disposable `TIMEWEB_SMOKE_PROJECT_ID` и
+   `TIMEWEB_SMOKE_SSH_KEY_ID`; создание дополнительных project/key в smoke не
+   выполняется, root password отключён.
+4. Read-only connection показывает готовый account, актуальный баланс, Ubuntu
    24.04, preset, регион и availability zone.
-3. В Timeweb account нет другого VPS; platform database не содержит live среды.
-4. Production admin имеет verified TOTP factor и выполняет свежую re-auth.
-5. Token ограничен минимально доступными service permissions и разрешает
+5. В Timeweb account нет другого VPS; platform database не содержит live среды.
+6. Production admin имеет verified TOTP factor и выполняет свежую re-auth.
+7. Token ограничен минимально доступными service permissions и разрешает
    automatic delete без Telegram-кода.
-6. Token и `AUTH_FACTOR_ENCRYPTION_KEY` находятся только в Vercel Production;
+8. Token и `AUTH_FACTOR_ENCRYPTION_KEY` находятся только в Vercel Production;
    Preview и Development не содержат их.
-7. Kill-switches включаются только на время подтверждённого smoke.
+9. Kill-switches включаются только на время подтверждённого smoke.
 
 Для уже созданного administrator TOTP добавляется одноразовой CLI-командой.
 Значения передаются только через process environment и не выводятся:
@@ -37,6 +43,8 @@ TIMEWEB_API_TOKEN=<encrypted Vercel Production secret>
 TIMEWEB_MUTATIONS_ENABLED=true
 TIMEWEB_CAPABILITIES_VERIFIED=true
 TIMEWEB_SMOKE_BUDGET_RUB=<целое число рублей>
+TIMEWEB_SMOKE_PROJECT_ID=<ID disposable проекта>
+TIMEWEB_SMOKE_SSH_KEY_ID=<ID существующего SSH-ключа>
 AUTH_FACTOR_ENCRYPTION_KEY=<32 random bytes, base64url>
 ```
 
@@ -45,10 +53,15 @@ AUTH_FACTOR_ENCRYPTION_KEY=<32 random bytes, base64url>
 1. Открыть `/admin/infrastructure` и проверить provider preview.
 2. Создать среду с уникальным именем. API возвращает `202` и `operationId`.
 3. Дождаться `active`; timeline обязан содержать
-   `reserve_public_ip`, `create_server`, `reconcile_server`, `complete`.
+   `reserve_public_ip` (без отдельной mutation), `create_server` (атомарно с
+   IPv4), `reconcile_server`, `complete`.
+   Повторный preflight выполняется непосредственно перед create, а status
+   должен стать ровно `on`; исчерпание bounded polling даёт
+   `cleanup_required`.
 4. Повтор исходного idempotency key обязан вернуть тот же `operationId`.
-5. Открыть destructive AlertDialog, ввести точное имя, подтвердить потерю
-   данных, пароль и TOTP.
+5. Открыть destructive AlertDialog и сверить перечисленные owned VPS/IP,
+   provider IDs, стоимость и предупреждение об отсутствии backup. Затем ввести
+   точное имя, подтвердить потерю данных, пароль и TOTP.
 6. Дождаться `deleted`. Cleanup удаляет server, затем отдельно public IP.
 7. Read-only catalog обязан показать ноль VPS и отсутствие созданного IP.
 

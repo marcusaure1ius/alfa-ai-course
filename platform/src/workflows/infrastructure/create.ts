@@ -13,7 +13,7 @@ export async function createEnvironmentWorkflow(command: WorkflowCommand) {
   "use workflow";
   await reserveIpStep(command);
   await createServerStep(command);
-  if ((await providerSliceStep()) === "production-1a") {
+  if ((await providerSliceStep(command)) === "production-1a") {
     await reconcileServerStep(command);
     await completeCreateStep(command);
     return { status: "active" as const };

@@ -28,6 +28,12 @@ type Environment = {
   updatedAt: string;
   publicIp: string | null;
   monthlyRoubles: number;
+  ownedResources: Array<{
+    kind: string;
+    providerResourceId: string;
+    status: string;
+    monthlyRoubles: number;
+  }>;
 };
 
 type EnvironmentResponse = {
@@ -89,6 +95,7 @@ function DeleteEnvironment({
           },
           body: JSON.stringify({
             confirmationName,
+            confirmedLoss,
             idempotencyKey: `delete-${environment.id}-${crypto.randomUUID()}`,
           }),
         },
@@ -122,6 +129,29 @@ function DeleteEnvironment({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-3">
+          <div className="rounded-md border bg-muted/40 p-3 text-sm">
+            <p className="font-medium">Фактические owned ресурсы</p>
+            {environment.ownedResources.length > 0 ? (
+              <ul className="mt-2 space-y-1">
+                {environment.ownedResources.map((resource) => (
+                  <li
+                    key={`${resource.kind}:${resource.providerResourceId}`}
+                    className="break-all font-mono text-xs"
+                  >
+                    {resource.kind} · {resource.providerResourceId} ·{" "}
+                    {resource.status} · {resource.monthlyRoubles} ₽/мес.
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-muted-foreground">
+                Активные owned VPS/IP не найдены.
+              </p>
+            )}
+            <p className="mt-2 text-destructive">
+              Backup не создаётся; сохраняемых данных или ресурсов нет.
+            </p>
+          </div>
           <label className="grid gap-1.5 text-sm">
             Введите точное имя среды
             <Input
@@ -268,7 +298,10 @@ export function InfrastructureControl() {
           <CardHeader>
             <CardTitle>Актуальный provider preview</CardTitle>
             <CardDescription>
-              IDs и стоимость получены из Timeweb API {new Date(preview.plan.checkedAt).toLocaleString("ru-RU")}.
+              {preview.mode === "timeweb"
+                ? "IDs и стоимость получены из Timeweb API"
+                : "Локальные fake-данные без облачных mutation"}{" "}
+              {new Date(preview.plan.checkedAt).toLocaleString("ru-RU")}.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -333,6 +366,16 @@ export function InfrastructureControl() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     {environment.publicIp ?? "IP ещё не назначен"} · {environment.monthlyRoubles.toLocaleString("ru-RU")} ₽/мес.
                   </p>
+                  {environment.status === "cleanup_required" ? (
+                    <ul className="mt-2 space-y-1 text-xs text-destructive">
+                      {environment.ownedResources.map((resource) => (
+                        <li key={`${resource.kind}:${resource.providerResourceId}`}>
+                          Остался {resource.kind}: {resource.providerResourceId} (
+                          {resource.monthlyRoubles} ₽/мес.)
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
                 {["active", "degraded", "cleanup_required"].includes(environment.status) ? (
                   <DeleteEnvironment environment={environment} onAccepted={() => void refresh()} />

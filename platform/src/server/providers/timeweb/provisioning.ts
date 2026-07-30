@@ -4,8 +4,6 @@ import type { TimewebCatalogSnapshot } from "./contracts";
 import { createTimewebReadAdapter } from "./read-service";
 import { readTimewebMutationRuntimeGate } from "./runtime";
 
-const PUBLIC_IPV4_MONTHLY_ROUBLES = 180;
-
 export type TimewebProvisioningPlan = Readonly<{
   version: "timeweb-provisioning-v1";
   checkedAt: string;
@@ -22,7 +20,8 @@ export type TimewebProvisioningPlan = Readonly<{
   monthlyPublicIpRoubles: number;
   monthlyTotalRoubles: number;
   balanceRoubles: number;
-  floatingIpIdsBefore: readonly string[];
+  projectId: number;
+  sshKeyId: number;
 }>;
 
 export type TimewebProvisioningPreview =
@@ -41,6 +40,11 @@ export type TimewebProvisioningPreview =
         | "UBUNTU_2404_UNAVAILABLE"
         | "PRESET_UNAVAILABLE"
         | "BUDGET_NOT_CONFIGURED"
+        | "PUBLIC_IP_PRICE_NOT_CONFIGURED"
+        | "SMOKE_PROJECT_NOT_CONFIGURED"
+        | "SMOKE_PROJECT_UNAVAILABLE"
+        | "SMOKE_SSH_KEY_NOT_CONFIGURED"
+        | "SMOKE_SSH_KEY_UNAVAILABLE"
         | "BUDGET_EXCEEDED"
         | "INSUFFICIENT_FUNDS";
       message: string;
@@ -56,6 +60,8 @@ function positiveInteger(value: string): number | null {
 function selectPlan(
   catalog: TimewebCatalogSnapshot,
   budgetRoubles: number | null,
+  projectId: number | null,
+  sshKeyId: number | null,
 ): TimewebProvisioningPreview {
   if (catalog.account.state !== "ready") {
     return {
@@ -121,8 +127,6 @@ function selectPlan(
     };
   }
 
-  const monthlyTotalRoubles =
-    selected.preset.priceRoubles + PUBLIC_IPV4_MONTHLY_ROUBLES;
   if (catalog.source === "timeweb" && budgetRoubles == null) {
     return {
       ok: false,
@@ -130,6 +134,51 @@ function selectPlan(
       message: "Не задан owner-approved TIMEWEB_SMOKE_BUDGET_RUB.",
     };
   }
+  if (catalog.source === "timeweb" && catalog.publicIpMonthlyRoubles == null) {
+    return {
+      ok: false,
+      code: "PUBLIC_IP_PRICE_NOT_CONFIGURED",
+      message:
+        "Timeweb API не вернул актуальную стоимость floating IP; mutation запрещена.",
+    };
+  }
+  if (catalog.source === "timeweb" && projectId == null) {
+    return {
+      ok: false,
+      code: "SMOKE_PROJECT_NOT_CONFIGURED",
+      message: "Не задан disposable TIMEWEB_SMOKE_PROJECT_ID.",
+    };
+  }
+  if (
+    projectId != null &&
+    !catalog.projects.some((project) => project.id === String(projectId))
+  ) {
+    return {
+      ok: false,
+      code: "SMOKE_PROJECT_UNAVAILABLE",
+      message: "Disposable project ID не найден в актуальном Timeweb API catalog.",
+    };
+  }
+  if (catalog.source === "timeweb" && sshKeyId == null) {
+    return {
+      ok: false,
+      code: "SMOKE_SSH_KEY_NOT_CONFIGURED",
+      message: "Не задан TIMEWEB_SMOKE_SSH_KEY_ID для passwordless root access.",
+    };
+  }
+  if (
+    sshKeyId != null &&
+    !catalog.sshKeys.some((key) => key.id === String(sshKeyId))
+  ) {
+    return {
+      ok: false,
+      code: "SMOKE_SSH_KEY_UNAVAILABLE",
+      message: "Smoke SSH key ID не найден в актуальном Timeweb API catalog.",
+    };
+  }
+  const monthlyPublicIpRoubles = catalog.publicIpMonthlyRoubles ?? 0;
+  const monthlyTotalRoubles =
+    selected.preset.priceRoubles + monthlyPublicIpRoubles;
   if (budgetRoubles != null && monthlyTotalRoubles > budgetRoubles) {
     return {
       ok: false,
@@ -161,10 +210,11 @@ function selectPlan(
       ramMb: selected.preset.ramMb,
       diskMb: selected.preset.diskMb,
       diskType: selected.preset.diskType,
-      monthlyPublicIpRoubles: PUBLIC_IPV4_MONTHLY_ROUBLES,
+      monthlyPublicIpRoubles,
       monthlyTotalRoubles,
       balanceRoubles: catalog.balance.amount,
-      floatingIpIdsBefore: catalog.floatingIps.map((ip) => ip.id),
+      projectId: projectId ?? 1,
+      sshKeyId: sshKeyId ?? 1,
     },
   };
 }
@@ -196,5 +246,18 @@ export async function getTimewebProvisioningPreview(
     gate.mode === "timeweb"
       ? positiveInteger(environment.TIMEWEB_SMOKE_BUDGET_RUB ?? "")
       : 10_000;
-  return selectPlan(catalog, budget);
+  const projectId =
+    gate.mode === "timeweb"
+      ? positiveInteger(environment.TIMEWEB_SMOKE_PROJECT_ID ?? "")
+      : 1;
+  const sshKeyId =
+    gate.mode === "timeweb"
+      ? positiveInteger(environment.TIMEWEB_SMOKE_SSH_KEY_ID ?? "")
+      : 1;
+  return selectPlan(
+    catalog,
+    budget,
+    projectId,
+    sshKeyId,
+  );
 }

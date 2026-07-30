@@ -13,7 +13,10 @@ import type {
 } from "./contracts";
 import { FakeProviderError, FakeTimewebAdapter } from "./fake";
 import { createProductionTimewebMutationAdapter } from "./mutation";
-import type { TimewebProvisioningPlan } from "./provisioning";
+import {
+  getTimewebProvisioningPreview,
+  type TimewebProvisioningPlan,
+} from "./provisioning";
 import { TimewebProviderError } from "./read-only";
 import { readTimewebMutationRuntimeGate } from "./runtime";
 
@@ -29,7 +32,7 @@ export class LifecycleProviderError extends Error {
 }
 
 export type InfrastructureLifecycleAdapter = Readonly<{
-  reservePublicIp(): Promise<OwnedProviderResource>;
+  reservePublicIp(): Promise<void>;
   createServer(): Promise<OwnedProviderResource>;
   reconcileServer(): Promise<void>;
   configureDns(): Promise<OwnedProviderResource | void>;
@@ -40,7 +43,7 @@ export type InfrastructureLifecycleAdapter = Readonly<{
 type OperationContext = Readonly<{
   environmentId: string;
   environmentName: string;
-  plan: TimewebProvisioningPlan;
+  plan: TimewebProvisioningPlan | null;
 }>;
 
 function safePlan(value: unknown): TimewebProvisioningPlan {
@@ -55,8 +58,16 @@ function safePlan(value: unknown): TimewebProvisioningPlan {
     plan.version !== "timeweb-provisioning-v1" ||
     !Number.isSafeInteger(plan.presetId) ||
     !Number.isSafeInteger(plan.operatingSystemId) ||
+    typeof plan.projectId !== "number" ||
+    !Number.isSafeInteger(plan.projectId) ||
+    typeof plan.sshKeyId !== "number" ||
+    !Number.isSafeInteger(plan.sshKeyId) ||
+    typeof plan.monthlyPublicIpRoubles !== "number" ||
+    !Number.isFinite(plan.monthlyPublicIpRoubles) ||
     typeof plan.availabilityZone !== "string" ||
-    !Array.isArray(plan.floatingIpIdsBefore)
+    plan.projectId <= 0 ||
+    plan.sshKeyId <= 0 ||
+    plan.monthlyPublicIpRoubles <= 0
   ) {
     throw new LifecycleProviderError(
       "INVALID_PROVIDER_PLAN",
@@ -95,7 +106,10 @@ async function operationContext(
   return {
     environmentId: row.environment_id,
     environmentName: row.environment_name,
-    plan: safePlan(row.input_snapshot.providerPlan),
+    plan:
+      row.input_snapshot.providerPlan === undefined
+        ? null
+        : safePlan(row.input_snapshot.providerPlan),
   };
 }
 
@@ -220,10 +234,10 @@ function mappedError(error: unknown): LifecycleProviderError {
 async function waitForAbsent(
   reconcile: () => Promise<{ state: "absent" | "present" }>,
 ): Promise<boolean> {
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
     if ((await reconcile()).state === "absent") return true;
-    if (attempt < 5) {
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    if (attempt < 9) {
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
     }
   }
   return false;
@@ -241,71 +255,99 @@ class ProductionTimewebLifecycleAdapter
     >,
   ) {}
 
-  async reservePublicIp(): Promise<OwnedProviderResource> {
+  private requirePlan(): TimewebProvisioningPlan {
+    if (!this.context.plan) {
+      throw new LifecycleProviderError(
+        "INVALID_PROVIDER_PLAN",
+        "Create operation не содержит production provider plan.",
+      );
+    }
+    return this.context.plan;
+  }
+
+  async reservePublicIp(): Promise<void> {
+    // Production creates the IPv4 atomically with the marked server. A
+    // standalone IP has no provider-side ownership marker and cannot be
+    // reconciled safely after an ambiguous POST timeout.
+  }
+
+  private async ensureAttachedPublicIp(
+    server: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<void> {
+    const plan = this.requirePlan();
     const existing = await activeResource(
       this.sql,
       this.context.environmentId,
       "public_ip",
     );
-    if (existing) return existing;
-    try {
-      const attempts = await stepAttempts(
-        this.sql,
-        this.command.operationId,
-        "reserve_public_ip",
+    if (existing) return;
+    const resource = await this.adapter.findPublicIpByServer(server);
+    if (!resource) {
+      throw new LifecycleProviderError(
+        "PUBLIC_IP_NOT_READY",
+        "Timeweb ещё не привязал атомарно созданный публичный IP к VPS.",
+        true,
       );
-      if (attempts > 1) {
-        const recovered = await this.adapter.findNewPublicIp(
-          this.context.environmentId,
-          this.context.plan.availabilityZone,
-          this.context.plan.floatingIpIdsBefore,
-        );
-        if (!recovered) {
-          throw new LifecycleProviderError(
-            "UNKNOWN_PUBLIC_IP_OUTCOME",
-            "Не удалось однозначно reconcile публичный IP; повторное создание запрещено.",
-          );
-        }
-        await recordResource(this.sql, this.command, recovered, {
-          address: recovered.address,
-          availabilityZone: this.context.plan.availabilityZone,
-          monthlyRoubles: this.context.plan.monthlyPublicIpRoubles,
-        });
-        return recovered;
-      }
-      const resource = await this.adapter.createPublicIp({
-        environmentId: this.context.environmentId,
-        availabilityZone: this.context.plan.availabilityZone,
-      });
-      await recordResource(this.sql, this.command, resource, {
-        address: resource.address,
-        availabilityZone: this.context.plan.availabilityZone,
-        monthlyRoubles: this.context.plan.monthlyPublicIpRoubles,
-      });
-      return resource;
-    } catch (error) {
-      throw mappedError(error);
+    }
+    await recordResource(this.sql, this.command, resource, {
+      address: resource.address,
+      availabilityZone: plan.availabilityZone,
+      monthlyRoubles: plan.monthlyPublicIpRoubles,
+    });
+  }
+
+  private async assertFreshProviderPlan(): Promise<void> {
+    const preview = await getTimewebProvisioningPreview();
+    if (!preview.ok) {
+      throw new LifecycleProviderError(
+        preview.code,
+        `Повторный provider preflight отклонён: ${preview.message}`,
+      );
+    }
+    const fresh = preview.plan;
+    const expected = this.requirePlan();
+    if (
+      fresh.presetId !== expected.presetId ||
+      fresh.operatingSystemId !== expected.operatingSystemId ||
+      fresh.availabilityZone !== expected.availabilityZone ||
+      fresh.projectId !== expected.projectId ||
+      fresh.sshKeyId !== expected.sshKeyId ||
+      fresh.monthlyServerRoubles !== expected.monthlyServerRoubles ||
+      fresh.monthlyPublicIpRoubles !== expected.monthlyPublicIpRoubles
+    ) {
+      throw new LifecycleProviderError(
+        "STALE_PROVIDER_PLAN",
+        "Provider catalog или цена изменились; создайте новую operation после preview.",
+      );
     }
   }
 
   async createServer(): Promise<OwnedProviderResource> {
+    const plan = this.requirePlan();
     const existing = await activeResource(
       this.sql,
       this.context.environmentId,
       "server",
     );
-    if (existing) return existing;
+    if (existing) {
+      const server = { ...existing, kind: "server" as const };
+      await this.ensureAttachedPublicIp(server);
+      return server;
+    }
     try {
       const recovered = await this.adapter.findServerByEnvironmentId(
         this.context.environmentId,
       );
       if (recovered) {
         await recordResource(this.sql, this.command, recovered, {
-          presetId: this.context.plan.presetId,
-          operatingSystemId: this.context.plan.operatingSystemId,
-          availabilityZone: this.context.plan.availabilityZone,
-          monthlyRoubles: this.context.plan.monthlyServerRoubles,
+          presetId: plan.presetId,
+          operatingSystemId: plan.operatingSystemId,
+          availabilityZone: plan.availabilityZone,
+          monthlyRoubles: plan.monthlyServerRoubles,
+          projectId: plan.projectId,
+          passwordAuthentication: false,
         });
+        await this.ensureAttachedPublicIp(recovered);
         return recovered;
       }
       if (
@@ -320,32 +362,25 @@ class ProductionTimewebLifecycleAdapter
           "Owned server не найден после timeout; повторное создание запрещено.",
         );
       }
-      const publicIp = await activeResource(
-        this.sql,
-        this.context.environmentId,
-        "public_ip",
-      );
-      const address = publicIp?.publicMetadata.address;
-      if (typeof address !== "string") {
-        throw new LifecycleProviderError(
-          "PUBLIC_IP_NOT_READY",
-          "Публичный IP не готов для создания VPS.",
-        );
-      }
+      await this.assertFreshProviderPlan();
       const resource = await this.adapter.createServer({
         environmentId: this.context.environmentId,
         name: this.context.environmentName,
-        presetId: this.context.plan.presetId,
-        operatingSystemId: this.context.plan.operatingSystemId,
-        availabilityZone: this.context.plan.availabilityZone,
-        publicIpAddress: address,
+        presetId: plan.presetId,
+        operatingSystemId: plan.operatingSystemId,
+        availabilityZone: plan.availabilityZone,
+        projectId: plan.projectId,
+        sshKeyId: plan.sshKeyId,
       });
       await recordResource(this.sql, this.command, resource, {
-        presetId: this.context.plan.presetId,
-        operatingSystemId: this.context.plan.operatingSystemId,
-        availabilityZone: this.context.plan.availabilityZone,
-        monthlyRoubles: this.context.plan.monthlyServerRoubles,
+        presetId: plan.presetId,
+        operatingSystemId: plan.operatingSystemId,
+        availabilityZone: plan.availabilityZone,
+        monthlyRoubles: plan.monthlyServerRoubles,
+        projectId: plan.projectId,
+        passwordAuthentication: false,
       });
+      await this.ensureAttachedPublicIp(resource);
       return resource;
     } catch (error) {
       throw mappedError(error);
@@ -373,6 +408,25 @@ class ProductionTimewebLifecycleAdapter
         throw new LifecycleProviderError(
           "SERVER_NOT_READY",
           "Timeweb ещё не подтверждает созданный VPS.",
+          true,
+        );
+      }
+      if (reconciliation.status.state === "unsupported") {
+        throw new LifecycleProviderError(
+          "PROVIDER_STATUS_UNSUPPORTED",
+          "Timeweb вернул неизвестный server status; автоматический active запрещён.",
+        );
+      }
+      if (reconciliation.status.value === "blocked") {
+        throw new LifecycleProviderError(
+          "SERVER_BLOCKED",
+          "Timeweb заблокировал созданный VPS.",
+        );
+      }
+      if (reconciliation.status.value !== "on") {
+        throw new LifecycleProviderError(
+          "SERVER_NOT_READY",
+          `Timeweb server ещё не готов: ${reconciliation.status.value}.`,
           true,
         );
       }
@@ -455,15 +509,73 @@ class ProductionTimewebLifecycleAdapter
 export function isProductionTimewebWorkflow(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): boolean {
-  return readTimewebMutationRuntimeGate(environment).mode === "timeweb";
+  const gate = readTimewebMutationRuntimeGate(environment);
+  if (
+    environment.VERCEL_ENV === "production" &&
+    environment.PLATFORM_PROVIDER === "timeweb" &&
+    gate.mode !== "timeweb"
+  ) {
+    throw new LifecycleProviderError(
+      "MUTATION_GATE_CLOSED",
+      "Production Timeweb mutation gate закрылся во время workflow.",
+    );
+  }
+  return gate.mode === "timeweb";
+}
+
+async function operationRequiresTimeweb(
+  sql: DatabaseSql,
+  operationId: string,
+): Promise<boolean> {
+  const rows = await sql<{ required: boolean }[]>`
+    SELECT (
+      operations.input_snapshot ? 'providerPlan'
+      OR operations.input_snapshot->>'providerMode' = 'timeweb'
+      OR EXISTS (
+        SELECT 1
+        FROM provider_resources
+        WHERE provider_resources.environment_id = operations.environment_id
+          AND provider_resources.provider = 'timeweb'
+          AND provider_resources.ownership = 'platform'
+          AND provider_resources.lifecycle_status <> 'deleted'
+      )
+    ) AS required
+    FROM operations
+    WHERE operations.id = ${operationId}
+  `;
+  if (!rows[0]) {
+    throw new LifecycleProviderError(
+      "INVALID_OPERATION",
+      "Provider mode для operation не найден.",
+    );
+  }
+  return rows[0].required;
+}
+
+export async function operationUsesProductionTimeweb(
+  command: WorkflowCommand,
+): Promise<boolean> {
+  const sql = getDatabase();
+  const required = await operationRequiresTimeweb(sql, command.operationId);
+  const gate = readTimewebMutationRuntimeGate();
+  if (required && gate.mode !== "timeweb") {
+    throw new LifecycleProviderError(
+      "PROVIDER_MODE_DRIFT",
+      "Operation закреплена за Timeweb, но production gate изменился.",
+    );
+  }
+  return required;
 }
 
 export async function createInfrastructureLifecycleAdapter(
   command: WorkflowCommand,
 ): Promise<InfrastructureLifecycleAdapter> {
   const sql = getDatabase();
-  const production = createProductionTimewebMutationAdapter();
-  if (!production) {
+  const requiresTimeweb = await operationRequiresTimeweb(
+    sql,
+    command.operationId,
+  );
+  if (!requiresTimeweb) {
     const fake = new FakeTimewebAdapter(
       sql,
       command.operationId,
@@ -471,13 +583,22 @@ export async function createInfrastructureLifecycleAdapter(
       command.scenario,
     );
     return {
-      reservePublicIp: () => fake.reservePublicIp(),
+      reservePublicIp: async () => {
+        await fake.reservePublicIp();
+      },
       createServer: () => fake.createServer(),
       reconcileServer: async () => undefined,
       configureDns: () => fake.configureDns(),
       verifyTls: () => fake.verifyTls(),
       deleteOwnedResource: (resource) => fake.deleteOwnedResource(resource),
     };
+  }
+  const production = createProductionTimewebMutationAdapter();
+  if (!production) {
+    throw new LifecycleProviderError(
+      "PROVIDER_MODE_DRIFT",
+      "Timeweb operation не может перейти на fake adapter.",
+    );
   }
   return new ProductionTimewebLifecycleAdapter(
     sql,

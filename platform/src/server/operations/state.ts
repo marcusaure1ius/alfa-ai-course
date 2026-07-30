@@ -30,6 +30,13 @@ export type RetryClass = "transient" | "unknown_outcome" | "permanent";
 
 export function classifyProviderError(code: string): RetryClass {
   if (code === "TIMEOUT_AFTER_MUTATION") return "unknown_outcome";
-  if (code === "RATE_LIMIT" || code === "PROVIDER_UNAVAILABLE") return "transient";
+  if (
+    code === "RATE_LIMIT" ||
+    code === "PROVIDER_UNAVAILABLE" ||
+    code === "PUBLIC_IP_NOT_READY" ||
+    code === "SERVER_NOT_READY"
+  ) {
+    return "transient";
+  }
   return "permanent";
 }

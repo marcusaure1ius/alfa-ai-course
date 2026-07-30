@@ -39,6 +39,7 @@ beforeEach(async () => {
     role: "admin",
     expiresAt: new Date(Date.now() + 60_000),
     reauthenticatedAt: new Date(),
+    mfaAuthenticatedAt: null,
   };
   await sql`
     INSERT INTO users (id, email, password_hash, role_id)
@@ -90,6 +91,34 @@ describe("guarded Timeweb mutation authorization", () => {
     ).rejects.toMatchObject({
       code: "STALE_REAUTH",
     });
+  });
+
+  it("requires a fresh session-bound MFA proof before a production provider call", async () => {
+    const previousEnvironment = process.env.VERCEL_ENV;
+    process.env.VERCEL_ENV = "production";
+    try {
+      const operationId = await createOperation();
+
+      await expect(
+        authorizeMutationStep(sql, createCommand(operationId)),
+      ).rejects.toMatchObject({
+        code: "STALE_REAUTH",
+      });
+
+      await sql`
+        UPDATE auth_sessions
+        SET mfa_authenticated_at = now()
+        WHERE id = ${actor.sessionId}
+      `;
+      await expect(
+        authorizeMutationStep(sql, createCommand(operationId)),
+      ).resolves.toMatchObject({
+        environmentId: expect.any(String),
+      });
+    } finally {
+      if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = previousEnvironment;
+    }
   });
 
   it("rejects resources not owned by the platform", async () => {

@@ -146,6 +146,7 @@ export async function reserveDeleteOperation(
   input: {
     environmentId: string;
     confirmationName: string;
+    confirmedLoss: true;
     idempotencyKey: string;
     scenario: FakeScenario;
   },
@@ -186,7 +187,7 @@ export async function reserveDeleteOperation(
           ${transaction.json({
             scenario: input.scenario,
             confirmedName: input.confirmationName,
-            confirmed: true,
+            confirmed: input.confirmedLoss,
           })}
         )
       `;
@@ -199,7 +200,7 @@ export async function reserveDeleteOperation(
           'operation', ${operationId}, 'success',
           ${transaction.json({
             environmentId: input.environmentId,
-            confirmed: true,
+            confirmed: input.confirmedLoss,
           })}
         )
       `;
@@ -234,6 +235,7 @@ type GuardRow = {
   user_status: string;
   session_active: boolean;
   reauth_fresh: boolean;
+  mfa_fresh: boolean;
 };
 
 export async function authorizeMutationStep(
@@ -275,7 +277,11 @@ export async function authorizeMutationStep(
         (
           auth_sessions.reauthenticated_at <= now()
           AND auth_sessions.reauthenticated_at >= now() - interval '10 minutes'
-        ) AS reauth_fresh
+        ) AS reauth_fresh,
+        (
+          auth_sessions.mfa_authenticated_at <= now()
+          AND auth_sessions.mfa_authenticated_at >= now() - interval '10 minutes'
+        ) AS mfa_fresh
       FROM operations
       JOIN environments ON environments.id = operations.environment_id
       JOIN users ON users.id = operations.requested_by_user_id
@@ -295,6 +301,9 @@ export async function authorizeMutationStep(
       throw new MutationGuardError("FORBIDDEN");
     }
     if (!row.reauth_fresh) throw new MutationGuardError("STALE_REAUTH");
+    if (process.env.VERCEL_ENV === "production" && !row.mfa_fresh) {
+      throw new MutationGuardError("STALE_REAUTH");
+    }
     if (!["queued", "running"].includes(row.operation_status)) {
       throw new MutationGuardError("INVALID_OPERATION");
     }

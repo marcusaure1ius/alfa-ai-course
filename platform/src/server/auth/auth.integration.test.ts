@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 import { GET as adminApi } from "@/app/api/admin/access-check/route";
@@ -33,6 +33,7 @@ import {
   reserveDeleteOperation,
 } from "../operations/repository";
 import { FakeTimewebAdapter } from "../providers/timeweb/fake";
+import { createInfrastructureLifecycleAdapter } from "../providers/timeweb/lifecycle";
 import { createEnvironmentWorkflow } from "@/workflows/infrastructure/create";
 import { deleteEnvironmentWorkflow } from "@/workflows/infrastructure/delete";
 import { proxy as adminPagePolicy } from "@/proxy";
@@ -208,6 +209,10 @@ describe("database-backed authentication", () => {
         mfaCode: createTotpCode(totpSecret),
       });
       expect(accepted.ok).toBe(true);
+      if (!accepted.ok) {
+        throw new Error("Production TOTP login was rejected.");
+      }
+      expect(accepted.session.mfaAuthenticatedAt).toBeInstanceOf(Date);
       const factors = await sql<{ secret_ciphertext: string }[]>`
         SELECT secret_ciphertext FROM auth_factors
       `;
@@ -542,6 +547,7 @@ describe("durable fake infrastructure lifecycle", () => {
     const input = {
       environmentId: environment[0]!.id,
       confirmationName: "Основная среда",
+      confirmedLoss: true as const,
       idempotencyKey: "delete-concurrent-key-01",
       scenario: "success" as const,
     };
@@ -640,6 +646,7 @@ describe("durable fake infrastructure lifecycle", () => {
     const deletion = await reserveDeleteOperation(sql, adminLogin.session, {
       environmentId: environment[0]!.id,
       confirmationName: "Основная среда",
+      confirmedLoss: true,
       idempotencyKey: "delete-partial-key-01",
       scenario: "partial_cleanup",
     });
@@ -661,5 +668,97 @@ describe("durable fake infrastructure lifecycle", () => {
       GROUP BY environments.status
     `;
     expect(rows[0]).toEqual({ status: "cleanup_required", active_ips: 1 });
+  });
+
+  it("constructs a production delete adapter without a create provider plan", async () => {
+    const { adminLogin } = await provisionUsers();
+    const create = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Production cleanup fixture",
+      idempotencyKey: "production-delete-adapter-01",
+      scenario: "success",
+    });
+    await createEnvironmentWorkflow({
+      operationId: create.accepted.operationId,
+      scenario: "success",
+    });
+    const environment = await sql<{ id: string }[]>`
+      SELECT environment_id AS id
+      FROM operations
+      WHERE id = ${create.accepted.operationId}
+    `;
+    await sql`
+      UPDATE provider_resources
+      SET provider = 'timeweb',
+          provider_resource_id = CASE
+            WHEN resource_kind = 'server' THEN '54321'
+            ELSE '11111111-2222-4333-8444-555555555555'
+          END,
+          public_metadata = CASE
+            WHEN resource_kind = 'public_ip'
+            THEN '{"address":"203.0.113.10","monthlyRoubles":180}'::jsonb
+            ELSE '{"monthlyRoubles":700}'::jsonb
+          END
+      WHERE environment_id = ${environment[0]!.id}
+        AND resource_kind IN ('server', 'public_ip')
+    `;
+    const deletion = await reserveDeleteOperation(sql, adminLogin.session, {
+      environmentId: environment[0]!.id,
+      confirmationName: "Production cleanup fixture",
+      confirmedLoss: true,
+      idempotencyKey: "production-delete-adapter-02",
+      scenario: "success",
+    });
+
+    const previous = {
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      PLATFORM_PROVIDER: process.env.PLATFORM_PROVIDER,
+      TIMEWEB_API_TOKEN: process.env.TIMEWEB_API_TOKEN,
+      TIMEWEB_MUTATIONS_ENABLED: process.env.TIMEWEB_MUTATIONS_ENABLED,
+      TIMEWEB_CAPABILITIES_VERIFIED:
+        process.env.TIMEWEB_CAPABILITIES_VERIFIED,
+    };
+    process.env.VERCEL_ENV = "production";
+    process.env.PLATFORM_PROVIDER = "timeweb";
+    process.env.TIMEWEB_API_TOKEN = "synthetic-test-token";
+    process.env.TIMEWEB_MUTATIONS_ENABLED = "true";
+    process.env.TIMEWEB_CAPABILITIES_VERIFIED = "true";
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      process.env.PLATFORM_PROVIDER = "fake";
+      await expect(
+        createInfrastructureLifecycleAdapter({
+          operationId: deletion.accepted.operationId,
+          scenario: "success",
+        }),
+      ).rejects.toMatchObject({ code: "PROVIDER_MODE_DRIFT" });
+      process.env.PLATFORM_PROVIDER = "timeweb";
+      const lifecycle = await createInfrastructureLifecycleAdapter({
+        operationId: deletion.accepted.operationId,
+        scenario: "success",
+      });
+      await lifecycle.deleteOwnedResource({
+        externalId: "54321",
+        kind: "server",
+        environmentId: environment[0]!.id,
+      });
+      await lifecycle.deleteOwnedResource({
+        externalId: "11111111-2222-4333-8444-555555555555",
+        kind: "public_ip",
+        environmentId: environment[0]!.id,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.unstubAllGlobals();
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
   });
 });

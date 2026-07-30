@@ -43,6 +43,7 @@ beforeEach(async () => {
     role: "admin",
     expiresAt: new Date(Date.now() + 60_000),
     reauthenticatedAt: new Date(),
+    mfaAuthenticatedAt: null,
   };
   await sql`
     INSERT INTO auth_sessions (id, user_id, token_hash, expires_at)

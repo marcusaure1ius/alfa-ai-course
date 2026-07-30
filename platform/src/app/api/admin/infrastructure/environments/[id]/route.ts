@@ -30,10 +30,12 @@ export async function DELETE(
     !body ||
     !hasOnlyInputKeys(body, [
       "confirmationName",
+      "confirmedLoss",
       "idempotencyKey",
       "simulation",
     ]) ||
     typeof body.confirmationName !== "string" ||
+    body.confirmedLoss !== true ||
     typeof body.idempotencyKey !== "string" ||
     body.idempotencyKey.length < 16 ||
     body.idempotencyKey.length > 128
@@ -46,6 +48,7 @@ export async function DELETE(
     const reserved = await reserveDeleteOperation(getDatabase(), access.session, {
       environmentId: id,
       confirmationName: body.confirmationName,
+      confirmedLoss: body.confirmedLoss,
       idempotencyKey: body.idempotencyKey,
       scenario,
     });

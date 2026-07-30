@@ -50,6 +50,7 @@ beforeEach(async () => {
     role: "admin",
     expiresAt: new Date(Date.now() + 60_000),
     reauthenticatedAt: new Date(),
+    mfaAuthenticatedAt: null,
   };
   sessionToken = `workflow-session-${randomUUID()}`;
   await sql`
@@ -110,6 +111,25 @@ describe("Vercel Workflow orchestration", () => {
       },
     );
     expect(deleteResponse.status).toBe(400);
+    const missingLossConfirmation = await deleteEndpoint(
+      new Request(
+        "http://localhost:3000/api/admin/infrastructure/environments/11111111-1111-4111-8111-111111111111",
+        {
+          method: "DELETE",
+          headers,
+          body: JSON.stringify({
+            confirmationName: "API среда",
+            idempotencyKey: "missing-loss-confirmation-01",
+          }),
+        },
+      ),
+      {
+        params: Promise.resolve({
+          id: "11111111-1111-4111-8111-111111111111",
+        }),
+      },
+    );
+    expect(missingLossConfirmation.status).toBe(400);
     expect(
       await sql<{ count: number }[]>`
         SELECT count(*)::int AS count FROM operations

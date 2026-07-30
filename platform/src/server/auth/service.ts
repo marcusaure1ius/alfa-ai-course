@@ -36,6 +36,7 @@ export type AuthSession = {
   role: Role;
   expiresAt: Date;
   reauthenticatedAt: Date;
+  mfaAuthenticatedAt: Date | null;
 };
 
 export type LoginResult =
@@ -239,7 +240,8 @@ export async function loginWithPassword(
 
   await sql`
     INSERT INTO auth_sessions (
-      id, user_id, token_hash, ip_hash, user_agent_hash, expires_at
+      id, user_id, token_hash, ip_hash, user_agent_hash, expires_at,
+      mfa_authenticated_at
     )
     VALUES (
       ${sessionId},
@@ -247,7 +249,14 @@ export async function loginWithPassword(
       ${hashOpaqueToken(token)},
       ${attempt.ipHash},
       ${userAgentHash},
-      ${expiresAt}
+      ${expiresAt},
+      ${
+        user.role_id === "admin" &&
+        process.env.VERCEL_ENV === "production" &&
+        challengeSatisfied
+          ? new Date()
+          : null
+      }
     )
   `;
   await resetLoginAttempts(sql, attempt.bucketKey);
@@ -271,6 +280,12 @@ export async function loginWithPassword(
       role: user.role_id,
       expiresAt,
       reauthenticatedAt: new Date(),
+      mfaAuthenticatedAt:
+        user.role_id === "admin" &&
+        process.env.VERCEL_ENV === "production" &&
+        challengeSatisfied
+          ? new Date()
+          : null,
     },
   };
 }
@@ -290,6 +305,7 @@ export async function getSessionByToken(
       role_id: Role;
       expires_at: Date;
       reauthenticated_at: Date;
+      mfa_authenticated_at: Date | null;
     }[]
   >`
     SELECT
@@ -298,7 +314,8 @@ export async function getSessionByToken(
       users.email,
       users.role_id,
       auth_sessions.expires_at,
-      auth_sessions.reauthenticated_at
+      auth_sessions.reauthenticated_at,
+      auth_sessions.mfa_authenticated_at
     FROM auth_sessions
     JOIN users ON users.id = auth_sessions.user_id
     WHERE auth_sessions.token_hash = ${hashOpaqueToken(token)}
@@ -316,6 +333,7 @@ export async function getSessionByToken(
         role: row.role_id,
         expiresAt: row.expires_at,
         reauthenticatedAt: row.reauthenticated_at,
+        mfaAuthenticatedAt: row.mfa_authenticated_at,
       }
     : null;
 }
@@ -474,7 +492,12 @@ export async function reauthenticateSession(
   if (accepted) {
     await sql`
       UPDATE auth_sessions
-      SET reauthenticated_at = now(), last_seen_at = now()
+      SET reauthenticated_at = now(),
+          mfa_authenticated_at = CASE
+            WHEN ${process.env.VERCEL_ENV === "production"} THEN now()
+            ELSE mfa_authenticated_at
+          END,
+          last_seen_at = now()
       WHERE id = ${session.sessionId}
         AND user_id = ${session.userId}
         AND revoked_at IS NULL
