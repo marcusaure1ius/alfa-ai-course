@@ -237,4 +237,83 @@ describe("course content repository", () => {
       { id: materialId, position: 1, version: 2 },
     ]);
   });
+
+  it("rejects a cross-course material at the database boundary", async () => {
+    const first = await createPublishedCourseWithDraftMaterial();
+    const secondCourseId = await createCourse(sql, admin, {
+      slug: "another-course",
+      title: "Другой курс",
+    });
+    await expect(
+      sql`
+        INSERT INTO course_materials (
+          id, course_id, section_id, slug, kind, title, position,
+          created_by_user_id, updated_by_user_id
+        )
+        VALUES (
+          ${randomUUID()}, ${secondCourseId}, ${first.sectionId}, 'cross-course',
+          'article', 'Недопустимый материал', 12, ${admin.userId}, ${admin.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      constraint_name: "course_materials_course_section_fkey",
+    });
+  });
+
+  it("serializes a progress write behind a concurrent access revoke", async () => {
+    const { courseId, materialId, sectionId } =
+      await createPublishedCourseWithDraftMaterial();
+    await updateMaterial(sql, admin, materialId, {
+      sectionId,
+      slug: "first-step",
+      kind: "article",
+      title: "Сначала понять",
+      summary: "",
+      bodyMarkdown: "Готово.",
+      position: 0,
+      estimatedMinutes: null,
+      status: "published",
+    });
+
+    let releaseRevoke!: () => void;
+    const revokeCanFinish = new Promise<void>((resolve) => {
+      releaseRevoke = resolve;
+    });
+    let revokeStarted!: () => void;
+    const revokeHasLock = new Promise<void>((resolve) => {
+      revokeStarted = resolve;
+    });
+    const revoke = sql.begin(async (transaction) => {
+      await transaction`
+        UPDATE course_memberships
+        SET status = 'revoked', revoked_by_user_id = ${admin.userId},
+          revoked_at = now(), updated_at = now()
+        WHERE course_id = ${courseId} AND user_id = ${studentId}
+      `;
+      revokeStarted();
+      await revokeCanFinish;
+    });
+    await revokeHasLock;
+
+    let progressSettled = false;
+    const progress = saveMaterialProgress(sql, studentId, {
+      materialId,
+      lastPosition: "during-revoke",
+      completed: false,
+    }).finally(() => {
+      progressSettled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(progressSettled).toBe(false);
+
+    releaseRevoke();
+    await revoke;
+    await expect(progress).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const stored = await sql<Array<{ count: number }>>`
+      SELECT count(*)::int AS count
+      FROM material_progress
+      WHERE material_id = ${materialId} AND user_id = ${studentId}
+    `;
+    expect(stored[0]?.count).toBe(0);
+  });
 });

@@ -522,9 +522,9 @@ export async function saveMaterialProgress(
   studentUserId: string,
   input: { materialId: string; lastPosition?: string | null; completed: boolean },
 ): Promise<void> {
-  const accessible = await sql<{ present: boolean }[]>`
-    SELECT EXISTS (
-      SELECT 1
+  await sql.begin(async (transaction) => {
+    const accessible = await transaction<Array<{ id: string }>>`
+      SELECT material.id
       FROM course_materials AS material
       JOIN courses AS course
         ON course.id = material.course_id AND course.status = 'published'
@@ -535,20 +535,21 @@ export async function saveMaterialProgress(
         AND membership.user_id = ${studentUserId}
         AND membership.status = 'active'
       WHERE material.id = ${input.materialId} AND material.status = 'published'
-    ) AS present
-  `;
-  if (!accessible[0]?.present) throw new CourseContentError("NOT_FOUND");
-  await sql`
-    INSERT INTO material_progress (
-      material_id, user_id, last_position, completed_at
-    )
-    VALUES (
-      ${input.materialId}, ${studentUserId}, ${input.lastPosition ?? null},
-      ${input.completed ? new Date() : null}
-    )
-    ON CONFLICT (material_id, user_id) DO UPDATE SET
-      last_position = EXCLUDED.last_position,
-      completed_at = EXCLUDED.completed_at,
-      updated_at = now()
-  `;
+      FOR SHARE OF material, course, section, membership
+    `;
+    if (!accessible[0]) throw new CourseContentError("NOT_FOUND");
+    await transaction`
+      INSERT INTO material_progress (
+        material_id, user_id, last_position, completed_at
+      )
+      VALUES (
+        ${input.materialId}, ${studentUserId}, ${input.lastPosition ?? null},
+        ${input.completed ? new Date() : null}
+      )
+      ON CONFLICT (material_id, user_id) DO UPDATE SET
+        last_position = EXCLUDED.last_position,
+        completed_at = EXCLUDED.completed_at,
+        updated_at = now()
+    `;
+  });
 }
