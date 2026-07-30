@@ -333,20 +333,15 @@ export function InfrastructureControl() {
   );
 
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
+    <main className="page-container space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-medium text-primary">Панель администратора</p>
-          <h1 className="mt-2 text-2xl font-semibold sm:text-3xl">
-            Серверы для n8n
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Создайте новый сервер и следите за текущими серверами в одном окне.
-          </p>
+          <h1 className="font-display text-page-title">Инструменты</h1>
+          <p className="mt-2 text-sm text-muted-foreground">n8n</p>
         </div>
         <Button variant="outline" onClick={() => void refresh(selection)}>
           <RefreshCw aria-hidden="true" />
-          Обновить цены
+          Обновить конфигурации
         </Button>
       </div>
 
@@ -616,10 +611,10 @@ export function InfrastructureControl() {
       <section className="grid gap-3" aria-live="polite">
         {message ? <p className="text-sm">{message}</p> : null}
         {environments.length === 0 ? (
-          <Card className="border-dashed">
+          <Card>
             <CardContent className="flex items-center gap-3 py-8 text-muted-foreground">
               <Server aria-hidden="true" />
-              Серверов пока нет. Выберите конфигурацию выше и создайте первый.
+              n8n пока не подключён. Выберите конфигурацию и создайте среду.
             </CardContent>
           </Card>
         ) : (

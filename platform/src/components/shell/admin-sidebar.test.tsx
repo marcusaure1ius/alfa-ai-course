@@ -33,7 +33,7 @@ beforeAll(() => {
 afterEach(cleanup);
 
 describe("AdminSidebar collapsed navigation", () => {
-  it("keeps every infrastructure destination as a top-level actionable link", () => {
+  it("keeps the product workspace as top-level actionable links", () => {
     render(
       <SidebarProvider defaultOpen={false}>
         <AdminSidebar email="admin@example.test" />
@@ -41,6 +41,9 @@ describe("AdminSidebar collapsed navigation", () => {
     );
 
     const destinations = [
+      ["Обзор", "/admin"],
+      ["Ученики", "/admin/students"],
+      ["Контент", "/admin/content"],
       ["Инструменты", "/admin/infrastructure"],
       ["Операции", "/admin/operations"],
     ] as const;

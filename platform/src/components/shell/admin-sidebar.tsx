@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  BookOpenText,
   History,
+  LayoutDashboard,
   ListChecks,
   Settings2,
   Wrench,
@@ -26,8 +28,10 @@ import {
 } from "@/components/ui/sidebar";
 import { NavLink } from "./nav-link";
 
-const courseNavigation = [
+const workspaceNavigation = [
+  { href: "/admin", label: "Обзор", icon: LayoutDashboard },
   { href: "/admin/students", label: "Ученики", icon: Users },
+  { href: "/admin/content", label: "Контент", icon: BookOpenText },
   { href: "/admin/infrastructure", label: "Инструменты", icon: Wrench },
 ] as const;
 
@@ -56,10 +60,10 @@ export function AdminSidebar({ email }: { email: string }) {
       <SidebarSeparator />
       <SidebarContent className="py-2">
         <SidebarGroup>
-          <SidebarGroupLabel>Курс</SidebarGroupLabel>
+          <SidebarGroupLabel>Работа</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {courseNavigation.map((item) => (
+              {workspaceNavigation.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <NavLink {...item} />
                 </SidebarMenuItem>
@@ -86,13 +90,11 @@ export function AdminSidebar({ email }: { email: string }) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" tooltip={email}>
               <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
-                A
+                {email.slice(0, 1).toUpperCase()}
               </span>
               <span className="grid min-w-0 flex-1 text-left leading-tight">
-                <span className="truncate text-sm font-medium">Администратор</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {email}
-                </span>
+                <span className="truncate text-sm font-medium">{email}</span>
+                <span className="truncate text-xs text-muted-foreground">Аккаунт</span>
               </span>
             </SidebarMenuButton>
           </SidebarMenuItem>

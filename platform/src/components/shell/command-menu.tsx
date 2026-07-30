@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import {
+  BookOpenText,
   History,
+  LayoutDashboard,
   ListChecks,
   Search,
   Settings2,
@@ -23,9 +25,11 @@ import {
 } from "@/components/ui/command";
 
 const entries = [
+  { href: "/admin", label: "Обзор", icon: LayoutDashboard },
+  { href: "/admin/students", label: "Ученики", icon: Users },
+  { href: "/admin/content", label: "Контент", icon: BookOpenText },
   { href: "/admin/infrastructure", label: "Инструменты", icon: Wrench },
   { href: "/admin/operations", label: "Операции", icon: ListChecks },
-  { href: "/admin/students", label: "Ученики", icon: Users },
   { href: "/admin/audit", label: "История", icon: History },
   { href: "/admin/settings", label: "Настройки", icon: Settings2 },
 ] as const;
@@ -90,7 +94,7 @@ export function CommandMenu() {
         open={open}
         onOpenChange={setOpen}
         title="Поиск по платформе"
-        description="Перейдите к нужному разделу панели управления."
+        description="Откройте нужный раздел."
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           (returnFocusRef.current ?? triggerRef.current)?.focus();
