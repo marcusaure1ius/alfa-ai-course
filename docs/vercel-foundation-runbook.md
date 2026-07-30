@@ -3,7 +3,10 @@
 - Подготовлено: 2026-07-30
 - Deployable root: `platform/`
 - Provider mode foundation: только `fake`
-- Production/preview deployment и Neon resource этим документом не подтверждены
+- Vercel project: `alfa-ai-course-platform`
+  (`prj_Ot0S3wUkIij7HN4RMfdjuAeBpADi`)
+- Neon resource: `alfa-ai-course-platform-db`
+  (`store_4g5YKEC5u4zeYG3j`, Frankfurt)
 
 ## Архитектурный контракт
 
@@ -29,41 +32,41 @@ Cron claim хранится в `operations.workflow_run_id` как коротк�
 
 ## Environment inventory
 
-Значения ниже создаются только после явного разрешения владельца. Secret values
-не копируются в evidence или логи.
+Ресурсы и значения ниже созданы 2026-07-30 после явного разрешения владельца.
+Secret values не копируются в evidence или логи.
 
 | Key | Development | Preview | Production |
 |---|---|---|---|
 | `VERCEL_ENV` | system/development | system/preview | system/production |
 | `PLATFORM_PROVIDER` | `fake` | `fake` | `fake` |
-| `DATABASE_URL` | local pooled-equivalent | отдельная preview branch | production pooled |
-| `DATABASE_URL_UNPOOLED` | local fallback | отдельная preview direct | production direct, migration only |
-| `APP_ORIGIN` | localhost | preview-specific origin | production origin |
+| `DATABASE_URL` | local pooled-equivalent | Marketplace-managed preview scope | production pooled |
+| `DATABASE_URL_UNPOOLED` | local fallback | Marketplace-managed preview scope | production direct, migration only |
+| `APP_ORIGIN` | localhost | вычисляется из `VERCEL_URL` | production origin |
 | `AUTH_SECRET` | unique local synthetic | отдельный encrypted secret | отдельный encrypted secret |
 | `CRON_SECRET` | отсутствует | отсутствует | encrypted, не менее 32 символов |
 | `TIMEWEB_API_TOKEN` | отсутствует | отсутствует | отсутствует на foundation |
 
-Ни один secret не имеет префикс `NEXT_PUBLIC_`. Production database credential
-не выдаётся preview. Preview использует отдельную Neon branch/credential.
+Ни один secret не имеет префикс `NEXT_PUBLIC_`. В Neon integration включено
+`Create database branch for deployment: Preview` и обязательная готовность
+resource до deployment. Важно: CLI Preview deployments 2026-07-30 отдельную
+Neon branch не создали и использовали `main`; автоматическая branch-per-preview
+изоляция должна быть повторно подтверждена на первом Git-based Preview до
+работы с несинтетическими данными.
 
 ## Безопасный порядок provisioning
 
-Команды ниже — runbook, а не evidence выполненного provisioning.
+Фактически выполненный порядок provisioning:
 
-1. В Vercel создать один project и установить Root Directory `platform/`.
-2. Выбрать Functions region, затем создать Neon через Vercel Marketplace в
-   максимально близком доступном регионе.
-3. Подключить production pooled/direct credentials. Для preview создать
-   отдельную Neon branch и отдельные credentials.
-4. Добавить environment variables по inventory. Не добавлять
+1. Создан один Vercel project с Root Directory `platform/`, Node.js `24.x` и
+   Functions region `fra1`.
+2. Через Vercel Marketplace создан Neon Postgres 17 в Frankfurt; runtime
+   использует pooled URL, migrations — direct URL.
+3. Подключены Production и Preview scopes, включена branch-per-preview
+   настройка с оговоркой для CLI deployment выше.
+4. Добавлены environment variables по inventory. Не добавлен
    `TIMEWEB_API_TOKEN`.
-5. Из `platform/` выполнить `vercel env ls` и сверить только имена/scopes.
-6. До deployment применить migrations direct connection:
-
-```bash
-cd platform
-vercel env run -e production -- npm run db:migrate
-```
+5. `vercel env ls` проверен только по именам/scopes.
+6. До deployment применены четыре versioned migrations под advisory lock.
 
 Migration runner предпочитает `DATABASE_URL_UNPOOLED`, использует PostgreSQL
 advisory lock и проверяет checksum уже применённых файлов. Migration не входит
@@ -107,16 +110,24 @@ Schema migrations forward-only. Rollback приложения допускает
 отдельный corrective migration и review. Факт rollback подтверждается
 deployment ID, status и redacted runtime log.
 
-## Непройденные внешние gates
+## Проверки 2026-07-30
 
-До завершения T-0055 нужны реальные evidence:
+- Preview deployment `dpl_5Qmtv99rTc4dX33ct56iFA5Pn5vY` собран без
+  локальных `.env` в build context.
+- Fake create/delete завершились `succeeded`; проверены 5 create steps и
+  4 delete steps, после удаления environment имеет status `deleted`.
+- Operation `44016af0-d13b-4915-b68c-6fcab90a573f` с retry
+  `timeout_after_create` доступна и terminal после нового deployment.
+- Preview Cron route вернул `404`.
+- Production deployment `dpl_AGg3p9vKzmjZ6k2o9kXuzR89V7e8` имеет status
+  `READY`; ручной Cron invocation вернул `200` и безопасный агрегат
+  `claimed: 0, started: 0, released: 0`.
+- После чистого deployment `dpl_4fjj1DZkjmAf557Km2ozHDDt984V` выполнен
+  rollback на `dpl_AGg3p9vKzmjZ6k2o9kXuzR89V7e8`; rollback status успешен,
+  production alias указывает на целевой deployment и отвечает `200`.
+- За окно проверки Vercel не показал runtime error/fatal logs; application logs
+  не содержали паролей, session tokens или environment values.
 
-- project ID/settings с Root Directory `platform/`;
-- Neon integration, регионы и разделённые credential scopes;
-- применённые production migrations;
-- preview/production-safe fake E2E;
-- Cron после production deployment;
-- Workflow через новый deployment;
-- logs/redaction и успешный rollback.
-
-Без этих evidence нельзя заявлять, что Vercel foundation развёрнут.
+Остаётся отдельная проверка branch-per-preview на Git-based deployment.
+Production Timeweb mutation, MFA enrollment и несинтетические пользовательские
+данные не включены в foundation.

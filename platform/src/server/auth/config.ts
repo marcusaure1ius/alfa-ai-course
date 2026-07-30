@@ -18,9 +18,11 @@ export function getAuthSecret(): string {
 }
 
 export function getAppOrigin(): string {
-  const origin = process.env.APP_ORIGIN;
+  const origin =
+    process.env.APP_ORIGIN ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
   if (!origin) {
-    throw new Error("APP_ORIGIN не настроен.");
+    throw new Error("APP_ORIGIN или VERCEL_URL не настроен.");
   }
   return new URL(origin).origin;
 }

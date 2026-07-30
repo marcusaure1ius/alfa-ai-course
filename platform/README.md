@@ -145,7 +145,9 @@ npm run test:workflow
 - Provider: `src/server/providers/timeweb/` импортирует `server-only`, публикует
   versioned typed allowlist и принудительно использует fake mode вне production.
 - `TIMEWEB_API_TOKEN` не добавляется в `.env.example`, preview или development.
-- Реальные Vercel, Neon и Timeweb ресурсы в рамках foundation не создаются.
+- Для T-0055 созданы Vercel project и Neon Marketplace database; их проверенные
+  IDs, scopes и ограничения записаны в runbook. Timeweb VPS, DNS и provider
+  credentials в foundation не создаются и не подключаются.
 
 Решение по БД и окружениям зафиксировано в
 [`adr/0007-neon-postgres-for-course-platform.md`](../adr/0007-neon-postgres-for-course-platform.md).
@@ -199,5 +201,4 @@ durable Workflow run; terminal operation и существующий run не п
 Root Directory `platform/`, раздельные Neon credentials, контролируемая
 migration, preview E2E, observability и rollback описаны в
 [`docs/vercel-foundation-runbook.md`](../docs/vercel-foundation-runbook.md).
-Наличие конфигурации в Git не является evidence связанного Vercel project или
-deployment.
+Runbook отделяет фактическое evidence 2026-07-30 от ещё не проверенных gates.
