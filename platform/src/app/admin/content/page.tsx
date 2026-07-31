@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { CourseCreateForm } from "@/components/admin/course-create-form";
 import { MaterialCreateDialog } from "@/components/admin/material-create-dialog";
+import { SectionCreateDialog } from "@/components/admin/section-dialogs";
 import { Badge } from "@/components/ui/badge";
 import {
   getAdminCourses,
@@ -41,14 +42,15 @@ export default async function AdminContentPage() {
         </div>
         <div className="flex flex-wrap gap-3">
           <CourseCreateForm />
+          <SectionCreateDialog courses={courseOptions} sections={sectionOptions} />
           <MaterialCreateDialog sections={sectionOptions} />
         </div>
       </div>
 
       {courseOptions.length > 0 && sectionOptions.length === 0 ? (
         <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Чтобы создать материал, сначала добавьте раздел курса через API или
-          подготовленный импорт программы.
+          Чтобы создать материал, добавьте первый раздел курса — это можно
+          сделать прямо здесь кнопкой «Добавить раздел».
         </p>
       ) : null}
 
@@ -161,8 +163,8 @@ export default async function AdminContentPage() {
           <BookOpenText className="size-6 text-muted-foreground" aria-hidden="true" />
           <h2 className="font-display mt-6 text-2xl">Материалов пока нет</h2>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            В курсе пока нет материалов. После подготовки программы они
-            появятся здесь в порядке изучения.
+            Добавьте раздел, затем создайте первый материал. Он появится здесь
+            в порядке изучения и останется черновиком до публикации.
           </p>
         </section>
       )}

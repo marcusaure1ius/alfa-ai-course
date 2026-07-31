@@ -256,6 +256,33 @@ export async function setSectionPublication(
   );
 }
 
+export async function updateSection(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  sectionId: string,
+  input: { slug: string; title: string; status: PublicationStatus },
+): Promise<void> {
+  requireAdminActor(actor);
+  const publication = publicationFields(input.status, actor.userId);
+  const rows = await sql<Array<{ id: string }>>`
+    UPDATE course_sections
+    SET slug = ${input.slug}, title = ${input.title}, status = ${input.status},
+      version = version + 1, updated_by_user_id = ${actor.userId},
+      published_by_user_id = ${publication.publishedByUserId},
+      published_at = ${publication.publishedAt}, updated_at = now()
+    WHERE id = ${sectionId}
+    RETURNING id
+  `;
+  if (!rows[0]) throw new CourseContentError("NOT_FOUND");
+  await appendAudit(
+    sql,
+    actor.userId,
+    "course.section.updated",
+    "course_section",
+    sectionId,
+  );
+}
+
 export async function reorderSectionMaterials(
   sql: DatabaseSql,
   actor: AuthSession,

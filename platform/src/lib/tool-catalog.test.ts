@@ -28,6 +28,7 @@ describe("composeToolCatalog", () => {
         status: "active",
         publicUrl: null,
         updatedAt: "2026-07-31T00:00:00.000Z",
+        accessCount: 0,
       },
     ]);
 

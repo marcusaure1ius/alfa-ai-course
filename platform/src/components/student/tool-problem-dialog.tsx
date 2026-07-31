@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Clipboard, MessageCircleWarning } from "lucide-react";
+import { Check, Clipboard, Loader2, MessageCircleWarning } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -29,10 +29,12 @@ export function ToolProblemDialog({ state }: { state: string }) {
   const [details, setDetails] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [pending, setPending] = useState(false);
   const firstRef = useRef<HTMLInputElement>(null);
 
   async function prepare(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) return;
     if (!problem) {
       setError("Выберите, что произошло.");
       firstRef.current?.focus();
@@ -45,17 +47,21 @@ export function ToolProblemDialog({ state }: { state: string }) {
       details.trim() ? `Подробности: ${details.trim()}` : null,
       "Credentials и пароли не прикладывались.",
     ].filter(Boolean).join("\n");
+    setPending(true);
+    setError(null);
     try {
       await navigator.clipboard.writeText(message);
       setCopied(true);
-      setError(null);
     } catch {
       setError("Не удалось скопировать. Выделите описание вручную и передайте преподавателю.");
+    } finally {
+      setPending(false);
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={(next) => {
+      if (pending) return;
       setOpen(next);
       if (!next) {
         setCopied(false);
@@ -65,7 +71,7 @@ export function ToolProblemDialog({ state }: { state: string }) {
       <DialogTrigger asChild>
         <Button type="button" variant="outline"><MessageCircleWarning aria-hidden="true" />Сообщить о проблеме</Button>
       </DialogTrigger>
-      <DialogContent onOpenAutoFocus={(event) => {
+      <DialogContent aria-busy={pending} onOpenAutoFocus={(event) => {
         event.preventDefault();
         firstRef.current?.focus();
       }}>
@@ -99,6 +105,7 @@ export function ToolProblemDialog({ state }: { state: string }) {
                     name="tool-problem"
                     value={item}
                     checked={problem === item}
+                    disabled={pending}
                     onChange={() => {
                       setProblem(item);
                       setError(null);
@@ -116,14 +123,18 @@ export function ToolProblemDialog({ state }: { state: string }) {
                 id="tool-problem-details"
                 className="min-h-28 w-full resize-y rounded-md border border-input bg-card px-3.5 py-3 text-base leading-6 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 md:text-sm"
                 value={details}
+                disabled={pending}
                 onChange={(event) => setDetails(event.target.value)}
                 placeholder="Коротко опишите текст ошибки и последний успешный шаг"
               />
               <FieldDescription>Не вставляйте пароли, токены, ключи или персональные данные.</FieldDescription>
             </Field>
             <DialogFooter>
-              <DialogClose asChild><Button type="button" variant="outline">Отмена</Button></DialogClose>
-              <Button type="submit"><Clipboard aria-hidden="true" />Скопировать сообщение</Button>
+              <DialogClose asChild><Button type="button" variant="outline" disabled={pending}>Отмена</Button></DialogClose>
+              <Button type="submit" disabled={pending}>
+                {pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Clipboard aria-hidden="true" />}
+                {pending ? "Копируем…" : "Скопировать сообщение"}
+              </Button>
             </DialogFooter>
           </form>
         )}

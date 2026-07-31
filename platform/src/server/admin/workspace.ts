@@ -30,6 +30,7 @@ export type AdminOverview = {
 const actionLabels: Record<string, string> = {
   "course.created": "Создан курс",
   "course.section.created": "Добавлен раздел",
+  "course.section.updated": "Обновлён раздел",
   "course.material.created": "Создан материал",
   "course.material.updated": "Обновлён материал",
   "course.publication.changed": "Изменена публикация курса",
@@ -247,10 +248,12 @@ export async function getAdminCourses(
 
 export type AdminSectionOption = {
   id: string;
+  slug: string;
   title: string;
   courseId: string;
   courseTitle: string;
   position: number;
+  status: "draft" | "published";
   nextMaterialPosition: number;
 };
 
@@ -260,10 +263,12 @@ export async function getAdminSections(
   return sql<AdminSectionOption[]>`
     SELECT
       section.id,
+      section.slug,
       section.title,
       section.course_id AS "courseId",
       course.title AS "courseTitle",
       section.position,
+      section.status,
       coalesce(
         (
           SELECT max(material.position) + 1

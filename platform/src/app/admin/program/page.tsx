@@ -1,6 +1,10 @@
-import { ArrowRight, BookOpenText, CheckCircle2, CircleDashed } from "lucide-react";
+import { BookOpenText, CheckCircle2, CircleDashed } from "lucide-react";
 import Link from "next/link";
 
+import {
+  SectionCreateDialog,
+  SectionEditDialog,
+} from "@/components/admin/section-dialogs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,12 +32,15 @@ export default async function AdminProgramPage() {
             Курсы, разделы и порядок опубликованных учебных шагов.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href="/admin/content">
-            <BookOpenText aria-hidden="true" />
-            Управлять материалами
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <SectionCreateDialog courses={courses} sections={allSections} />
+          <Button asChild variant="outline">
+            <Link href="/admin/content">
+              <BookOpenText aria-hidden="true" />
+              Управлять материалами
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="mt-8 grid gap-5">
@@ -81,13 +88,21 @@ export default async function AdminProgramPage() {
                           <span className="block text-sm font-medium">{sectionIndex + 1}. {section.title}</span>
                           <span className="mt-1 block text-xs text-muted-foreground">{published} из {sectionMaterials.length} опубликовано</span>
                         </span>
-                        <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />
+                        <Badge variant={section.status === "published" ? "success" : "outline"}>
+                          {section.status === "published" ? "Виден" : "Черновик"}
+                        </Badge>
+                        <SectionEditDialog section={section} />
                       </li>
                     );
                   })}
                 </ol>
               ) : (
-                <p className="px-7 py-8 text-sm text-muted-foreground">Разделы появятся после добавления первого материала.</p>
+                <div className="px-7 py-8">
+                  <p className="text-sm text-muted-foreground">
+                    Добавьте первый раздел кнопкой вверху, чтобы собрать
+                    последовательность материалов.
+                  </p>
+                </div>
               )}
             </section>
           );

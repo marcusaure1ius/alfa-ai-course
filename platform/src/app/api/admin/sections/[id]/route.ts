@@ -1,13 +1,14 @@
 import { requireAdmin } from "@/server/auth/access";
 import { verifyCsrfRequest } from "@/server/auth/csrf";
-import type { PublicationStatus } from "@/server/course/contracts";
 import {
   courseError,
   courseRepositoryError,
   hasExactKeys,
+  isBoundedText,
+  isSlug,
   noStoreJson,
 } from "@/server/course/http";
-import { setSectionPublication } from "@/server/course/repository";
+import { updateSection } from "@/server/course/repository";
 import { getDatabase } from "@/server/db/client";
 
 export const runtime = "nodejs";
@@ -24,20 +25,32 @@ export async function PATCH(
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (
     !body ||
-    !hasExactKeys(body, ["status"]) ||
+    !hasExactKeys(body, ["slug", "title", "status"]) ||
+    !isSlug(body.slug) ||
+    !isBoundedText(body.title, 2, 120) ||
     (body.status !== "draft" && body.status !== "published")
   ) {
-    return courseError(400, "INVALID_INPUT", "Укажите состояние публикации.");
+    return courseError(400, "INVALID_INPUT", "Проверьте название, slug и публикацию раздела.");
   }
   try {
     const { id } = await context.params;
-    await setSectionPublication(
+    await updateSection(
       getDatabase(),
       access.session,
       id,
-      body.status as PublicationStatus,
+      {
+        slug: body.slug,
+        title: body.title.trim(),
+        status: body.status,
+      },
     );
-    return noStoreJson({ version: "course-v1", id, status: body.status });
+    return noStoreJson({
+      version: "course-v1",
+      id,
+      slug: body.slug,
+      title: body.title.trim(),
+      status: body.status,
+    });
   } catch (error) {
     const response = courseRepositoryError(error);
     if (response) return response;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ClipboardCheck, ExternalLink } from "lucide-react";
+import { Check, ClipboardCheck, ExternalLink, Loader2 } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -23,9 +23,10 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [pending, setPending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function saveDraft(event: React.FormEvent<HTMLFormElement>) {
+  async function saveDraft(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     let parsed: URL;
     try {
@@ -40,15 +41,28 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
       inputRef.current?.focus();
       return;
     }
-    window.localStorage.setItem(storageKey, url);
-    setSaved(true);
+    setPending(true);
     setError(null);
+    try {
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+      window.localStorage.setItem(storageKey, url);
+      setSaved(true);
+    } catch {
+      setError(
+        "Не удалось сохранить черновик в этом браузере. Скопируйте ссылку в безопасное место.",
+      );
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
+        if (pending) return;
         if (next) setUrl(window.localStorage.getItem(storageKey) ?? "");
         setOpen(next);
         if (!next) {
@@ -60,7 +74,7 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
       <DialogTrigger asChild>
         <Button type="button" variant="outline"><ClipboardCheck aria-hidden="true" />Подготовить ответ</Button>
       </DialogTrigger>
-      <DialogContent onOpenAutoFocus={(event) => {
+      <DialogContent aria-busy={pending} onOpenAutoFocus={(event) => {
         event.preventDefault();
         inputRef.current?.focus();
       }}>
@@ -98,6 +112,7 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
                   placeholder="https://…"
                   className="pl-10"
                   value={url}
+                  disabled={pending}
                   onChange={(event) => {
                     setUrl(event.target.value);
                     if (error) setError(null);
@@ -117,8 +132,11 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
               {error ? <FieldError id="practice-url-error">{error}</FieldError> : null}
             </Field>
             <DialogFooter>
-              <DialogClose asChild><Button type="button" variant="outline">Отмена</Button></DialogClose>
-              <Button type="submit">Сохранить черновик</Button>
+              <DialogClose asChild><Button type="button" variant="outline" disabled={pending}>Отмена</Button></DialogClose>
+              <Button type="submit" disabled={pending}>
+                {pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
+                {pending ? "Сохраняем…" : "Сохранить черновик"}
+              </Button>
             </DialogFooter>
           </form>
         )}

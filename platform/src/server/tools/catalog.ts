@@ -15,12 +15,21 @@ export async function getToolCatalog(sql: DatabaseSql): Promise<ToolCatalogItem[
       status: string;
       public_url: string | null;
       updated_at: Date;
+      access_count: number;
     }>
   >`
-    SELECT id, name, status, public_url, updated_at
-    FROM environments
-    WHERE status <> 'deleted'
-    ORDER BY created_at
+    SELECT
+      environment.id, environment.name, environment.status,
+      environment.public_url, environment.updated_at,
+      (
+        SELECT count(*)::int
+        FROM tool_access AS access
+        WHERE access.environment_id = environment.id
+          AND access.status = 'active'
+      ) AS access_count
+    FROM environments AS environment
+    WHERE environment.status <> 'deleted'
+    ORDER BY environment.created_at
   `;
   return composeToolCatalog(
     toolDefinitions,
@@ -31,6 +40,7 @@ export async function getToolCatalog(sql: DatabaseSql): Promise<ToolCatalogItem[
       status: row.status,
       publicUrl: row.public_url,
       updatedAt: row.updated_at.toISOString(),
+      accessCount: row.access_count,
     })),
   );
 }

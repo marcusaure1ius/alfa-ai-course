@@ -17,6 +17,7 @@ import {
   setCoursePublication,
   setSectionPublication,
   setStudentCourseAccess,
+  updateSection,
   updateMaterial,
 } from "./repository";
 
@@ -167,6 +168,45 @@ describe("course content repository", () => {
     expect(audit.map((event) => event.action)).toEqual([
       "course.material.created",
       "course.material.updated",
+    ]);
+  });
+
+  it("updates section metadata and publication together", async () => {
+    const { sectionId } = await createPublishedCourseWithDraftMaterial();
+    await updateSection(sql, admin, sectionId, {
+      slug: "new-start",
+      title: "Новый старт",
+      status: "published",
+    });
+
+    const stored = await sql<
+      Array<{
+        slug: string;
+        title: string;
+        status: string;
+        version: number;
+        published_by_user_id: string;
+      }>
+    >`
+      SELECT slug, title, status, version, published_by_user_id
+      FROM course_sections WHERE id = ${sectionId}
+    `;
+    expect(stored[0]).toEqual({
+      slug: "new-start",
+      title: "Новый старт",
+      status: "published",
+      version: 3,
+      published_by_user_id: admin.userId,
+    });
+    const audit = await sql<Array<{ action: string }>>`
+      SELECT action FROM audit_events
+      WHERE subject_id = ${sectionId}
+      ORDER BY occurred_at
+    `;
+    expect(audit.map((event) => event.action)).toEqual([
+      "course.section.created",
+      "course.section.publication.changed",
+      "course.section.updated",
     ]);
   });
 

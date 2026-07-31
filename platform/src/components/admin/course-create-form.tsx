@@ -76,7 +76,7 @@ export function CourseCreateForm() {
 
   return (
     <Dialog open={open} onOpenChange={(next) => !pending && setOpen(next)}>
-      <DialogTrigger asChild><Button type="button"><Plus aria-hidden="true" />Создать курс</Button></DialogTrigger>
+      <DialogTrigger asChild><Button type="button" variant="outline"><Plus aria-hidden="true" />Создать курс</Button></DialogTrigger>
       <DialogContent onOpenAutoFocus={(event) => { event.preventDefault(); titleRef.current?.focus(); }}>
         <form onSubmit={submit} className="grid gap-5" noValidate>
           <DialogHeader>
@@ -91,7 +91,7 @@ export function CourseCreateForm() {
             </Field>
             <Field>
               <FieldLabel htmlFor="course-slug">Slug</FieldLabel>
-              <Input ref={slugRef} id="course-slug" value={slug} onChange={(event) => { setSlug(event.target.value.toLowerCase()); setSlugError(null); }} placeholder="n8n-start" aria-invalid={Boolean(slugError)} aria-describedby="course-slug-help course-slug-error" />
+              <Input ref={slugRef} id="course-slug" value={slug} onChange={(event) => { setSlug(event.target.value.toLowerCase()); setSlugError(null); }} placeholder="n8n-start" aria-invalid={Boolean(slugError)} aria-describedby={slugError ? "course-slug-help course-slug-error" : "course-slug-help"} />
               <FieldDescription id="course-slug-help">Адрес курса: латиница, цифры и дефисы.</FieldDescription>
               {slugError ? <FieldError id="course-slug-error">{slugError}</FieldError> : null}
             </Field>

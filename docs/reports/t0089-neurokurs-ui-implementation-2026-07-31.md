@@ -21,7 +21,13 @@
 - admin navigation приведена к пяти основным разделам: «Ученики»,
   «Материалы», «Программа», «Доступы», «Инструменты»;
 - добавлены самостоятельные страницы «Программа» и «Доступы»;
-- создание курса, ученика и материала переведено в единые диалоги;
+- создание курса, раздела, ученика и материала переведено в единые диалоги;
+- раздел программы теперь можно создать, переименовать, изменить его slug и
+  опубликовать из интерфейса; стрелки без действия и инструкция про ручной API
+  удалены;
+- admin «Инструменты» пересобраны в плотную рабочую область: сводка,
+  attention state, таблица экземпляров, число доступов, статусы, обновление и
+  явные переходы к деталям/управлению;
 - редактор материала показывает несохранённые изменения и предупреждает при
   закрытии вкладки;
 - формы получили видимые labels, inline errors, `aria-invalid`,
@@ -29,6 +35,22 @@
 - вход получил кнопку показа/скрытия пароля;
 - destructive infrastructure flows и их reauth/exact-name safeguards не
   ослаблялись.
+
+## Доработка после независимого review
+
+Первое review вернуло задачу на доработку. Закрыты все четыре блокирующих
+замечания:
+
+1. Program/Materials стали самодостаточными: create/edit section работает через
+   существующий course content backend, material create/edit остаётся связанным
+   с выбранным разделом.
+2. Admin Tools больше не использует прежнюю крупную одиночную карточку и
+   соответствует плотному list → details паттерну `.pen`.
+3. Локальное сохранение практики и копирование сообщения о проблеме имеют
+   `pending`, disabled controls, spinner и `aria-busy`, поэтому повторное
+   действие невозможно.
+4. `course-slug` и `student-password` добавляют error ID в
+   `aria-describedby` только когда соответствующий error element существует.
 
 ## Ограничение backend
 
@@ -40,7 +62,7 @@
 
 ## Browser QA
 
-Проверены размеры 1280×900, 375×812 и landscape 667×375.
+Проверены размеры 1280×900, 1280×720, 375×812 и landscape 667×375.
 
 - страницы загружаются без Next.js error overlay и console errors;
 - `scrollWidth` равен ширине viewport на desktop, mobile и landscape;
@@ -49,6 +71,14 @@
 - невалидная форма фокусирует первое проблемное поле;
 - completion, practice, student creation, material creation и n8n problem
   dialogs имеют доступные заголовки, подписи, cancel/close и error states;
+- через реальный UI создан, затем переименован и опубликован новый раздел;
+  после сохранения dialog закрылся, а обновлённая строка появилась в программе;
+- create/edit section dialogs на desktop и mobile переводят фокус в первый
+  смысловой control и не выходят за viewport;
+- `aria-describedby` проверен до и после появления ошибок у course slug и
+  student password: все IDREF указывают на существующие элементы;
+- Admin Tools на 1280 и 375 показывает сводку и responsive instance row без
+  horizontal overflow; console error log пуст;
 - на проверенных экранах нет inputs без label и кнопок без доступного имени;
 - глобальный `prefers-reduced-motion` отключает долгие animation/transition;
 - ключевые light/dark text pairs проверены по WCAG: light foreground 14.64:1,
@@ -69,24 +99,30 @@
 - `docs/assets/design-audit/t0089/admin-create-material-error.jpg`
 - `docs/assets/design-audit/t0089/admin-create-student.jpg`
 - `docs/assets/design-audit/t0089/n8n-problem-dialog-error.jpg`
+- `docs/assets/design-audit/t0089/admin-tools-remediation-desktop.jpg`
+- `docs/assets/design-audit/t0089/admin-tools-remediation-mobile-row.jpg`
+- `docs/assets/design-audit/t0089/admin-materials-remediation-desktop.jpg`
+- `docs/assets/design-audit/t0089/admin-section-create-dialog.jpg`
+- `docs/assets/design-audit/t0089/admin-section-edit-dialog.jpg`
+- `docs/assets/design-audit/t0089/admin-section-create-mobile.jpg`
 
-Browser QA использовал только синтетические локальные accounts/course. После
-проверки в локальной базе осталось 0 синтетических пользователей и 0
-синтетических курсов T-0089.
+Browser QA использовал только синтетические локальные account/course/section.
+После проверки удалены пользователь, курс, созданные через UI разделы,
+материал, сессия и связанные audit events; проверка точных fixture ID вернула
+0 пользователей, 0 курсов, 0 сред и 0 audit events T-0089. Эти временные данные
+не восстанавливаются и не относились к пользовательским данным.
 
 ## Проверки
 
 - `npm run lint` — passed;
 - `npm run typecheck` — passed;
-- `npm test` — 32 files, 127 tests passed;
-- `npm run test:integration` — 7 files, 54 tests passed;
+- `npm test` — 33 files, 129 tests passed;
+- `npm run test:integration` — 7 files, 55 tests passed;
 - `npm run test:workflow` — 1 file, 4 tests passed;
 - `npm run build` — passed, 38 routes generated/validated.
 
-Один повторный integration run кратковременно воспроизвёл существующий
-timestamp-sensitive `STALE_REAUTH` flake в трёх инфраструктурных тестах. Тот же
-файл сразу прошёл 27/27, затем полный повтор прошёл 54/54. UI-код не изменяет
-auth/operations runtime.
+Итоговый повтор после всех правок прошёл полностью: quality, integration и
+workflow зелёные. UI-код не изменяет auth/operations runtime.
 
 ## Вне результата
 

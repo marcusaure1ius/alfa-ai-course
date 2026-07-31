@@ -164,7 +164,11 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
                 disabled={pending}
                 className="pr-12"
                 aria-invalid={Boolean(passwordError)}
-                aria-describedby="student-password-help student-password-error"
+                aria-describedby={
+                  passwordError
+                    ? "student-password-help student-password-error"
+                    : "student-password-help"
+                }
               />
               <button
                 type="button"

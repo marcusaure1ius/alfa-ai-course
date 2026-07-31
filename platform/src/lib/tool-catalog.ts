@@ -13,6 +13,7 @@ export type ToolEnvironment = {
   status: string;
   publicUrl: string | null;
   updatedAt: string;
+  accessCount: number;
 };
 
 export type ToolCatalogItem = ToolDefinition & {
