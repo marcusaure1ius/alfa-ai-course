@@ -42,7 +42,7 @@ server-side окружении. Второй фактор, если он тре�
 
 Проверенные внешние факты:
 
-- Timeweb позволяет создавать VPS через API и передавать `cloud-init` при создании; `cloud-init` выполняется без интерактивных запросов от `root` ([создание сервера](https://timeweb.cloud/docs/cloud-servers/manage-servers/create-server), [cloud-init](https://timeweb.cloud/docs/cloud-servers/manage-servers/cloud-init));
+- Timeweb позволяет создавать VPS через API, а актуальный update contract допускает provider-side переустановку существующего server ID с `os_id` и `cloud_init`; `cloud-init` выполняется без интерактивных запросов от `root` ([API](https://timeweb.cloud/api-docs), [создание сервера](https://timeweb.cloud/docs/cloud-servers/manage-servers/create-server), [cloud-init](https://timeweb.cloud/docs/cloud-servers/manage-servers/cloud-init));
 - Timeweb позволяет после создания сервера получить системный диск и включить или выключить его автобэкап отдельным API-вызовом; стоимость существующей backup-копии составляет 6 ₽/ГБ ([API](https://timeweb.cloud/api-docs), [резервное копирование](https://timeweb.cloud/docs/cloud-servers/manage-servers/backup));
 - Timeweb API token можно ограничить по сервисам и сроку действия; разрешение удалять сервисы без кода из Telegram задаётся отдельно ([API-токены](https://timeweb.cloud/docs/account-management/token));
 - публичный IPv4 является отдельным тарифицируемым ресурсом, после удаления сервера может сохраниться и продолжить тарифицироваться ([публичные IP](https://timeweb.cloud/docs/public-ip));
@@ -283,7 +283,7 @@ Environment открывается из конкретного инструме�
 6. Публичный/переносимый IPv4 включён и создаётся сразу.
 7. Preview ресурсов и provider price, подтверждение и переход к экрану durable operation.
 
-Этот мастер создаёт чистый VPS. Он не принимает shell script, не запускает Ubuntu-24-only starter kit и не обещает готовность n8n. Установка совместимого профиля остаётся отдельным versioned flow.
+Этот мастер создаёт чистый VPS. Он не принимает shell script, не запускает Ubuntu-24-only starter kit и не обещает готовность n8n. Отдельное действие «Установить n8n» после fresh re-auth и exact-name confirmation переустанавливает тот же owned VPS на Ubuntu 24.04, сохраняет floating IPv4 и запускает только versioned allowlisted profile. UI явно предупреждает о полной потере данных системного диска.
 
 Мастер не принимает произвольный shell script. Профили установки версионируются и выбираются из allowlist.
 
@@ -333,7 +333,7 @@ Environment открывается из конкретного инструме�
 - выбранные region, zone, Premium NVMe preset и Ubuntu image всё ещё присутствуют в актуальном catalog;
 - отсутствует другая активная mutation этой среды.
 
-`INF-03` Deploy configurator резервирует переносимый публичный IP, затем создаёт чистый VPS с этим IP. После provider readiness он применяет выбранное состояние автобэкапа к единственному системному диску. DNS и `cloud-init` выполняются только отдельным совместимым install flow.
+`INF-03` Deploy configurator резервирует переносимый публичный IP, затем создаёт чистый VPS с этим IP. После provider readiness он применяет выбранное состояние автобэкапа к единственному системному диску. DNS и `cloud-init` выполняются только отдельным destructive install flow по [ADR-0011](../adr/0011-control-plane-post-provisioning-install.md); install не создаёт второй VPS или IP.
 
 `INF-04` Если резервирование IP до VPS невозможно для выбранной конфигурации, adapter использует подтверждённый альтернативный порядок и фиксирует его отдельным provider capability flag.
 
@@ -343,7 +343,7 @@ Environment открывается из конкретного инструме�
 
 ### 7.3. Bootstrap и установка n8n
 
-`N8N-01` Default путь первого создания использует versioned `cloud-init`, а не интерактивный SSH.
+`N8N-01` Отдельный `install_environment` flow после создания plain VPS использует provider-side `PATCH`/reinstall того же server ID с Ubuntu 24.04 и versioned `cloud-init`, а не интерактивный SSH. Перед destructive mutation обязательны fresh re-auth, точное имя среды и подтверждение потери данных.
 
 `N8N-02` `cloud-init`:
 
@@ -368,7 +368,7 @@ Environment открывается из конкретного инструме�
 - `/healthz` отвечает ожидаемо;
 - страница editor открывается без redirect loop.
 
-`N8N-05` Первый этап не использует исходящий SSH из Vercel: bootstrap выполняется только через `cloud-init`, а готовность подтверждается Timeweb status и внешними HTTPS/health checks. Добавление remote execution требует отдельного ADR с egress/network policy и уникальным ED25519 key; один общий root key запрещён.
+`N8N-05` Первый этап не использует исходящий SSH из Vercel: bootstrap выполняется только через provider-side reinstall с `cloud-init`, исходный SSH key после reimage проверяется и повторно прикрепляется через typed Timeweb API, а готовность подтверждается Timeweb status/OS и внешними HTTPS/health checks. Добавление remote execution требует отдельного ADR с egress/network policy и уникальным ED25519 key; один общий root key запрещён.
 
 `N8N-06` Платформа не заявляет, что owner account n8n создан автоматически, пока для выбранной версии не подтверждён официальный безопасный API/CLI. В готовой среде допускается финальное состояние `ready_owner_setup_required` с инструкцией открыть URL и создать owner.
 
@@ -390,29 +390,33 @@ Environment открывается из конкретного инструме�
 
 ```mermaid
 stateDiagram-v2
-  [*] --> validating
-  validating --> reserving_ip
-  reserving_ip --> creating_dns
-  creating_dns --> creating_server
+  [*] --> validating_create
+  validating_create --> reserving_ip
+  reserving_ip --> creating_server
   creating_server --> provider_installing
-  provider_installing --> bootstrapping
-  bootstrapping --> installing_n8n
-  installing_n8n --> waiting_dns
-  waiting_dns --> issuing_tls
+  provider_installing --> active_plain_vps
+  active_plain_vps --> validating_install
+  validating_install --> creating_dns
+  creating_dns --> waiting_dns
+  waiting_dns --> installing_n8n
+  installing_n8n --> provider_reinstalling
+  provider_reinstalling --> bootstrapping
+  bootstrapping --> issuing_tls
   issuing_tls --> health_check
-  health_check --> ready
   health_check --> ready_owner_setup_required
-  validating --> failed
+  validating_create --> failed
+  validating_install --> degraded
   reserving_ip --> failed
-  creating_dns --> failed
+  creating_dns --> degraded
   creating_server --> failed
   provider_installing --> failed
-  bootstrapping --> failed
-  installing_n8n --> failed
+  provider_reinstalling --> degraded
+  bootstrapping --> degraded
+  installing_n8n --> degraded
   waiting_dns --> degraded
   issuing_tls --> degraded
   health_check --> degraded
-  ready --> deleting
+  active_plain_vps --> deleting
   ready_owner_setup_required --> deleting
   degraded --> deleting
   failed --> deleting
@@ -662,9 +666,9 @@ navigation.
 
 `AC-03` Двойное нажатие create с одним idempotency key создаёт одну operation и не более одного VPS.
 
-`AC-04` Успешная операция создаёт VPS, DNS и n8n; external check подтверждает валидный HTTPS и health; UI показывает URL и фактические provider IDs.
+`AC-04` Успешный create оставляет один active plain VPS с exact owned floating IP. Отдельный подтверждённый install переустанавливает тот же server ID, создаёт owned DNS и n8n; external check подтверждает валидный HTTPS, закрытые 5432/5678, health и owner setup state; UI показывает URL без выдачи provider IDs ученику.
 
-`AC-05` Повтор step, рестарт Function или новый Vercel deployment между `creating_server` и `bootstrapping` не создаёт второй сервер, а продолжает/reconciles исходную operation.
+`AC-05` Повтор step, рестарт Function или новый Vercel deployment не создаёт второй сервер и не повторяет destructive reimage вслепую: create reconciles owned resources, install — provider status и exact OS по durable mutation marker.
 
 `AC-06` Ошибка DNS или TLS переводит среду в `degraded`, сохраняет работающий VPS и показывает конкретное действие, не повторяя создание VPS.
 

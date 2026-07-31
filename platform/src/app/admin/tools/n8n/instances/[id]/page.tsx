@@ -31,6 +31,7 @@ const resourceStatusLabels: Record<string, string> = {
 
 const operationLabels: Record<string, string> = {
   create_environment: "Создание среды",
+  install_environment: "Установка n8n",
   delete_environment: "Удаление среды",
 };
 

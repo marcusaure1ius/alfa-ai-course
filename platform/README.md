@@ -23,9 +23,36 @@ server-side окружению проекта. Второй фактор, есл
 Раздел «Инструменты» показывает продуктовые типы и их учебные среды. n8n — первый
 тип инструмента; конкретный VPS не становится сущностью верхнего уровня.
 Регион, Ubuntu, публичный IPv4, backup и стоимость доступны только в setup и
-техническом detail. На текущем этапе setup создаёт VPS, но автоматическая
-установка n8n, DNS и TLS остаётся отдельным lifecycle `T-0057`; интерфейс не
-выдаёт созданный VPS за уже готовую n8n-среду.
+техническом detail. Setup сначала создаёт чистый VPS. Отдельное действие
+«Установить n8n» после fresh re-auth и exact-name confirmation переустанавливает
+тот же VPS на Ubuntu 24.04 с exact starter-kit profile, настраивает owned DNS и
+проверяет TLS/health. До успешного install интерфейс не выдаёт VPS за готовую
+n8n-среду.
+
+## Отдельная установка n8n
+
+`POST /api/admin/infrastructure/environments/:id/install-n8n` запускает durable
+`install_environment` operation только для owned active/degraded plain VPS.
+Операция разрушительна: системный диск переустанавливается, поэтому UI требует
+пароль, при необходимости MFA, точное имя среды и отдельный checkbox потери
+данных.
+
+Production adapter:
+
+- повторно проверяет exact VPS, floating IPv4, SSH key и Ubuntu 24.04 в live
+  Timeweb catalog;
+- резервирует `n8n.neurokurs.ru` и создаёт только owned A record;
+- перед destructive mutation записывает durable marker;
+- отправляет allowlisted `PATCH` того же server ID с Ubuntu 24.04 и exact
+  `starter-kit-v0.1.0` cloud-init;
+- после reimage проверяет OS/status, повторно прикрепляет исходный SSH key и
+  подтверждает DNS, 80/443, закрытые 5432/5678, TLS, `/healthz`, editor и
+  `ready_owner_setup_required`;
+- при retry не повторяет reimage вслепую, а сначала reconciles provider state.
+
+Исходящий SSH из Vercel, browser-supplied cloud-init/provider IDs,
+`releases/latest` и автоматическое создание owner запрещены. Подробное решение:
+[`ADR-0011`](../adr/0011-control-plane-post-provisioning-install.md).
 
 ## Контент и доступ ученика
 

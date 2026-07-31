@@ -5,10 +5,12 @@ import {
   AlertTriangle,
   ArrowLeft,
   Check,
+  ExternalLink,
   HardDrive,
   Loader2,
   MapPin,
   Plus,
+  Download,
   RefreshCw,
   Server,
   ShieldCheck,
@@ -41,6 +43,15 @@ type Environment = {
   name: string;
   status: string;
   updatedAt: string;
+  publicUrl: string | null;
+  installationStatus: string | null;
+  currentOperation: {
+    id: string;
+    kind: string;
+    status: string;
+    currentStep: string | null;
+    canResume: boolean;
+  } | null;
   publicIp: string | null;
   monthlyRoubles: number;
   ownedResources: Array<{
@@ -79,6 +90,192 @@ const resourceLabels: Record<string, string> = {
   public_ip: "Публичный IP",
   backup: "Резервные копии",
 };
+
+const operationStepLabels: Record<string, string> = {
+  configure_dns: "Настраиваем DNS",
+  waiting_dns: "Ждём DNS",
+  installing_n8n: "Переустанавливаем Ubuntu и n8n",
+  provider_installing: "Проверяем сервер после переустановки",
+  bootstrapping: "Запускаем сервисы",
+  issuing_tls: "Получаем TLS-сертификат",
+  health_check: "Проверяем n8n",
+  complete_install: "Завершаем установку",
+};
+
+function operationStepLabel(operation: Environment["currentOperation"]): string {
+  if (!operation) return "Операция поставлена в очередь";
+  if (
+    operation.kind === "create_environment" &&
+    operation.currentStep === "provider_installing"
+  ) {
+    return "Проверяем готовность сервера";
+  }
+  return (
+    operationStepLabels[operation.currentStep ?? ""] ??
+    "Операция поставлена в очередь"
+  );
+}
+
+function InstallEnvironment({
+  environment,
+  resume = false,
+  onAccepted,
+}: {
+  environment: Environment;
+  resume?: boolean;
+  onAccepted(): void;
+}) {
+  const [confirmationName, setConfirmationName] = useState("");
+  const [confirmedLoss, setConfirmedLoss] = useState(false);
+  const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [pending, setPending] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
+  const exact = confirmationName === environment.name && confirmedLoss;
+
+  async function install() {
+    if (!exact) return;
+    setPending(true);
+    setInstallError(null);
+    try {
+      const csrf = await csrfToken();
+      const reauth = await fetch("/api/auth/reauth", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+          "x-csrf-token": csrf,
+        },
+        body: JSON.stringify({
+          password,
+          ...(mfaCode ? { mfaCode } : {}),
+        }),
+      });
+      if (!reauth.ok) throw new Error("Не удалось подтвердить вход.");
+      const response = await fetch(
+        `/api/admin/infrastructure/environments/${environment.id}/install-n8n`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "content-type": "application/json",
+            "x-csrf-token": csrf,
+          },
+          body: JSON.stringify({
+            confirmationName,
+            confirmedLoss,
+            idempotencyKey: `install-${environment.id}-${crypto.randomUUID()}`,
+          }),
+        },
+      );
+      const body = (await response.json()) as {
+        error?: { message?: string };
+      };
+      if (!response.ok) {
+        throw new Error(body.error?.message ?? "Не удалось запустить установку.");
+      }
+      onAccepted();
+    } catch (error) {
+      setInstallError(
+        error instanceof Error
+          ? error.message
+          : "Не удалось запустить установку.",
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="sm" className="min-h-11">
+          <Download aria-hidden="true" />
+          {resume ? "Возобновить установку" : "Установить n8n"}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {resume
+              ? `Возобновить установку на «${environment.name}»?`
+              : `Установить n8n на «${environment.name}»?`}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {resume
+              ? "Прерванная durable-операция продолжится с последнего незавершённого шага. Второй VPS или публичный IP создаваться не будет."
+              : "Тот же VPS будет полностью переустановлен на Ubuntu 24.04. Публичный IP сохранится, но все текущие файлы и настройки сервера будут удалены. После установки нужно будет создать владельца n8n."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-3">
+          <Alert variant="destructive">
+            <AlertTriangle aria-hidden="true" />
+            <AlertTitle>Все данные VPS будут удалены</AlertTitle>
+            <AlertDescription>
+              Продолжайте только для чистого сервера, созданного этим мастером.
+            </AlertDescription>
+          </Alert>
+          <label className="grid gap-1.5 text-sm">
+            Введите точное имя среды
+            <Input
+              value={confirmationName}
+              onChange={(event) => setConfirmationName(event.target.value)}
+              autoComplete="off"
+            />
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={confirmedLoss}
+              onChange={(event) => setConfirmedLoss(event.target.checked)}
+              className="mt-1"
+            />
+            Я подтверждаю полную переустановку и потерю данных VPS.
+          </label>
+          <label className="grid gap-1.5 text-sm">
+            Пароль Neurokurs
+            <Input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm">
+            Код из приложения (если включён)
+            <Input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={mfaCode}
+              onChange={(event) =>
+                setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              placeholder="000000"
+            />
+          </label>
+          {installError ? (
+            <p className="text-sm text-destructive" aria-live="polite">
+              {installError}
+            </p>
+          ) : null}
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Отмена</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!exact || password.length < 12 || pending}
+            onClick={(event) => {
+              event.preventDefault();
+              void install();
+            }}
+          >
+            {pending ? <Loader2 aria-hidden="true" className="animate-spin" /> : null}
+            {resume ? "Продолжить установку" : "Переустановить VPS и n8n"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
 
 function DeleteEnvironment({
   environment,
@@ -301,6 +498,17 @@ export function InfrastructureControl() {
     const timer = window.setTimeout(() => void refresh(), selection ? 180 : 0);
     return () => window.clearTimeout(timer);
   }, [refresh, selection]);
+
+  useEffect(() => {
+    const hasRunningOperation = environments.some(
+      (environment) =>
+        environment.currentOperation ||
+        ["creating", "deleting"].includes(environment.status),
+    );
+    if (!loaded || !hasRunningOperation) return;
+    const timer = window.setTimeout(() => void refresh(selection), 1_500);
+    return () => window.clearTimeout(timer);
+  }, [environments, loaded, refresh, selection]);
 
   async function create() {
     if (!preview?.ok || !selection || name.trim().length < 2) return;
@@ -672,6 +880,20 @@ export function InfrastructureControl() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     {environment.publicIp ?? "IP ещё не назначен"} · {environment.monthlyRoubles.toLocaleString("ru-RU")} ₽/мес.
                   </p>
+                  {environment.currentOperation ? (
+                    <p className="mt-2 text-sm text-muted-foreground" role="status">
+                      {operationStepLabel(environment.currentOperation)}
+                    </p>
+                  ) : environment.installationStatus ===
+                    "ready_owner_setup_required" ? (
+                    <p className="mt-2 text-sm text-status-ready">
+                      n8n готов — требуется создать владельца.
+                    </p>
+                  ) : environment.status === "active" ? (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Сервер готов. n8n ещё не установлен.
+                    </p>
+                  ) : null}
                   {environment.status === "cleanup_required" ? (
                     <ul className="mt-2 space-y-1 text-xs text-destructive">
                       {environment.ownedResources.map((resource) => (
@@ -683,9 +905,35 @@ export function InfrastructureControl() {
                     </ul>
                   ) : null}
                 </div>
-                {["active", "degraded", "cleanup_required"].includes(environment.status) ? (
-                  <DeleteEnvironment environment={environment} onAccepted={() => void refresh()} />
-                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  {environment.publicUrl ? (
+                    <Button asChild variant="outline" size="sm" className="min-h-11">
+                      <a href={environment.publicUrl} target="_blank" rel="noreferrer">
+                        Открыть n8n
+                        <ExternalLink aria-hidden="true" />
+                      </a>
+                    </Button>
+                  ) : null}
+                  {["active", "degraded"].includes(environment.status) &&
+                  environment.installationStatus !==
+                    "ready_owner_setup_required" &&
+                  (!environment.currentOperation ||
+                    environment.currentOperation.canResume) ? (
+                    <InstallEnvironment
+                      environment={environment}
+                      resume={environment.currentOperation?.canResume ?? false}
+                      onAccepted={() => void refresh()}
+                    />
+                  ) : null}
+                  {["active", "degraded", "cleanup_required"].includes(
+                    environment.status,
+                  ) && !environment.currentOperation ? (
+                    <DeleteEnvironment
+                      environment={environment}
+                      onAccepted={() => void refresh()}
+                    />
+                  ) : null}
+                </div>
               </CardContent>
             </Card>
           ))

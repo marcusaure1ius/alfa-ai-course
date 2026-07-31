@@ -6,6 +6,8 @@ import {
   type TimewebAutoBackupSettings,
   type TimewebCreateServerInput,
   type TimewebDnsRecord,
+  type TimewebInstallationReconciliation,
+  type TimewebInstallServerInput,
   type TimewebMutationAdapter,
   type TimewebPublicIpCandidate,
   type TimewebPublicIpReconciliation,
@@ -29,6 +31,7 @@ const API_ORIGIN = "https://api.timeweb.cloud";
 const MUTATION_REQUEST_TIMEOUT_MS = 60_000;
 const RECONCILIATION_REQUEST_TIMEOUT_MS = 8_000;
 const SERVER_COLLECTION_PATH = "/api/v1/servers";
+const SSH_KEY_COLLECTION_PATH = "/api/v1/ssh-keys";
 const PUBLIC_IP_COLLECTION_PATH = "/api/v1/floating-ips";
 const DNS_RECORD_ID = /^[1-9][0-9]{0,18}$/;
 const SERVER_ID = /^[1-9][0-9]{0,18}$/;
@@ -253,6 +256,13 @@ async function providerError(response: Response): Promise<TimewebProviderError> 
       true,
     );
   }
+  if (status === 405) {
+    return new TimewebProviderError(
+      "UPSTREAM_UNAVAILABLE",
+      "Timeweb ещё не разрешает mutation-запрос для переходного состояния сервера (HTTP 405).",
+      true,
+    );
+  }
   if (status === 409) {
     return new TimewebProviderError(
       "INVALID_REQUEST",
@@ -327,6 +337,39 @@ function responseServerStatus(payload: unknown): TimewebServerStatus {
     state: "unsupported",
     providerValue: normalized || "unknown",
   };
+}
+
+function responseServerOperatingSystemId(payload: unknown): number | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb не вернул данные сервера.",
+      false,
+    );
+  }
+  const server = (payload as Record<string, unknown>).server;
+  if (!server || typeof server !== "object" || Array.isArray(server)) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb не вернул данные сервера.",
+      false,
+    );
+  }
+  const operatingSystem = (server as Record<string, unknown>).os;
+  if (operatingSystem == null) return null;
+  if (
+    typeof operatingSystem !== "object" ||
+    Array.isArray(operatingSystem) ||
+    !Number.isSafeInteger((operatingSystem as Record<string, unknown>).id) ||
+    Number((operatingSystem as Record<string, unknown>).id) <= 0
+  ) {
+    throw new TimewebProviderError(
+      "INVALID_RESPONSE",
+      "Timeweb вернул некорректную операционную систему сервера.",
+      false,
+    );
+  }
+  return Number((operatingSystem as Record<string, unknown>).id);
 }
 
 function responsePublicIp(payload: unknown, environmentId: string): TimewebPublicIpResource {
@@ -679,6 +722,60 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
     );
   }
 
+  async installServer(input: TimewebInstallServerInput): Promise<void> {
+    const resource = ownedServer(input.resource);
+    if (input.cloudInit !== buildStarterKitCloudInit()) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Install profile не прошёл allowlist-проверку.",
+        false,
+      );
+    }
+    await this.request(
+      "PATCH",
+      `${SERVER_COLLECTION_PATH}/${resource.externalId}`,
+      {
+        os_id: positiveInteger(input.operatingSystemId, "Operating system"),
+        cloud_init: input.cloudInit,
+      },
+    );
+  }
+
+  async ensureServerSshKey(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+    sshKeyId: number,
+  ): Promise<void> {
+    const verified = ownedServer(resource);
+    const expectedId = positiveInteger(sshKeyId, "SSH key");
+    const response = await this.request("GET", SSH_KEY_COLLECTION_PATH);
+    const payload = await response.json().catch(() => null);
+    const values = objectArray(payload, "ssh_keys");
+    const matching = values.filter(
+      (value) =>
+        value.id === expectedId || String(value.id) === String(expectedId),
+    );
+    if (matching.length !== 1 || !Array.isArray(matching[0]?.used_by)) {
+      throw new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "Timeweb не вернул однозначное состояние approved SSH-ключа.",
+        false,
+      );
+    }
+    const present = matching[0].used_by.some((server) => {
+      if (!server || typeof server !== "object" || Array.isArray(server)) {
+        return false;
+      }
+      const id = (server as Record<string, unknown>).id;
+      return id === Number(verified.externalId) || String(id) === verified.externalId;
+    });
+    if (present) return;
+    await this.request(
+      "POST",
+      `${SERVER_COLLECTION_PATH}/${verified.externalId}/ssh-keys`,
+      { ssh_key_ids: [expectedId] },
+    );
+  }
+
   async rebootServer(
     resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
   ): Promise<void> {
@@ -723,6 +820,33 @@ export class TimewebMutationHttpAdapter implements TimewebMutationAdapter {
         state: "present",
         resource: verified,
         status: responseServerStatus(payload),
+      };
+    } catch (error) {
+      if (
+        error instanceof TimewebProviderError &&
+        error.code === "NOT_FOUND"
+      ) {
+        return { state: "absent" };
+      }
+      throw error;
+    }
+  }
+
+  async reconcileInstallation(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<TimewebInstallationReconciliation> {
+    const verified = ownedServer(resource);
+    try {
+      const response = await this.request(
+        "GET",
+        `${SERVER_COLLECTION_PATH}/${verified.externalId}`,
+      );
+      const payload = await response.json().catch(() => null);
+      return {
+        state: "present",
+        resource: verified,
+        status: responseServerStatus(payload),
+        operatingSystemId: responseServerOperatingSystemId(payload),
       };
     } catch (error) {
       if (

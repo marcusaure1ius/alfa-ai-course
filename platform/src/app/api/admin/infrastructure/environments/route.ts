@@ -29,6 +29,15 @@ export async function GET(request: Request): Promise<Response> {
       name: string;
       status: string;
       updated_at: Date;
+      public_url: string | null;
+      installation_status: string | null;
+      current_operation: {
+        id: string;
+        kind: string;
+        status: string;
+        currentStep: string | null;
+        canResume: boolean;
+      } | null;
       public_ip: string | null;
       monthly_roubles: number;
       owned_resources: Array<{
@@ -44,6 +53,49 @@ export async function GET(request: Request): Promise<Response> {
       environments.name,
       environments.status,
       environments.updated_at,
+      environments.public_url,
+      (
+        SELECT software_installations.status
+        FROM software_installations
+        WHERE software_installations.environment_id = environments.id
+          AND software_installations.profile_name = 'starter-kit'
+        LIMIT 1
+      ) AS installation_status,
+      (
+        SELECT jsonb_build_object(
+          'id', operations.id,
+          'kind', operations.kind,
+          'status', operations.status,
+          'currentStep', (
+            SELECT operation_steps.logical_key
+            FROM operation_steps
+            WHERE operation_steps.operation_id = operations.id
+              AND operation_steps.status <> 'succeeded'
+            ORDER BY operation_steps.step_order DESC
+            LIMIT 1
+          ),
+          'canResume', COALESCE((
+            SELECT
+              operations.kind = 'install_environment'
+              AND operations.status = 'running'
+              AND operation_steps.status = 'failed'
+              AND operation_steps.retry_class = 'transient'
+              AND operation_steps.execution_token IS NULL
+              AND operation_steps.lease_expires_at IS NULL
+              AND operation_steps.updated_at < now() - interval '2 minutes'
+            FROM operation_steps
+            WHERE operation_steps.operation_id = operations.id
+              AND operation_steps.status <> 'succeeded'
+            ORDER BY operation_steps.step_order DESC
+            LIMIT 1
+          ), false)
+        )
+        FROM operations
+        WHERE operations.environment_id = environments.id
+          AND operations.status IN ('queued', 'running')
+        ORDER BY operations.created_at DESC
+        LIMIT 1
+      ) AS current_operation,
       (
         SELECT provider_resources.public_metadata->>'address'
         FROM provider_resources
@@ -96,6 +148,10 @@ export async function GET(request: Request): Promise<Response> {
         name: row.name,
         status: row.status,
         updatedAt: row.updated_at.toISOString(),
+        publicUrl: row.status === "deleted" ? null : row.public_url,
+        installationStatus:
+          row.status === "deleted" ? "deleted" : row.installation_status,
+        currentOperation: row.current_operation,
         publicIp: row.public_ip,
         monthlyRoubles: row.monthly_roubles,
         ownedResources: row.owned_resources,

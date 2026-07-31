@@ -56,7 +56,10 @@ export class FakeTimewebAdapter {
       VALUES (
         ${randomUUID()}, ${this.environmentId}, ${this.operationId},
         'fake-timeweb', ${kind}, ${externalId}, 'platform', 'active',
-        ${this.sql.json({ simulation: true })}
+        ${this.sql.json({
+          simulation: true,
+          ...(kind === "public_ip" ? { address: "192.0.2.10" } : {}),
+        })}
       )
       ON CONFLICT (provider, resource_kind, provider_resource_id) DO NOTHING
     `;
@@ -94,25 +97,98 @@ export class FakeTimewebAdapter {
     return resource;
   }
 
+  async installServer(): Promise<void> {
+    const servers = await this.sql<{ id: string }[]>`
+      SELECT id
+      FROM provider_resources
+      WHERE environment_id = ${this.environmentId}
+        AND provider = 'fake-timeweb'
+        AND resource_kind = 'server'
+        AND ownership = 'platform'
+        AND lifecycle_status <> 'deleted'
+      LIMIT 2
+    `;
+    if (servers.length !== 1) {
+      throw new FakeProviderError(
+        "PARTIAL_CLEANUP",
+        "Owned fake VPS отсутствует до установки.",
+      );
+    }
+    await this.sql`
+      INSERT INTO fake_provider_events (operation_id, event_key)
+      VALUES (${this.operationId}, 'install_server')
+      ON CONFLICT DO NOTHING
+    `;
+  }
+
   async configureDns(): Promise<OwnedProviderResource> {
     if (this.scenario === "dns_failure") {
       throw new FakeProviderError("DNS_FAILED", "DNS не подтверждён.");
     }
     const resource = await this.ensureResource("dns_record");
-    await this.sql`
-      INSERT INTO domain_allocations (
-        id, environment_id, hostname, zone_name, record_type,
-        provider_resource_id, status
-      )
-      SELECT
-        ${randomUUID()}, ${this.environmentId}, 'n8n.neurokurs.ru',
-        'neurokurs.ru', 'A', provider_resources.id, 'active'
-      FROM provider_resources
-      WHERE environment_id = ${this.environmentId}
-        AND provider_resource_id = ${resource.externalId}
-      ON CONFLICT DO NOTHING
-    `;
+    await this.sql.begin(async (transaction) => {
+      const updated = await transaction<{ id: string }[]>`
+        UPDATE domain_allocations
+        SET provider_resource_id = provider_resources.id,
+            status = 'record_created', updated_at = now()
+        FROM provider_resources
+        WHERE domain_allocations.environment_id = ${this.environmentId}
+          AND domain_allocations.hostname = 'n8n.neurokurs.ru'
+          AND provider_resources.environment_id = domain_allocations.environment_id
+          AND provider_resources.provider_resource_id = ${resource.externalId}
+        RETURNING domain_allocations.id
+      `;
+      if (!updated[0]) {
+        await transaction`
+          INSERT INTO domain_allocations (
+            id, environment_id, hostname, zone_name, record_type,
+            provider_resource_id, status
+          )
+          SELECT
+            ${randomUUID()}, ${this.environmentId}, 'n8n.neurokurs.ru',
+            'neurokurs.ru', 'A', provider_resources.id, 'record_created'
+          FROM provider_resources
+          WHERE environment_id = ${this.environmentId}
+            AND provider_resource_id = ${resource.externalId}
+        `;
+      }
+    });
     return resource;
+  }
+
+  async recordReadyInstallation(): Promise<void> {
+    const operations = await this.sql<{ kind: string }[]>`
+      SELECT kind FROM operations WHERE id = ${this.operationId}
+    `;
+    if (operations[0]?.kind !== "install_environment") return;
+    await this.sql.begin(async (transaction) => {
+      await transaction`
+        INSERT INTO software_installations (
+          id, environment_id, profile_name, profile_version,
+          software_version, status, health_status, installed_at,
+          last_checked_at
+        )
+        VALUES (
+          ${randomUUID()}, ${this.environmentId}, 'starter-kit',
+          'starter-kit-v0.1.0', '2.29.10',
+          'ready_owner_setup_required', 'healthy', now(), now()
+        )
+        ON CONFLICT (environment_id, profile_name) DO UPDATE SET
+          status = EXCLUDED.status,
+          health_status = EXCLUDED.health_status,
+          installed_at = COALESCE(
+            software_installations.installed_at,
+            EXCLUDED.installed_at
+          ),
+          last_checked_at = EXCLUDED.last_checked_at,
+          updated_at = now()
+      `;
+      await transaction`
+        UPDATE environments
+        SET public_url = 'https://n8n.neurokurs.ru', updated_at = now()
+        WHERE id = ${this.environmentId}
+      `;
+    });
   }
 
   async verifyTls(): Promise<void> {

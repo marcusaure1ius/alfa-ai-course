@@ -11,6 +11,7 @@ import {
   resolveDnsAmbiguityCandidate,
   resolvePublicIpAmbiguityCandidate,
   runFreshDnsCreate,
+  runFreshInstallMutation,
 } from "./lifecycle";
 import { TimewebProviderError } from "./read-only";
 import {
@@ -381,6 +382,49 @@ describe("production Timeweb lifecycle gate", () => {
         ),
       ).rejects.toBe(error);
       expect(ambiguousClear).not.toHaveBeenCalled();
+    }
+  });
+
+  it("reconciles an ambiguous reinstall outcome without issuing a duplicate PATCH", async () => {
+    const clearMarker = vi.fn<() => Promise<void>>(async () => undefined);
+
+    for (const error of [
+      new TimewebProviderError("TIMEOUT", "timeout", true),
+      new TimewebProviderError(
+        "UPSTREAM_UNAVAILABLE",
+        "unconfirmed HTTP outcome",
+        false,
+      ),
+      new TimewebProviderError(
+        "INVALID_RESPONSE",
+        "ambiguous 2xx payload",
+        false,
+      ),
+    ]) {
+      await expect(
+        runFreshInstallMutation(async () => {
+          throw error;
+        }, clearMarker),
+      ).resolves.toBeUndefined();
+    }
+    expect(clearMarker).not.toHaveBeenCalled();
+  });
+
+  it("clears the reinstall marker and surfaces a definitive provider rejection", async () => {
+    for (const code of [
+      "INVALID_REQUEST",
+      "UNAUTHORIZED",
+      "FORBIDDEN",
+      "NOT_FOUND",
+    ] as const) {
+      const clearMarker = vi.fn<() => Promise<void>>(async () => undefined);
+      const error = new TimewebProviderError(code, "definitive", false);
+      await expect(
+        runFreshInstallMutation(async () => {
+          throw error;
+        }, clearMarker),
+      ).rejects.toBe(error);
+      expect(clearMarker).toHaveBeenCalledOnce();
     }
   });
 
