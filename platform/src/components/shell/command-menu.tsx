@@ -69,7 +69,7 @@ export function CommandMenu() {
         ref={triggerRef}
         type="button"
         variant="outline"
-        className="h-10 w-full justify-start gap-2 text-muted-foreground sm:w-64"
+        className="h-11 w-full justify-start gap-2 text-muted-foreground sm:w-64"
         onClick={() => {
           rememberFocus();
           setOpen(true);

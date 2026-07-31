@@ -144,7 +144,7 @@ function DeleteEnvironment({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="destructive" size="sm">
+        <Button variant="destructive" size="sm" className="min-h-11">
           <Trash2 aria-hidden="true" />
           Удалить
         </Button>

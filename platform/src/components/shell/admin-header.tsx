@@ -8,7 +8,7 @@ export function AdminHeader() {
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b bg-card/95 px-3 backdrop-blur sm:px-5">
       <SidebarTrigger
-        className="size-10 shrink-0"
+        className="size-11 shrink-0"
         aria-label="Открыть или свернуть навигацию"
       />
       <NeurokursBrand className="lg:hidden" />
