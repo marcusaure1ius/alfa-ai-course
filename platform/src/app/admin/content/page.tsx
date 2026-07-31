@@ -1,8 +1,9 @@
 import { ArrowRight, BookOpenText, Clock3 } from "lucide-react";
 import Link from "next/link";
 
+import { CourseCreateForm } from "@/components/admin/course-create-form";
 import { Badge } from "@/components/ui/badge";
-import { getAdminMaterials } from "@/server/admin/workspace";
+import { getAdminCourses, getAdminMaterials } from "@/server/admin/workspace";
 import { getDatabase } from "@/server/db/client";
 
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
@@ -15,7 +16,11 @@ function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
 }
 
 export default async function AdminContentPage() {
-  const materials = await getAdminMaterials(getDatabase());
+  const sql = getDatabase();
+  const [materials, courseOptions] = await Promise.all([
+    getAdminMaterials(sql),
+    getAdminCourses(sql),
+  ]);
   const published = materials.filter((material) => material.status === "published");
   const courses = groupBy(materials, (material) => material.courseTitle);
 
@@ -29,6 +34,32 @@ export default async function AdminContentPage() {
           </p>
         </div>
       </div>
+
+      <CourseCreateForm />
+
+      {courseOptions.length > 0 ? (
+        <section className="mt-8 max-w-2xl" aria-labelledby="courses-title">
+          <h2 id="courses-title" className="font-display text-xl">
+            Курсы
+          </h2>
+          <div className="mt-4 overflow-hidden rounded-xl border bg-card">
+            {courseOptions.map((course, index) => (
+              <div
+                className={
+                  "flex items-center justify-between gap-4 px-5 py-4 " +
+                  (index > 0 ? "border-t" : "")
+                }
+                key={course.id}
+              >
+                <span className="text-sm font-medium">{course.title}</span>
+                <Badge variant={course.status === "published" ? "success" : "outline"}>
+                  {course.status === "published" ? "Опубликован" : "Черновик"}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {materials.length > 0 ? (
         <div className="mt-8 space-y-8">
