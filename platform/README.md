@@ -220,6 +220,22 @@ navigation, provider ID, IP, стоимости и operation data. Запрос 
 `/admin/**` останавливается server-side Proxy policy с `403`; скрытие ссылок не
 используется как контроль доступа.
 
+## Типографика
+
+Платформа self-hosted использует ту же текстовую пару, что и production-сайт
+`https://kurs.alfabank.ru`:
+
+- `Alfa Interface Sans` 400/500/700 — основной интерфейсный и читательский
+  шрифт;
+- `Styrene A LC Medium` — заголовки внутри материалов и системных компонентов;
+- `Styrene A LC Black` — display-заголовки и wordmark.
+
+Пять исходных webfont-файлов сохранены в `public/fonts/`. Их URL взяты из
+`https://kurs.alfabank.ru/styles.10f4cf05af2f6cbd.css` и проверены
+2026-07-31. Иконочный шрифт `kurs` намеренно не копируется: интерфейс
+использует SVG-иконки компонентов. Шрифты не запрашиваются с внешнего CDN во
+время работы Neurokurs.
+
 ## Границы foundation
 
 - UI: Next.js App Router + TypeScript + Tailwind CSS + shadcn/ui.
