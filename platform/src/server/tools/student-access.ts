@@ -10,7 +10,8 @@ import type {
 
 export type N8nLicenseEvidenceMode =
   | "written_permission"
-  | "commercial_agreement";
+  | "commercial_agreement"
+  | "product_owner_risk_acceptance";
 
 export type N8nStudentAccessLicenseGate =
   | {
@@ -31,11 +32,15 @@ export function getN8nStudentAccessLicenseGate(
   const mode = environment.N8N_STUDENT_ACCESS_LICENSE_MODE;
   const evidenceReference =
     environment.N8N_STUDENT_ACCESS_LICENSE_EVIDENCE?.trim();
-  if (mode !== "written_permission" && mode !== "commercial_agreement") {
+  if (
+    mode !== "written_permission" &&
+    mode !== "commercial_agreement" &&
+    mode !== "product_owner_risk_acceptance"
+  ) {
     return {
       ready: false,
       reason:
-        "До выдачи доступа добавьте подтверждённую лицензионную модель n8n в production environment.",
+        "До выдачи доступа зафиксируйте основание production-доступа в server environment.",
     };
   }
   if (
@@ -47,7 +52,7 @@ export function getN8nStudentAccessLicenseGate(
     return {
       ready: false,
       reason:
-        "Для лицензионного разрешения нужна непустая ссылка или идентификатор evidence.",
+        "Для решения о production-доступе нужна непустая ссылка или идентификатор evidence.",
     };
   }
   return { ready: true, mode, evidenceReference };

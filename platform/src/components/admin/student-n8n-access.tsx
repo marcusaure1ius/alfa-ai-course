@@ -81,9 +81,9 @@ export function StudentN8nAccessControl({
       {licenseGate.ready ? (
         <Alert>
           <ShieldCheck aria-hidden="true" />
-          <AlertTitle>Лицензионный gate подтверждён</AlertTitle>
+          <AlertTitle>Основание production-доступа зафиксировано</AlertTitle>
           <AlertDescription>
-            При выдаче доступа ссылка на evidence сохраняется server-side.
+            При выдаче доступа ссылка на решение сохраняется server-side.
           </AlertDescription>
         </Alert>
       ) : (

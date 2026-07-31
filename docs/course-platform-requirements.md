@@ -65,6 +65,11 @@ instance и hosting/management клиентских workflow и credentials
 n8n либо подходящее коммерческое соглашение. Этот документ не является
 юридическим заключением.
 
+Решение владельца от 2026-07-31: довести управляемый student access до
+production самостоятельно, приняв связанный лицензионный риск. Это решение
+фиксируется отдельным mode `product_owner_risk_acceptance` и никогда не
+описывается как разрешение, одобрение или соглашение со стороны n8n.
+
 Решения владельца от 2026-07-29:
 
 - код платформы остаётся в текущем репозитории; один Vercel project использует deployable root `platform/`;
@@ -79,9 +84,9 @@ n8n либо подходящее коммерческое соглашение.
 `expires_at` не дальше 366 дней. После срока student DTO перестаёт возвращать
 launch URL; admin может выдать новый срок либо передать инструкцию
 самостоятельного запуска. Assignment API fail-closed: без server-side mode
-`written_permission`/`commercial_agreement` и ссылки или идентификатора
-лицензионного evidence доступ не выдаётся. Snapshot evidence сохраняется в
-`tool_access`, но никогда не входит в student DTO.
+`written_permission`/`commercial_agreement`/`product_owner_risk_acceptance` и
+ссылки или идентификатора подтверждающего решения доступ не выдаётся. Snapshot
+evidence сохраняется в `tool_access`, но никогда не входит в student DTO.
 
 ## 3. Цели первого этапа
 
@@ -388,7 +393,7 @@ Environment открывается из конкретного инструме�
 
 `N8N-06` Платформа не заявляет, что owner account n8n создан автоматически, пока для выбранной версии не подтверждён официальный безопасный API/CLI. В готовой среде допускается финальное состояние `ready_owner_setup_required` с инструкцией открыть URL и создать owner.
 
-`N8N-07` До выдачи production-среды ученику сохраняется evidence выбранной лицензионной модели: собственный instance ученика, коммерческое соглашение n8n либо иное письменное разрешение. Наличие технически работающего VPS не снимает этот gate.
+`N8N-07` До выдачи production-среды ученику сохраняется evidence выбранного основания: собственный instance ученика, коммерческое соглашение n8n, иное письменное разрешение либо явное принятие риска владельцем продукта. Принятие риска хранится и отображается отдельно и не заявляется как разрешение n8n. Наличие технически работающего VPS само по себе не снимает этот gate.
 
 ### 7.4. DNS и TLS
 
@@ -743,7 +748,7 @@ Student не может читать draft, изменять чужой progress
 |---|---|---|
 | Где размещён control plane? | Один Vercel project с Root Directory `platform/`, Workflow, Cron и Marketplace Postgres | Длительные операции нельзя держать в одном HTTP request; Timeweb token доступен только server-side production adapter |
 | Где находится код? | Текущий репозиторий, изолированный root `platform/` | Нужны отдельные CI, release, secrets и regression gates starter kit |
-| Кто владеет VPS и оплачивает его? | Владелец курса/школа | До выдачи ученикам нужен license gate n8n и политика срока доступа |
+| Кто владеет VPS и оплачивает его? | Владелец курса/школа | До выдачи ученикам нужны документированное основание production-доступа и политика срока доступа |
 | Какая базовая DNS zone? | `neurokurs.ru`, default `n8n.neurokurs.ru` | Zone должна обслуживаться через доступный Timeweb DNS API |
 | Сколько VPS? | Один активный основной n8n VPS | Database constraint и preflight блокируют второй |
 | Как удалять? | Полностью автоматически после destructive modal/re-auth | Единый server-side adapter проверяет ownership и вызывает только allowlisted delete methods; token должен разрешать удаление без Telegram-кода |
@@ -769,7 +774,7 @@ Student не может читать draft, изменять чужой progress
 4. disposable cleanup plan и ownership assertions прошли на fake adapter;
 5. production admin использует свежую re-auth для destructive action; если MFA
    enrolled, свежий второй фактор также обязателен;
-6. n8n license gate закрыт до предоставления управляемой среды ученикам;
+6. production-access gate закрыт документированным основанием до предоставления управляемой среды ученикам;
 7. Vercel production Workflow/Cron, Postgres backup policy и secret redaction проверены evidence.
 
 ## 15. Двойной саморевью
@@ -784,7 +789,7 @@ Student не может читать draft, изменять чужой progress
 - разделены создание VPS и создание готовой n8n-среды;
 - добавлены preview стоимости, degraded state и явная обработка оставшегося платного IP;
 - автоматическое создание owner n8n вынесено из обещаний в открытое ограничение.
-- добавлен обязательный license/ownership gate для случая, когда школа размещает n8n для учеников.
+- добавлен обязательный production-access/ownership gate для случая, когда школа размещает n8n для учеников.
 
 ### Проход 2 — безопасность и реализуемость
 

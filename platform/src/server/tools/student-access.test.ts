@@ -23,6 +23,17 @@ describe("n8n student access license gate", () => {
     });
     expect(
       getN8nStudentAccessLicenseGate({
+        N8N_STUDENT_ACCESS_LICENSE_MODE: "product_owner_risk_acceptance",
+        N8N_STUDENT_ACCESS_LICENSE_EVIDENCE:
+          "owner-decision:T-0058:2026-07-31",
+      }),
+    ).toEqual({
+      ready: true,
+      mode: "product_owner_risk_acceptance",
+      evidenceReference: "owner-decision:T-0058:2026-07-31",
+    });
+    expect(
+      getN8nStudentAccessLicenseGate({
         N8N_STUDENT_ACCESS_LICENSE_MODE: "approved",
         N8N_STUDENT_ACCESS_LICENSE_EVIDENCE: "trust me",
       }),

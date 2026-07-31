@@ -18,8 +18,8 @@ const databaseUrl =
 
 const licenseGate = {
   ready: true as const,
-  mode: "written_permission" as const,
-  evidenceReference: "agreement:n8n-test",
+  mode: "product_owner_risk_acceptance" as const,
+  evidenceReference: "owner-decision:T-0058:2026-07-31",
 };
 
 let sql: DatabaseSql;
@@ -174,8 +174,8 @@ describe("student n8n tool access", () => {
       FROM tool_access WHERE user_id = ${studentId}
     `;
     expect(stored[0]).toEqual({
-      license_evidence_mode: "written_permission",
-      license_evidence_reference: "agreement:n8n-test",
+      license_evidence_mode: "product_owner_risk_acceptance",
+      license_evidence_reference: "owner-decision:T-0058:2026-07-31",
     });
 
     await setStudentN8nAccess(sql, admin, {

@@ -86,10 +86,12 @@ Admin API:
   срок доступа без provider IDs, IP, тарифа, стоимости и operation logs.
 
 Выдача student URL закрыта по умолчанию. Production должен явно задать
-`N8N_STUDENT_ACCESS_LICENSE_MODE=written_permission` либо
-`commercial_agreement` и `N8N_STUDENT_ACCESS_LICENSE_EVIDENCE` со ссылкой или
-идентификатором подтверждающего документа. Значения проверяются только на
-сервере, а их snapshot сохраняется в `tool_access`; browser их не получает.
+`N8N_STUDENT_ACCESS_LICENSE_MODE=written_permission`, `commercial_agreement`
+либо `product_owner_risk_acceptance` и
+`N8N_STUDENT_ACCESS_LICENSE_EVIDENCE` со ссылкой или идентификатором
+подтверждающего решения. Последний mode фиксирует отдельное принятие риска
+владельцем продукта и не означает разрешение n8n. Значения проверяются только
+на сервере, а их snapshot сохраняется в `tool_access`; browser их не получает.
 Каждое назначение имеет обязательный срок не более 366 дней. После срока URL
 скрывается, а интерфейс направляет ученика за продлением или инструкцией
 самостоятельного запуска — перенос VPS и billing не обещается.
