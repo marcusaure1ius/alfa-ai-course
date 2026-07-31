@@ -36,6 +36,8 @@ const actionLabels: Record<string, string> = {
   "course.section.publication.changed": "Изменена публикация раздела",
   "course.access.granted": "Открыт доступ ученику",
   "course.access.revoked": "Отозван доступ ученика",
+  "tool.access.granted": "Открыт доступ к n8n",
+  "tool.access.revoked": "Отозван доступ к n8n",
 };
 
 export async function getAdminOverview(sql: DatabaseSql): Promise<AdminOverview> {

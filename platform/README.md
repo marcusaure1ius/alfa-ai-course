@@ -80,6 +80,19 @@ Admin API:
 - `PATCH /api/admin/materials/:id` — редактирование и публикация материала;
 - `PUT /api/admin/sections/:id/materials/order` — атомарный полный порядок;
 - `PUT /api/admin/students/:id/access` — выдать или отозвать доступ к курсу.
+- `PUT /api/admin/tools/n8n/access/:studentId` — выдать или отозвать
+  ограниченный по сроку доступ к основной n8n-среде;
+- `GET /api/student/tools/n8n` — вернуть только учебное состояние, HTTPS URL и
+  срок доступа без provider IDs, IP, тарифа, стоимости и operation logs.
+
+Выдача student URL закрыта по умолчанию. Production должен явно задать
+`N8N_STUDENT_ACCESS_LICENSE_MODE=written_permission` либо
+`commercial_agreement` и `N8N_STUDENT_ACCESS_LICENSE_EVIDENCE` со ссылкой или
+идентификатором подтверждающего документа. Значения проверяются только на
+сервере, а их snapshot сохраняется в `tool_access`; browser их не получает.
+Каждое назначение имеет обязательный срок не более 366 дней. После срока URL
+скрывается, а интерфейс направляет ученика за продлением или инструкцией
+самостоятельного запуска — перенос VPS и billing не обещается.
 
 Student API:
 

@@ -1,9 +1,14 @@
-import { ArrowLeft, ExternalLink, LockKeyhole } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { StudentN8nAccessCard } from "@/components/student/student-n8n-access";
+import { requirePageSession } from "@/server/auth/page-access";
+import { getDatabase } from "@/server/db/client";
+import { getStudentN8nAccess } from "@/server/tools/student-access";
 
-export default function StudentN8nPage() {
+export default async function StudentN8nPage() {
+  const session = await requirePageSession();
+  const access = await getStudentN8nAccess(getDatabase(), session.userId);
   return (
     <div className="px-5 py-8 sm:px-8 sm:py-12 xl:px-12">
       <div className="mx-auto max-w-5xl">
@@ -23,23 +28,8 @@ export default function StudentN8nPage() {
             <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
               Выделенное рабочее пространство для практики по курсу.
             </p>
-            <div className="mt-8 rounded-2xl border bg-card p-6">
-              <div className="flex items-start gap-4">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted">
-                  <LockKeyhole className="size-5" aria-hidden="true" />
-                </span>
-                <div>
-                  <h2 className="font-display text-xl">Доступ ещё не подключён</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Когда преподаватель подготовит инструмент, здесь появится
-                    кнопка для входа.
-                  </p>
-                </div>
-              </div>
-              <Button className="mt-6" disabled>
-                <ExternalLink aria-hidden="true" />
-                Открыть n8n
-              </Button>
+            <div className="mt-8">
+              <StudentN8nAccessCard access={access} />
             </div>
           </section>
           <aside className="self-start rounded-2xl bg-highlight p-6">

@@ -4,10 +4,25 @@ import Link from "next/link";
 import { requirePageSession } from "@/server/auth/page-access";
 import { getStudentWorkspaceCourse } from "@/server/course/repository";
 import { getDatabase } from "@/server/db/client";
+import { getStudentN8nAccess } from "@/server/tools/student-access";
+
+const accessLabel = {
+  locked: "Доступ ещё не назначен",
+  license_blocked: "Доступ временно закрыт",
+  preparing: "Среда готовится",
+  owner_setup_required: "Нужно завершить первоначальную настройку",
+  ready: "Готов к работе",
+  attention: "Требует проверки преподавателем",
+  expired: "Срок доступа завершён",
+} as const;
 
 export default async function StudentToolsPage() {
   const session = await requirePageSession();
-  const course = await getStudentWorkspaceCourse(getDatabase(), session.userId);
+  const sql = getDatabase();
+  const [course, n8nAccess] = await Promise.all([
+    getStudentWorkspaceCourse(sql, session.userId),
+    getStudentN8nAccess(sql, session.userId),
+  ]);
   return (
     <div className="px-5 py-8 sm:px-8 sm:py-12 xl:px-12">
       <div className="mx-auto max-w-5xl">
@@ -36,7 +51,7 @@ export default async function StudentToolsPage() {
               <span className="mt-3 flex items-center gap-2 text-sm font-medium">
                 <LockKeyhole className="size-4 text-muted-foreground" aria-hidden="true" />
                 {course
-                  ? "Состояние доступа — на странице инструмента"
+                  ? accessLabel[n8nAccess.state]
                   : "Появится после выдачи доступа к курсу"}
               </span>
             </span>
