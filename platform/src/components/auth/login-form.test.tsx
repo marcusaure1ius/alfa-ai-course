@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { axe } from "vitest-axe";
 
 import { LoginForm } from "./login-form";
 
@@ -36,6 +37,41 @@ function fillCredentials() {
 }
 
 describe("LoginForm", () => {
+  it("keeps entered credentials readable on the inverse login surface", () => {
+    render(<LoginForm inverse />);
+
+    for (const label of ["Email", "Пароль"]) {
+      const input = screen.getByLabelText(label);
+      expect(input.className).toContain("font-sans");
+      expect(input.className).toContain("text-foreground");
+      expect(input.className).toContain("caret-foreground");
+    }
+  });
+
+  it("defers the protected credential preview until form interaction", () => {
+    render(<LoginForm inverse />);
+
+    const email = screen.getByLabelText("Email") as HTMLInputElement;
+    const password = screen.getByLabelText("Пароль") as HTMLInputElement;
+    expect(email.readOnly).toBe(true);
+    expect(password.readOnly).toBe(true);
+
+    fireEvent.focus(email);
+    expect(email.readOnly).toBe(false);
+    expect(password.readOnly).toBe(false);
+  });
+
+  it.each([false, true])(
+    "has no automated accessibility violations (inverse=%s)",
+    async (inverse) => {
+      const { container } = render(<LoginForm inverse={inverse} />);
+      const results = await axe(container, {
+        rules: { "color-contrast": { enabled: false } },
+      });
+      expect(results.violations).toEqual([]);
+    },
+  );
+
   it("keeps the second factor hidden until the server requests it", async () => {
     const request = vi
       .fn()
@@ -100,8 +136,35 @@ describe("LoginForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Подтвердить вход" }));
 
     await waitFor(() =>
-      expect(push).toHaveBeenCalledWith("/admin/infrastructure"),
+      expect(push).toHaveBeenCalledWith("/admin/tools"),
     );
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("exposes a real loading state while authentication is pending", async () => {
+    let resolveLogin!: (response: Response) => void;
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ csrfToken: "csrf.one" }))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveLogin = resolve;
+          }),
+      );
+    vi.stubGlobal("fetch", request);
+
+    render(<LoginForm inverse />);
+    fillCredentials();
+    fireEvent.click(screen.getByRole("button", { name: "Войти" }));
+
+    const form = screen.getByRole("button", { name: "Проверяем…" }).closest("form");
+    expect(form?.getAttribute("aria-busy")).toBe("true");
+    expect((screen.getByLabelText("Email") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Пароль") as HTMLInputElement).disabled).toBe(true);
+
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    resolveLogin(jsonResponse({ user: { role: "student" } }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/student"));
   });
 });

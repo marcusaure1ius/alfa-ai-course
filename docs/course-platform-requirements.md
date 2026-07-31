@@ -1,4 +1,4 @@
-# Требования к платформе курса и управлению учебной инфраструктурой
+# Требования к Neurokurs и управлению учебной инфраструктурой
 
 **Статус:** требования первого этапа
 **Задачи:** `T-0048`, упрощение deployment — `T-0059`, live configurator — `T-0060`, продуктовый вход — `T-0061`
@@ -7,15 +7,15 @@
 
 ## 1. Решение
 
-Платформу курса следует создавать как изолированный control plane, который управляет пользователями, учебной средой и длительными инфраструктурными операциями. По решению владельца платформа разрабатывается в текущем репозитории в каталоге `platform/`. Репозиторий становится multi-product, но существующий `n8n Entrepreneur Starter Kit` остаётся независимо проверяемым и версионируемым установочным артефактом.
+Neurokurs следует создавать как закрытое text-first пространство курса, где участник находит актуальные знания, практические задания, помощь и доступ к учебным инструментам. Это не продающий сайт, не видео-LMS и не панель хостинга. По решению владельца платформа разрабатывается в текущем репозитории в каталоге `platform/`. Репозиторий становится multi-product, но существующий `n8n Entrepreneur Starter Kit` остаётся независимо проверяемым и версионируемым установочным артефактом.
 
 Первый пользовательский результат:
 
-1. пользователь открывает `neurokurs.ru` и входит по email и паролю без выбора технического режима;
-2. роль аккаунта определяет маршрут: admin сразу открывает «Серверы», student — отдельный пустой кабинет;
-3. администратор выбирает актуальный тариф, регион, образ и backup, затем создаёт чистый VPS;
-4. отдельным следующим этапом платформа устанавливает совместимый starter kit, создаёт DNS-запись, дожидается HTTPS и показывает итоговый URL;
-5. администратор видит каждый шаг, ошибку и стоимость ресурсов;
+1. пользователь открывает `neurokurs.ru`, понимает назначение закрытого пространства и входит по email и паролю без выбора роли;
+2. student попадает в учебный workspace: продолжает текущий материал, открывает программу, задания, помощь и доступные инструменты;
+3. admin попадает в task-first область управления учениками, контентом и инструментами;
+4. при добавлении инструмента admin управляет его учебной конфигурацией; создание VPS, DNS и установка runtime остаются вложенной инфраструктурной реализацией;
+5. длительные операции показывают прогресс, конкретную ошибку и безопасное действие восстановления;
 6. администратор может безопасно удалить среду и связанные с ней платные ресурсы.
 
 Интерфейс не показывает пользователю provider mode, tokens, deployment gates и
@@ -23,9 +23,10 @@
 server-side окружении. Второй фактор, если он требуется аккаунту, появляется
 отдельным шагом только после успешной проверки email и пароля.
 
-Интерфейс ученика на текущем срезе ограничен авторизацией и отдельной пустой
-стартовой страницей. Просмотр готовой среды и LMS-функции добавляются
-последующими этапами.
+Интерфейс ученика не раскрывает provider, VPS, тарифы, IP и deployment gates.
+Он показывает учебный смысл инструмента, состояние доступа и следующее действие.
+Контент остаётся text-first; видеоуроки, оценки, сертификаты и сложная LMS-модель
+не входят в продуктовый контракт.
 
 ## 2. Основания и границы документа
 
@@ -70,6 +71,9 @@ server-side окружении. Второй фактор, если он тре�
 
 ### 3.1. Продуктовые цели
 
+- Дать ученику одно доверенное место для актуальных материалов, заданий, помощи и учебных инструментов.
+- Сохранить простую text-first модель без LMS-хардкора и продающего маркетинга внутри продукта.
+- Дать администратору управление курсом через пользовательские сущности «ученики», «материалы» и «инструменты».
 - Убрать ручной переход администратора между Timeweb, SSH, DNS и инструкциями установки.
 - Сделать создание основной готовой учебной среды одной управляемой операцией.
 - Сохранить для администратора прозрачность: какие ресурсы созданы, сколько они ориентировочно стоят и на каком шаге возникла ошибка.
@@ -86,17 +90,25 @@ server-side окружении. Второй фактор, если он тре�
 
 ## 4. Scope
 
-### 4.1. Первый этап, срез 1A — control plane и VPS
+### 4.1. Продуктовый слой Neurokurs
 
 - responsive web-приложение на Next.js App Router и shadcn/ui;
 - авторизация и серверный RBAC для ролей `admin` и `student`;
 - desktop/mobile application shell;
+- программа курса из упорядоченных разделов;
+- text-first материалы и практические задания;
+- помощь и понятные locked/empty/error states;
+- каталог учебных инструментов и доступ ученика к назначенной среде;
+- управление учениками, доступом и публикацией контента в admin.
+
+### 4.2. Инфраструктурный слой — control plane и VPS
+
 - проверка настроенного Timeweb Cloud account без передачи raw token в браузер;
 - чтение актуальных регионов, зон, образов, конфигураций и доступного баланса, если это предоставляет API;
 - просмотр, создание и безопасное удаление единственного активного VPS;
 - durable operations, audit log, cost guardrails и обработка частичного сбоя.
 
-### 4.2. Первый этап, срез 1B — готовая среда n8n
+### 4.3. Готовая среда n8n
 
 - резервирование default hostname `n8n.neurokurs.ru` в управляемой зоне `neurokurs.ru`;
 - создание DNS `A`-записи;
@@ -109,9 +121,9 @@ server-side окружении. Второй фактор, если он тре�
 
 Срезы входят в один продуктовый этап, но реализуются и проверяются последовательно. Нельзя объединять первую проверку Timeweb API с непрозрачным «создать всё» без промежуточных состояний.
 
-### 4.3. Не входит в первый этап
+### 4.4. Не входит в первый этап
 
-- уроки, видео, домашние задания, прогресс, платежи и сертификаты об окончании курса;
+- видеоуроки, оценки, сложный gradebook, платежи и сертификаты об окончании курса;
 - native iOS/Android приложения;
 - массовое создание серверов;
 - другие облачные провайдеры;
@@ -125,22 +137,65 @@ server-side окружении. Второй фактор, если он тре�
 
 ## 5. Роли и доступ
 
-### 5.1. Роли
+### 5.1. Actors и jobs-to-be-done
 
-| Возможность | Student | Admin |
-|---|---:|---:|
-| Войти/выйти, изменить собственный пароль | Да | Да |
-| Открыть свою стартовую страницу | Да | Да |
-| Видеть основную учебную среду и публичный URL | Да | Да |
-| Видеть IP, provider ID, операции и стоимость | Нет | Да |
-| Создавать/устанавливать/удалять сервер | Нет | Да |
-| Проверять Timeweb connection и менять инфраструктурные профили | Нет | Да |
-| Читать аудит инфраструктуры | Нет | Да |
-| Управлять доступом учеников к ссылке на среду | Нет | Да |
+| Actor | Job to be done | Успешный результат |
+|---|---|---|
+| Guest | Понять, что находится в закрытом пространстве, и войти по выданным данным | Видит один краткий смысл и одну форму входа без выбора роли |
+| Student | Вернуться к следующему учебному действию, прочитать материал, выполнить задание или открыть назначенный инструмент | Продолжает с сохранённого места и не сталкивается с provider/VPS деталями |
+| Admin | Поддерживать актуальную программу, управлять учениками и инструментами, замечать требующие внимания состояния | Публикует контент, выдаёт доступ и управляет средами из одной task-first области |
+
+Guest не является отдельной ролью в базе: это пользователь без валидной сессии.
+Student читает только опубликованный и доступный ему контент. Admin получает
+полный курс-уровень, но инфраструктурные mutations дополнительно требуют
+существующих re-auth, ownership и audit checks.
+
+### 5.2. Route map
+
+| Surface | Route | Назначение |
+|---|---|---|
+| Entry | `/` → `/login` | Auth-aware точка входа; без сессии открывает единую explanatory/login surface |
+| Login | `/login` | Wordmark, слоган, краткое объяснение и одна auth-форма |
+| Student home | `/student` | Текущее место, «Продолжить», ближайшее задание |
+| Program | `/student/program` | Опубликованные разделы и материалы |
+| Material | `/student/materials/:slug` | Text-first статья или практическое задание |
+| Tools | `/student/tools` | Назначенные учебные инструменты |
+| Tool | `/student/tools/:slug` | Описание, состояние доступа и безопасный launch |
+| Help | `/student/help` | Поддержка и частые вопросы |
+| Admin students | `/admin/students` | Ученики и доступ |
+| Admin program | `/admin/program` | Структура и порядок курса |
+| Admin materials | `/admin/materials` | Draft/published материалы и редактор |
+| Admin tools | `/admin/tools` | Каталог инструментов и назначения |
+| Admin tool instances | `/admin/tools/:slug/instances` | Learning environments выбранного инструмента |
+| Admin instance | `/admin/tools/:slug/instances/:id` | Состояние и инфраструктура конкретной среды |
+| Admin operations | `/admin/operations` | Длительные операции |
+| Admin history | `/admin/audit` | Аудит действий |
+| Admin settings | `/admin/settings` | Настройки курса и платформы |
+
+Legacy `/admin/infrastructure/**` допускается как временный redirect во время
+миграции, но не остаётся пользовательским названием или конечной IA.
+
+### 5.3. Роли
+
+| Возможность | Guest | Student | Admin |
+|---|---:|---:|---:|
+| Видеть entry и отправлять login | Да | Да | Да |
+| Читать опубликованные доступные материалы | Нет | Да | Да |
+| Сохранять своё последнее место и completion | Нет | Да | Да |
+| Открывать помощь | Нет | Да | Да |
+| Видеть и запускать назначенные инструменты | Нет | Да | Да |
+| Видеть чужой прогресс и доступ | Нет | Нет | Да |
+| Создавать и публиковать материалы | Нет | Нет | Да |
+| Управлять программой и порядком | Нет | Нет | Да |
+| Назначать инструменты и среды ученикам | Нет | Нет | Да |
+| Видеть IP, provider ID, операции и стоимость | Нет | Нет | Да |
+| Создавать/устанавливать/удалять cloud resource | Нет | Нет | Да |
+| Проверять provider connection и профили | Нет | Нет | Да |
+| Читать административный аудит | Нет | Нет | Да |
 
 Отсутствие пункта в UI не является контролем доступа. Каждая server action, server component query и API route выполняет проверку сессии, роли и принадлежности ресурса. Запрос ученика к `/admin/**` возвращает `403`, не раскрывая существование чужих ресурсов.
 
-### 5.2. Авторизация
+### 5.4. Авторизация
 
 - Первый admin создаётся одноразовой bootstrap-командой или одноразовым setup flow, который после использования необратимо закрывается.
 - Пароли хешируются Argon2id либо механизмом выбранного проверенного auth provider с эквивалентной защитой.
@@ -159,11 +214,12 @@ server-side окружении. Второй фактор, если он тре�
 
 Левая панель отражает действия администратора, а не устройство системы:
 
-1. **Серверы** — первый и открытый по умолчанию раздел.
-2. **Операции**.
-3. **Ученики** — минимальный список, приглашение/создание и доступ к основной среде.
-4. **Аудит**.
-5. **Настройки**.
+1. **Ученики** — список, приглашение и управление доступом.
+2. **Материалы** — программа, публикация и порядок text-first контента.
+3. **Инструменты** — учебные продукты и назначенные ученикам среды.
+4. **Операции** — длительные инфраструктурные действия.
+5. **История** — аудит действий.
+6. **Настройки**.
 
 Подключение облачного провайдера и внутренние deployment switches не являются
 отдельными пользовательскими разделами. Диагностика остаётся server-side
@@ -172,28 +228,42 @@ server-side окружении. Второй фактор, если он тре�
 
 Desktop: сворачиваемая панель шириной около 256 px, хлебные крошки, global command/search по `Cmd/Ctrl+K`, основной scroll-контейнер. Mobile: панель открывается как shadcn `Sheet`, закрывается после перехода; ключевое действие доступно без горизонтального скролла.
 
-### 6.2. Экран «Серверы»
+### 6.2. Student workspace
 
-Обязательные состояния: loading skeleton, empty state, частичная ошибка провайдера, список, отсутствие прав.
+Навигация ученика отражает учебный путь:
+
+1. **Главная** — одно основное действие «Продолжить», текущий материал и ближайшее задание.
+2. **Программа** — разделы и материалы курса в заданном преподавателем порядке.
+3. **Инструменты** — доступные учебные продукты без provider/VPS терминов.
+4. **Помощь** — способы получить поддержку и контекст по частым проблемам.
+
+Материал читается в центральной колонке с комфортной длиной строки. Desktop может
+показывать программу слева и локальное оглавление справа; на узких экранах они
+становятся drawers. Прогресс помогает вернуться к следующему действию, но не
+создаёт gradebook, баллы или геймификацию.
+
+### 6.3. Экран «Инструменты»
+
+Обязательные состояния: loading skeleton, empty state, список, недоступный
+инструмент и ошибка создания среды.
 
 В списке отображаются:
 
-- имя среды;
-- владелец курса;
-- статус платформы и сырой provider status во всплывающей детали;
-- регион/зона и конфигурация;
-- публичный IP;
-- домен;
-- n8n version и health;
-- оценка текущих расходов из provider data;
-- последняя операция и время обновления;
-- меню допустимых действий.
+- название и краткое учебное назначение;
+- тип инструмента, например n8n;
+- состояние публикации и кому выдан доступ;
+- количество назначенных learning environments;
+- агрегированное состояние «готов», «создаётся», «требует внимания»;
+- основное действие «Открыть» или «Настроить доступ».
 
-На desktop используется shadcn `Table`, на узком экране — адаптивные `Card` без потери критических полей. Даже при лимите в один активный VPS экран обязан поддерживать состояния empty, creating, active, degraded и cleanup; преждевременная сложная фильтрация не требуется.
+Provider status, IP, тариф и стоимость не показываются на уровне каталога.
+Они доступны admin только после перехода в конкретную learning environment.
+На desktop используется плотный список или `Table`, на узком экране —
+последовательные строки без горизонтального scroll.
 
-### 6.3. Карточка среды
+### 6.4. Карточка среды
 
-Вкладки или секции:
+Environment открывается из конкретного инструмента. Вкладки или секции:
 
 - «Обзор»: URL, владелец курса, конфигурация и provider identifiers;
 - «Операции»: timeline шагов, повторы и понятная причина ошибки;
@@ -203,7 +273,7 @@ Desktop: сворачиваемая панель шириной около 256 p
 
 Секреты, cloud-init body и private key никогда не отображаются. Технические логи ограничены по объёму, очищены от секретов и доступны только admin.
 
-### 6.4. Мастер создания
+### 6.5. Мастер создания
 
 1. Имя сервера.
 2. Регион: Москва (`msk-1`), Амстердам (`ams-1`) или Франкфурт (`fra-1`).
@@ -217,7 +287,7 @@ Desktop: сворачиваемая панель шириной около 256 p
 
 Мастер не принимает произвольный shell script. Профили установки версионируются и выбираются из allowlist.
 
-### 6.5. Визуальный язык
+### 6.6. Визуальный язык
 
 - Использовать официальный shadcn/ui как source-copied component foundation и Radix primitives.
 - Базовый стиль — `new-york`, шрифт Geist, нейтральная палитра `zinc`/`slate`, один спокойный accent.
@@ -419,6 +489,28 @@ Create и delete используют один adapter, но не общий п�
 Минимальный namespace:
 
 ```text
+GET    /api/student/course
+GET    /api/student/program
+GET    /api/student/materials/:slug
+PUT    /api/student/materials/:slug/progress
+GET    /api/student/tools
+GET    /api/student/tools/:slug
+GET    /api/student/help
+
+GET    /api/admin/students
+POST   /api/admin/students
+PATCH  /api/admin/students/:id/access
+GET    /api/admin/program
+PUT    /api/admin/program/order
+GET    /api/admin/materials
+POST   /api/admin/materials
+PATCH  /api/admin/materials/:id
+POST   /api/admin/materials/:id/publish
+POST   /api/admin/materials/:id/unpublish
+GET    /api/admin/tools
+PATCH  /api/admin/tools/:id
+PUT    /api/admin/tools/:id/access/:studentId
+
 GET    /api/admin/infrastructure/environments
 POST   /api/admin/infrastructure/environments/preview
 POST   /api/admin/infrastructure/environments
@@ -429,10 +521,15 @@ GET    /api/admin/infrastructure/operations/:id
 POST   /api/admin/infrastructure/operations/:id/retry
 POST   /api/admin/infrastructure/provider-connections/test
 GET    /api/admin/infrastructure/provider-connections/timeweb
-GET    /api/student/environment
 ```
 
 Mutation принимает клиентский `idempotencyKey`, возвращает `operationId` и не возвращает provider secret. Ошибка имеет `code`, безопасное русское `message`, `correlationId` и необязательные `fieldErrors`. DTO версионируются; сырой Timeweb response не становится публичным контрактом.
+
+Student DTO никогда не содержит draft-материалы, provider IDs, IP, тариф,
+стоимость, raw health payload или чужой progress. Progress mutation принимает
+только material ID/slug, позицию и completion текущего пользователя. Publish и
+tool assignment проверяют admin role; unpublish немедленно убирает материал из
+student program, сохраняя audit и progress для возможной повторной публикации.
 
 Browser-facing namespace не содержит generic Timeweb endpoint. Cleanup service принимает только внутренний exact versioned command с operation/environment IDs; replay, неподтверждённая operation и чужой provider resource отклоняются до вызова adapter.
 
@@ -441,9 +538,15 @@ Browser-facing namespace не содержит generic Timeweb endpoint. Cleanup
 | Сущность | Назначение |
 |---|---|
 | `users`, `auth_sessions`, `auth_factors` | identity, role, session revocation и MFA |
+| `courses`, `course_sections` | пространство курса, порядок и навигация программы |
+| `materials` | text-first статья, практическое задание или ссылка; draft/published state |
+| `material_progress` | последнее открытое место и completion без оценочной LMS-модели |
+| `tools` | учебный продукт, его описание, launch policy и тип runtime |
+| `tool_access` | назначение инструмента ученику и безопасное состояние доступа |
+| `learning_environments` | учебная среда конкретного инструмента без provider деталей в student DTO |
 | `provider_connections` | provider kind, Vercel env aliases, capability snapshot и время проверки без raw secret |
 | `infrastructure_profiles` | allowlisted OS, preset rules, installer version/checksum, network policy |
-| `environments` | основная учебная среда, публичный URL и итоговый status |
+| `environments` | облачная реализация learning environment, публичный URL и итоговый status |
 | `provider_resources` | server/IP/DNS/SSH-key IDs, kind, zone и ownership |
 | `domain_allocations` | FQDN, zone, DNS record ID и reservation state |
 | `software_installations` | profile/version, health и timestamps |
@@ -550,9 +653,10 @@ Timeweb тесты по умолчанию используют mock/fake adapte
 
 ### 11.2. Приёмочные сценарии
 
-`AC-01` Обычная форма входа автоматически направляет admin в «Серверы», а
-student — в отдельный кабинет; mobile и desktop не показывают provider mode,
-tokens или deployment gates, student не видит admin navigation.
+`AC-01` Обычная форма входа автоматически направляет admin в рабочую область
+управления курсом, а student — в учебный workspace; mobile и desktop не
+показывают provider mode, tokens или deployment gates, student не видит admin
+navigation.
 
 `AC-02` Admin проверяет настроенный в Vercel production environment ограниченный Timeweb token и видит masked metadata; token отсутствует в browser traffic и PostgreSQL.
 
@@ -578,20 +682,38 @@ tokens или deployment gates, student не видит admin navigation.
 
 `AC-13` Browser, preview и development не имеют `TIMEWEB_API_TOKEN`. После подтверждения modal production Workflow повторно проверяет RBAC/re-auth/operation/ownership и через server-only allowlisted adapter автоматически удаляет только owned ресурсы без Telegram-кода.
 
+`AC-14` Guest видит только entry/login. Прямой запрос к student/admin route
+перенаправляется или возвращает `401`, не раскрывая закрытый контент.
+
+`AC-15` Admin создаёт draft-материал, добавляет его в программу и публикует.
+До публикации student не видит материал; после публикации он появляется в
+заданном разделе; после unpublish снова скрывается без потери audit.
+
+`AC-16` Student открывает опубликованный материал, сохраняет последнее место и
+completion, затем «Продолжить» возвращает его к следующему доступному действию.
+Student не может читать draft, изменять чужой progress или вызывать admin API.
+
+`AC-17` Admin назначает n8n-инструмент ученику. Student видит только учебное
+название, описание, состояние доступа и launch URL; provider, VPS, IP, тариф и
+стоимость отсутствуют в browser DTO и UI.
+
 ## 12. Рекомендуемая декомпозиция реализации
 
 1. ADR: multi-product границы текущего репозитория, один Vercel deployment и secret storage.
 2. Bootstrap `platform/`: Next.js/shadcn web, server-only provider boundary, Marketplace PostgreSQL, lint/test/CI без provider credentials.
 3. Auth, bootstrap admin, `student`/`admin` RBAC и deny-by-default route policy.
-4. Application shell, responsive navigation и пустые состояния.
-5. Domain model, migrations, audit/redaction и idempotent Vercel Workflow runner.
-6. Timeweb read-only adapter: connection test, capabilities, images, presets, zones, balance.
-7. Срез 1A: preview/create/reconcile/delete VPS и IP с fake adapter, затем disposable provider smoke.
-8. DNS ownership и managed subdomain.
-9. Versioned bootstrap profile, cloud-init и callback/health observation.
-10. Срез 1B: end-to-end n8n/DNS/TLS state machine.
-11. Cost guardrails, Vercel Cron reconciliation, observability и production hardening.
-12. Student environment card и управление доступом к основной среде.
+4. Application shell и route-aware navigation для guest/student/admin.
+5. Course/content schema, program ordering, draft/publish и student read APIs.
+6. Student home/program/material/progress/help flows и их locked/empty/error states.
+7. Tool catalog, assignment и provider-free student DTO.
+8. Admin students/program/materials/tools workflows.
+9. Infrastructure domain model, audit/redaction и idempotent Vercel Workflow runner.
+10. Timeweb read-only adapter: connection test, capabilities, images, presets, zones, balance.
+11. Срез 1A: preview/create/reconcile/delete VPS и IP с fake adapter, затем disposable provider smoke.
+12. DNS ownership и managed subdomain.
+13. Versioned bootstrap profile, cloud-init и callback/health observation.
+14. Срез 1B: end-to-end n8n/DNS/TLS state machine.
+15. Cost guardrails, Vercel Cron reconciliation, observability и production hardening.
 
 Каждый пункт декомпозируется в Projects Control с зависимостями, acceptance criteria и отдельным review. `platform/` имеет отдельные от root starter kit package manifest, tests, Vercel deployment и secrets. Изменение platform не меняет root Compose/scripts/workflow distribution; изменение starter kit release не разворачивает platform автоматически. Общие изменения документации или release-контракта проходят обе группы проверок.
 

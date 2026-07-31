@@ -1,16 +1,13 @@
 "use client";
 
 import {
-  Activity,
-  History,
-  ListChecks,
-  Server,
-  Settings2,
-  ShieldCheck,
+  BookOpenText,
+  Wrench,
   Users,
 } from "lucide-react";
 
 import { LogoutButton } from "@/components/auth/logout-button";
+import { NeurokursBrand } from "@/components/brand/neurokurs-brand";
 import {
   Sidebar,
   SidebarContent,
@@ -20,62 +17,42 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { NavLink } from "./nav-link";
 
-const infrastructure = [
-  { href: "/admin/infrastructure", label: "Серверы", icon: Server },
-  { href: "/admin/operations", label: "Операции", icon: ListChecks },
+const workspaceNavigation = [
+  { href: "/admin/students", label: "Ученики", icon: Users },
+  { href: "/admin/content", label: "Материалы", icon: BookOpenText },
+  { href: "/admin/tools", label: "Инструменты", icon: Wrench },
 ] as const;
 
 export function AdminSidebar({ email }: { email: string }) {
   return (
     <Sidebar collapsible="icon" aria-label="Навигация администратора">
-      <SidebarHeader className="p-3">
+      <SidebarHeader className="h-16 justify-center px-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" className="pointer-events-none">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                <ShieldCheck aria-hidden="true" className="size-4" />
-              </span>
-              <span className="grid min-w-0 flex-1 text-left leading-tight">
-                <span className="truncate font-semibold">Нейрокурс</span>
-                <span className="truncate font-mono text-[0.66rem] uppercase tracking-[0.12em] text-muted-foreground">
-                  Панель управления
-                </span>
-              </span>
-            </SidebarMenuButton>
+            <div className="flex h-12 items-center gap-3 px-2">
+              <NeurokursBrand compact />
+              <NeurokursBrand className="group-data-[collapsible=icon]:hidden" />
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarSeparator />
-      <SidebarContent>
+      <SidebarContent className="py-2">
         <SidebarGroup>
-          <SidebarGroupLabel>Управление</SidebarGroupLabel>
+          <SidebarGroupLabel>Курс</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {infrastructure.map((item) => (
+              {workspaceNavigation.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <NavLink {...item} />
                 </SidebarMenuItem>
               ))}
-              <SidebarMenuItem>
-                <NavLink href="/admin/students" label="Ученики" icon={Users} />
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <NavLink href="/admin/audit" label="Аудит" icon={History} />
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <NavLink
-                  href="/admin/settings"
-                  label="Настройки"
-                  icon={Settings2}
-                />
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -84,19 +61,15 @@ export function AdminSidebar({ email }: { email: string }) {
       <SidebarFooter className="p-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" tooltip={email}>
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary font-mono text-xs font-semibold">
-                A
+            <div className="flex h-12 items-center gap-3 px-2">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
+                {email.slice(0, 1).toUpperCase()}
               </span>
               <span className="grid min-w-0 flex-1 text-left leading-tight">
-                <span className="truncate text-sm font-medium">Администратор</span>
-                <span className="truncate text-xs text-muted-foreground">{email}</span>
+                <span className="truncate text-sm font-medium">{email}</span>
+                <span className="truncate text-xs text-muted-foreground">Аккаунт</span>
               </span>
-              <Activity
-                aria-label="Сессия активна"
-                className="ml-auto size-3.5 text-status-ready"
-              />
-            </SidebarMenuButton>
+            </div>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <LogoutButton />

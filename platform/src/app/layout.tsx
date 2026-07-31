@@ -1,22 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 
 import "./globals.css";
 
-const geist = Geist({
-  subsets: ["cyrillic", "latin"],
-  variable: "--font-geist",
-});
-
-const geistMono = Geist_Mono({
-  subsets: ["cyrillic", "latin"],
-  variable: "--font-geist-mono",
-});
-
 export const metadata: Metadata = {
-  title: "Нейрокурс — личный кабинет",
+  title: "Нейрокурс — пространство курса",
   description:
-    "Кабинеты ученика и администратора образовательной платформы Нейрокурс.",
+    "Материалы, пояснения и учебные инструменты курса — в одном пространстве.",
 };
 
 export default function RootLayout({
@@ -25,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru" className={`${geist.variable} ${geistMono.variable}`}>
+    <html lang="ru">
       <body className="antialiased">{children}</body>
     </html>
   );

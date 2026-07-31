@@ -2,12 +2,10 @@
 
 import * as React from "react";
 import {
-  History,
-  ListChecks,
+  BookOpenText,
   Search,
-  Server,
-  Settings2,
   Users,
+  Wrench,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -23,11 +21,9 @@ import {
 } from "@/components/ui/command";
 
 const entries = [
-  { href: "/admin/infrastructure", label: "Серверы", icon: Server },
-  { href: "/admin/operations", label: "Операции", icon: ListChecks },
   { href: "/admin/students", label: "Ученики", icon: Users },
-  { href: "/admin/audit", label: "Аудит", icon: History },
-  { href: "/admin/settings", label: "Настройки", icon: Settings2 },
+  { href: "/admin/content", label: "Материалы", icon: BookOpenText },
+  { href: "/admin/tools", label: "Инструменты", icon: Wrench },
 ] as const;
 
 export function CommandMenu() {
@@ -73,7 +69,7 @@ export function CommandMenu() {
         ref={triggerRef}
         type="button"
         variant="outline"
-        className="min-h-11 w-full justify-start gap-2 text-muted-foreground sm:w-64"
+        className="h-11 w-full justify-start gap-2 text-muted-foreground sm:w-64"
         onClick={() => {
           rememberFocus();
           setOpen(true);
@@ -82,7 +78,7 @@ export function CommandMenu() {
       >
         <Search aria-hidden="true" />
         <span className="truncate">Найти раздел</span>
-        <kbd className="ml-auto hidden rounded border bg-muted px-1.5 font-mono text-[0.65rem] sm:inline">
+        <kbd className="ml-auto hidden rounded border bg-muted px-1.5 font-mono text-xs sm:inline">
           ⌘ K
         </kbd>
       </Button>
@@ -90,7 +86,7 @@ export function CommandMenu() {
         open={open}
         onOpenChange={setOpen}
         title="Поиск по платформе"
-        description="Перейдите к нужному разделу панели управления."
+        description="Откройте нужный раздел."
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           (returnFocusRef.current ?? triggerRef.current)?.focus();

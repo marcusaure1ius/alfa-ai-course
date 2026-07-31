@@ -1,5 +1,5 @@
-import { InfrastructureControl } from "@/components/infrastructure/infrastructure-control";
+import { redirect } from "next/navigation";
 
-export default function InfrastructurePage() {
-  return <InfrastructureControl />;
+export default function LegacyInfrastructurePage() {
+  redirect("/admin/tools");
 }

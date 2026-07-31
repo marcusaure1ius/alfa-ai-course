@@ -25,7 +25,8 @@ export function NavLink({
 }: NavLinkProps) {
   const pathname = usePathname();
   const { setOpenMobile } = useSidebar();
-  const active = pathname === href || pathname.startsWith(`${href}/`);
+  const active =
+    pathname === href || (href !== "/admin" && pathname.startsWith(`${href}/`));
   const link = (
     <Link href={href} onClick={() => setOpenMobile(false)}>
       {Icon ? <Icon aria-hidden="true" /> : null}

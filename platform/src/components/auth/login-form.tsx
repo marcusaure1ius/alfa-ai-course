@@ -1,14 +1,14 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Loader2, LogIn } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function LoginForm() {
+export function LoginForm({ inverse = false }: { inverse?: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,6 +16,7 @@ export function LoginForm() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [credentialsUnlocked, setCredentialsUnlocked] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,7 +56,7 @@ export function LoginForm() {
         throw new Error(body.error ?? "Не удалось войти.");
       }
       router.push(
-        body.user?.role === "student" ? "/student" : "/admin/infrastructure",
+        body.user?.role === "student" ? "/student" : "/admin/tools",
       );
       router.refresh();
     } catch (caught) {
@@ -66,33 +67,59 @@ export function LoginForm() {
   }
 
   return (
-    <form className="grid gap-4" onSubmit={submit}>
-      <label className="grid gap-2 text-sm font-medium">
+    <form
+      className={inverse ? "grid gap-5 text-white" : "grid gap-5"}
+      onSubmit={submit}
+      onFocusCapture={() => setCredentialsUnlocked(true)}
+      onPointerDownCapture={() => setCredentialsUnlocked(true)}
+      aria-busy={pending}
+    >
+      <label className="login-field-enter grid gap-2 text-sm font-medium">
         Email
         <Input
           type="email"
+          name="username"
           autoComplete="username"
+          placeholder="name@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          readOnly={!credentialsUnlocked}
+          disabled={pending}
           required
         />
       </label>
-      <label className="grid gap-2 text-sm font-medium">
+      <label className="login-field-enter login-field-enter-delay grid gap-2 text-sm font-medium">
         Пароль
         <Input
           type="password"
+          name="password"
           autoComplete="current-password"
+          placeholder="Введите пароль"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
+          readOnly={!credentialsUnlocked}
+          disabled={pending}
           minLength={12}
           required
         />
       </label>
       {mfaRequired ? (
-        <div className="grid gap-3 rounded-lg border bg-muted/50 p-4">
+        <div
+          className={
+            inverse
+              ? "grid gap-3 rounded-lg border border-white/35 bg-white/10 p-4"
+              : "grid gap-3 rounded-lg border bg-muted/50 p-4"
+          }
+        >
           <div>
             <p className="text-sm font-medium">Подтвердите вход</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            <p
+              className={
+                inverse
+                  ? "mt-1 text-xs leading-5 text-white/75"
+                  : "mt-1 text-xs leading-5 text-muted-foreground"
+              }
+            >
               Введите шестизначный код из приложения-аутентификатора.
             </p>
           </div>
@@ -106,6 +133,7 @@ export function LoginForm() {
               onChange={(event) =>
                 setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))
               }
+              disabled={pending}
               pattern="[0-9]{6}"
               placeholder="000000"
               required
@@ -114,17 +142,21 @@ export function LoginForm() {
         </div>
       ) : null}
       {error ? (
-        <Alert variant="destructive" aria-live="polite">
+        <Alert
+          variant="destructive"
+          className={inverse ? "border-white/40 bg-white" : undefined}
+          aria-live="polite"
+        >
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
       <Button
         type="submit"
         size="lg"
-        className="mt-1 w-full"
+        className="mt-2 w-full"
         disabled={pending || (mfaRequired && mfaCode.length !== 6)}
       >
-        {pending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <LogIn aria-hidden="true" />}
+        {pending ? <Loader2 aria-hidden="true" className="animate-spin" /> : null}
         {pending ? "Проверяем…" : mfaRequired ? "Подтвердить вход" : "Войти"}
       </Button>
     </form>

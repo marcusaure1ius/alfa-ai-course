@@ -1062,6 +1062,217 @@ describe("durable fake infrastructure lifecycle", () => {
     }
   });
 
+  it("runs the initial production preflight before reserving an owned public IP", async () => {
+    const previous = {
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      PLATFORM_PROVIDER: process.env.PLATFORM_PROVIDER,
+      TIMEWEB_API_TOKEN: process.env.TIMEWEB_API_TOKEN,
+      AUTH_FACTOR_ENCRYPTION_KEY: process.env.AUTH_FACTOR_ENCRYPTION_KEY,
+    };
+    const totpSecret = "JBSWY3DPEHPK3PXP";
+    const factorEncryptionKey = Buffer.alloc(32, 13).toString("base64url");
+    const ownedIpId = "11111111-2222-4333-8444-555555555555";
+    process.env.VERCEL_ENV = "production";
+    process.env.PLATFORM_PROVIDER = "timeweb";
+    process.env.TIMEWEB_API_TOKEN = "synthetic-test-token";
+    process.env.AUTH_FACTOR_ENCRYPTION_KEY = factorEncryptionKey;
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      const method = init?.method ?? "GET";
+      if (url.pathname === "/api/v1/account/status") {
+        return Response.json({ status: { is_blocked: false } });
+      }
+      if (url.pathname === "/api/v1/account/finances") {
+        return Response.json({
+          finances: { balance: 2_000, currency: "RUB", monthly_fee: 180 },
+        });
+      }
+      if (url.pathname === "/api/v1/servers") {
+        return Response.json({ servers: [] });
+      }
+      if (url.pathname === "/api/v1/presets/servers") {
+        return Response.json({
+          server_presets: [
+            {
+              id: 4_800,
+              location: "ru-3",
+              tags: ["site", "cp", "msk_nvme"],
+              price: 1_000,
+              cpu: 2,
+              ram: 4_096,
+              disk: 51_200,
+              disk_type: "nvme",
+              bandwidth: 1_000,
+            },
+            {
+              id: 3_344,
+              location: "nl-1",
+              tags: ["site", "cp", "nl_base"],
+              price: 1_600,
+              cpu: 2,
+              ram: 2_048,
+              disk: 40_960,
+              disk_type: "nvme",
+              bandwidth: 1_000,
+            },
+            {
+              id: 6_063,
+              location: "de-1",
+              tags: ["site", "cp", "fra_nvme"],
+              price: 4_030,
+              cpu: 2,
+              ram: 2_048,
+              disk: 40_960,
+              disk_type: "nvme",
+              bandwidth: 200,
+            },
+          ],
+        });
+      }
+      if (url.pathname === "/api/v1/os/servers") {
+        return Response.json({
+          servers_os: [
+            {
+              id: 145,
+              family: "linux",
+              name: "Ubuntu",
+              version: "26.04",
+            },
+          ],
+        });
+      }
+      if (url.pathname === "/api/v2/locations") {
+        return Response.json({
+          locations: [
+            {
+              location: "ru-3",
+              location_code: "RU",
+              availability_zones: ["msk-1"],
+            },
+            {
+              location: "nl-1",
+              location_code: "NL",
+              availability_zones: ["ams-1"],
+            },
+            {
+              location: "de-1",
+              location_code: "DE",
+              availability_zones: ["fra-1"],
+            },
+          ],
+        });
+      }
+      if (
+        url.pathname === "/api/v1/floating-ips" &&
+        method === "POST"
+      ) {
+        return Response.json({
+          ip: {
+            id: ownedIpId,
+            ip: "203.0.113.10",
+            availability_zone: "msk-1",
+            resource_type: null,
+            resource_id: null,
+          },
+        });
+      }
+      if (url.pathname === "/api/v1/floating-ips") {
+        return Response.json({ ips: [] });
+      }
+      if (url.pathname === "/api/v1/account/services/cost") {
+        return Response.json({
+          services_costs: [{ type: "floating_ip", cost: 180 }],
+        });
+      }
+      if (url.pathname === "/api/v1/projects") {
+        return Response.json({
+          projects: [{ id: 303, name: "Course platform" }],
+        });
+      }
+      if (url.pathname === "/api/v1/ssh-keys") {
+        return Response.json({
+          ssh_keys: [{ id: 404, name: "Course key" }],
+        });
+      }
+      throw new Error(`Unexpected Timeweb test request: ${method} ${url.pathname}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const admin = await bootstrapAdmin(sql, {
+        email: "initial-preflight-admin@example.test",
+        password: "correct horse battery staple",
+        totpSecret,
+        totpCode: createTotpCode(totpSecret),
+        factorEncryptionKey,
+      });
+      const login = await loginWithPassword(sql, {
+        email: admin.email,
+        password: "correct horse battery staple",
+        mfaCode: createTotpCode(totpSecret),
+      });
+      if (!login.ok) throw new Error("Production MFA login failed.");
+      const create = await reserveCreateOperation(sql, login.session, {
+        name: "Production preflight regression",
+        idempotencyKey: "production-initial-preflight-01",
+        scenario: "success",
+        providerPlan: {
+          version: "timeweb-provisioning-v3",
+          deploymentMode: "plain-vps",
+          checkedAt: new Date().toISOString(),
+          presetId: 4_800,
+          operatingSystemId: 145,
+          operatingSystemLabel: "Ubuntu 26.04 x86_64",
+          region: "ru-3",
+          regionLabel: "Москва",
+          availabilityZone: "msk-1",
+          monthlyServerRoubles: 1_000,
+          hourlyServerRoubles: 1.37,
+          cpu: 2,
+          ramMb: 4_096,
+          diskMb: 51_200,
+          diskType: "nvme",
+          bandwidthMbps: 1_000,
+          backupsEnabled: false,
+          backupInterval: "week",
+          backupCopyCount: 1,
+          publicIpv4: true,
+          monthlyPublicIpRoubles: 180,
+          monthlyTotalRoubles: 1_180,
+          projectId: 303,
+          sshKeyId: 404,
+        },
+      });
+
+      await reserveIpStep({
+        operationId: create.accepted.operationId,
+        scenario: "success",
+      });
+
+      await expect(
+        sql<{ provider_resource_id: string }[]>`
+          SELECT provider_resource_id
+          FROM provider_resources
+          WHERE operation_id = ${create.accepted.operationId}
+            AND resource_kind = 'public_ip'
+            AND lifecycle_status = 'active'
+        `,
+      ).resolves.toEqual([{ provider_resource_id: ownedIpId }]);
+      expect(
+        fetchMock.mock.calls.filter(
+          ([input, init]) =>
+            new URL(String(input)).pathname === "/api/v1/floating-ips" &&
+            init?.method === "POST",
+        ),
+      ).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
   it("releases reconcile after a transient owned-IP lookup failure", async () => {
     const previous = {
       VERCEL_ENV: process.env.VERCEL_ENV,

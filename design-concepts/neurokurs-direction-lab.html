@@ -1,0 +1,2715 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Три арт-направления закрытого образовательного пространства Neurokurs"
+    />
+    <title>Neurokurs — лаборатория направлений</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fira+Sans+Condensed:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Onest:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --lab-h: 64px;
+        --focus: #7ca6ff;
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        color: #111;
+        background: #111318;
+        font-family: "Onest", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button,
+      a {
+        color: inherit;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      a {
+        text-decoration: none;
+      }
+
+      :focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 3px;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      .labbar {
+        position: sticky;
+        z-index: 100;
+        top: 0;
+        display: grid;
+        min-height: var(--lab-h);
+        grid-template-columns: minmax(170px, 1fr) auto minmax(170px, 1fr);
+        align-items: center;
+        gap: 24px;
+        padding: 10px 18px;
+        border-bottom: 1px solid #30343d;
+        color: #f7f7f5;
+        background: #111318;
+      }
+
+      .lab-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .lab-mark {
+        position: relative;
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border: 1px solid #555c68;
+        font-size: 12px;
+      }
+
+      .lab-mark::after {
+        position: absolute;
+        width: 1px;
+        height: 36px;
+        background: #707887;
+        content: "";
+        transform: rotate(34deg);
+      }
+
+      .lab-mark span {
+        position: relative;
+        z-index: 1;
+      }
+
+      .direction-switch {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .direction-switch button,
+      .surface-switch button {
+        min-height: 38px;
+        border: 0;
+        color: #9da4b0;
+        background: transparent;
+        transition:
+          color 180ms ease,
+          background 180ms ease;
+      }
+
+      .direction-switch button {
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-size: 12px;
+      }
+
+      .direction-switch button:hover,
+      .surface-switch button:hover {
+        color: #fff;
+      }
+
+      .direction-switch button[aria-selected="true"] {
+        color: #101217;
+        background: #f3f3f0;
+      }
+
+      .direction-switch small {
+        display: block;
+        margin-top: 1px;
+        opacity: 0.58;
+        font-size: 9px;
+        font-weight: 400;
+      }
+
+      .surface-switch {
+        display: flex;
+        justify-self: end;
+        padding: 3px;
+        border: 1px solid #343944;
+        border-radius: 7px;
+      }
+
+      .surface-switch button {
+        min-height: 30px;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+
+      .surface-switch button[aria-selected="true"] {
+        color: #fff;
+        background: #343944;
+      }
+
+      .direction[hidden],
+      .surface[hidden] {
+        display: none;
+      }
+
+      .direction-note {
+        display: grid;
+        min-height: 62px;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 20px;
+        padding: 12px 24px;
+        font-size: 12px;
+      }
+
+      .direction-note strong {
+        margin-right: 8px;
+      }
+
+      .direction-note-palette {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .swatch {
+        display: block;
+        width: 13px;
+        height: 13px;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+      }
+
+      .concept-flag {
+        position: fixed;
+        z-index: 80;
+        right: 12px;
+        bottom: 12px;
+        padding: 7px 9px;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        color: #262626;
+        background: rgba(255, 255, 255, 0.88);
+        backdrop-filter: blur(8px);
+        font: 10px/1.2 Arial, sans-serif;
+      }
+
+      /* Direction A — Living syllabus */
+      .direction-a {
+        --blue: #3154f5;
+        --blue-deep: #1835bd;
+        --ice: #f3f5ff;
+        --ink: #10131c;
+        --lime: #c8ff4d;
+        --coral: #ff795d;
+        color: var(--ink);
+        background: var(--ice);
+        font-family: "Onest", sans-serif;
+      }
+
+      .direction-a .direction-note {
+        color: #dfe5ff;
+        background: var(--blue-deep);
+      }
+
+      .direction-a .direction-note span {
+        color: #afbbef;
+      }
+
+      .a-landing {
+        min-height: calc(100vh - var(--lab-h) - 62px);
+        color: #fff;
+        background: var(--blue);
+      }
+
+      .a-nav {
+        display: flex;
+        min-height: 76px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 clamp(22px, 4.5vw, 70px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+      }
+
+      .a-wordmark {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+      }
+
+      .a-wordmark-mark {
+        display: grid;
+        width: 31px;
+        height: 31px;
+        place-items: center;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+        font: 700 12px/1 "Courier New", monospace;
+      }
+
+      .a-nav-right {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        font-size: 12px;
+      }
+
+      .a-enter {
+        display: inline-flex;
+        min-height: 42px;
+        align-items: center;
+        gap: 28px;
+        padding: 8px 13px 8px 16px;
+        border: 1px solid #fff;
+        color: var(--ink);
+        background: #fff;
+        font-weight: 700;
+      }
+
+      .a-hero {
+        display: grid;
+        min-height: 710px;
+        grid-template-columns: minmax(0, 1.15fr) minmax(400px, 0.85fr);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+      }
+
+      .a-hero-copy {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: clamp(54px, 7vw, 100px) clamp(22px, 4.5vw, 70px) 42px;
+      }
+
+      .a-live {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font: 12px/1.3 "Courier New", monospace;
+      }
+
+      .a-live::before {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--lime);
+        box-shadow: 0 0 0 6px rgba(200, 255, 77, 0.12);
+        content: "";
+      }
+
+      .a-hero h1 {
+        max-width: 950px;
+        margin: 42px 0 58px;
+        font-size: clamp(58px, 7.7vw, 112px);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        line-height: 0.82;
+        text-wrap: balance;
+      }
+
+      .a-hero h1 em {
+        color: var(--lime);
+        font-family: Georgia, "Times New Roman", serif;
+        font-weight: 400;
+      }
+
+      .a-hero-bottom {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 40px;
+      }
+
+      .a-hero-bottom p {
+        max-width: 510px;
+        margin: 0;
+        color: #dfe4ff;
+        font-size: 17px;
+        line-height: 1.55;
+      }
+
+      .a-round-link {
+        display: grid;
+        width: 86px;
+        height: 86px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: 50%;
+        color: #fff;
+        background: transparent;
+        font-size: 26px;
+        transition:
+          color 220ms var(--ease),
+          background 220ms var(--ease),
+          transform 220ms var(--ease);
+      }
+
+      .a-round-link:hover {
+        color: var(--blue);
+        background: #fff;
+        transform: rotate(-8deg);
+      }
+
+      .a-syllabus {
+        position: relative;
+        min-width: 0;
+        padding: 52px clamp(26px, 4vw, 58px);
+        border-left: 1px solid rgba(255, 255, 255, 0.25);
+        background: rgba(10, 31, 150, 0.28);
+      }
+
+      .a-syllabus::before {
+        position: absolute;
+        top: 54px;
+        bottom: 54px;
+        left: clamp(27px, 4vw, 59px);
+        width: 1px;
+        background: rgba(255, 255, 255, 0.42);
+        content: "";
+      }
+
+      .a-syllabus-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-left: 27px;
+        font: 11px/1.3 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .a-syllabus-head span:last-child {
+        color: #bcc7ff;
+      }
+
+      .a-syllabus-list {
+        margin-top: 70px;
+      }
+
+      .a-syllabus-item {
+        position: relative;
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr);
+        gap: 15px;
+        padding: 20px 0 26px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+      }
+
+      .a-syllabus-dot {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        width: 20px;
+        height: 20px;
+        place-items: center;
+        border: 1px solid #fff;
+        border-radius: 50%;
+        background: var(--blue-deep);
+        font: 9px/1 "Courier New", monospace;
+      }
+
+      .a-syllabus-item.current .a-syllabus-dot {
+        border-color: var(--lime);
+        color: var(--ink);
+        background: var(--lime);
+      }
+
+      .a-syllabus-item small {
+        display: block;
+        color: #afbbef;
+        font: 10px/1.3 "Courier New", monospace;
+      }
+
+      .a-syllabus-item strong {
+        display: block;
+        max-width: 340px;
+        margin-top: 7px;
+        font-size: 20px;
+        font-weight: 500;
+        letter-spacing: -0.025em;
+        line-height: 1.12;
+      }
+
+      .a-syllabus-item.current strong {
+        color: var(--lime);
+      }
+
+      .a-ribbon {
+        display: flex;
+        align-items: center;
+        gap: 42px;
+        padding: 18px 0;
+        overflow: hidden;
+        color: var(--ink);
+        background: var(--lime);
+        font: 700 13px/1 "Courier New", monospace;
+        white-space: nowrap;
+      }
+
+      .a-ribbon-track {
+        display: flex;
+        min-width: max-content;
+        gap: 42px;
+        animation: ribbon 28s linear infinite;
+      }
+
+      @keyframes ribbon {
+        to {
+          transform: translateX(-50%);
+        }
+      }
+
+      .a-admin {
+        min-height: calc(100vh - var(--lab-h) - 62px);
+        color: var(--ink);
+        background: var(--ice);
+      }
+
+      .a-admin-shell {
+        display: grid;
+        min-height: 760px;
+        grid-template-columns: 82px minmax(0, 1fr) 310px;
+      }
+
+      .a-rail {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 22px 0;
+        border-right: 1px solid #cbd2ef;
+        background: var(--blue);
+      }
+
+      .a-rail .a-wordmark-mark {
+        color: #fff;
+      }
+
+      .a-rail-nav {
+        display: flex;
+        align-items: center;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 74px;
+      }
+
+      .a-rail-nav button {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        place-items: center;
+        border: 1px solid transparent;
+        color: #c9d1ff;
+        background: transparent;
+        font: 11px/1 "Courier New", monospace;
+      }
+
+      .a-rail-nav button.active {
+        border-color: #fff;
+        color: var(--ink);
+        background: var(--lime);
+      }
+
+      .a-program {
+        min-width: 0;
+        padding: 34px clamp(24px, 4vw, 64px) 80px;
+      }
+
+      .a-program-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding-bottom: 30px;
+        border-bottom: 1px solid #cbd2ef;
+      }
+
+      .a-program-top span {
+        color: #6b7290;
+        font: 11px/1.2 "Courier New", monospace;
+      }
+
+      .a-program-top button,
+      .a-queue button {
+        min-height: 40px;
+        padding: 8px 14px;
+        border: 0;
+        color: #fff;
+        background: var(--blue);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .a-program-heading {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 180px;
+        gap: 30px;
+        padding: 50px 0 34px;
+      }
+
+      .a-program-heading h1 {
+        margin: 0;
+        font-size: clamp(43px, 5vw, 76px);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        line-height: 0.94;
+      }
+
+      .a-program-heading p {
+        margin: 4px 0 0;
+        color: #5e6681;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .a-program-section {
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr);
+        border-top: 1px solid #aeb8df;
+      }
+
+      .a-section-num {
+        padding-top: 22px;
+        color: var(--blue);
+        font: 11px/1 "Courier New", monospace;
+      }
+
+      .a-section-body {
+        border-left: 1px solid #cbd2ef;
+      }
+
+      .a-material {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 130px 32px;
+        align-items: center;
+        gap: 18px;
+        min-height: 76px;
+        padding: 13px 0 13px 24px;
+        border-bottom: 1px solid #cbd2ef;
+      }
+
+      .a-material strong {
+        display: block;
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .a-material small {
+        display: block;
+        margin-top: 4px;
+        color: #717994;
+        font: 10px/1.3 "Courier New", monospace;
+      }
+
+      .a-material-action {
+        color: var(--blue);
+        font-size: 11px;
+        font-weight: 700;
+        text-align: right;
+      }
+
+      .a-material-action.review {
+        color: #9b3f2d;
+      }
+
+      .a-material-more {
+        border: 0;
+        color: #656d87;
+        background: transparent;
+        font-size: 17px;
+      }
+
+      .a-queue {
+        padding: 34px 24px;
+        border-left: 1px solid #cbd2ef;
+        background: #e6eaff;
+      }
+
+      .a-queue h2 {
+        margin: 0;
+        font-size: 23px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+      }
+
+      .a-queue-intro {
+        margin: 8px 0 30px;
+        color: #68708b;
+        font-size: 12px;
+      }
+
+      .a-queue-item {
+        padding: 18px 0;
+        border-top: 1px solid #bfc8ed;
+      }
+
+      .a-queue-item time {
+        color: var(--blue);
+        font: 10px/1 "Courier New", monospace;
+      }
+
+      .a-queue-item strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 14px;
+      }
+
+      .a-queue-item p {
+        margin: 5px 0 0;
+        color: #68708b;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .a-queue .a-queue-action {
+        width: 100%;
+        margin-top: 24px;
+      }
+
+      /* Direction B — Editorial room */
+      .direction-b {
+        --b-ink: #0d0d0d;
+        --b-white: #fbfbfa;
+        --b-red: #c92935;
+        --b-gray: #d8d8d3;
+        --b-bluegray: #c8d0dc;
+        color: var(--b-ink);
+        background: var(--b-white);
+        font-family: "Onest", sans-serif;
+      }
+
+      .direction-b .direction-note {
+        border-bottom: 1px solid #bababa;
+        color: var(--b-ink);
+        background: #e7e7e3;
+      }
+
+      .direction-b .direction-note span {
+        color: #575757;
+      }
+
+      .b-nav {
+        display: grid;
+        min-height: 78px;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        padding: 0 clamp(20px, 4vw, 64px);
+        border-bottom: 1px solid var(--b-ink);
+      }
+
+      .b-logo {
+        justify-self: start;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 20px;
+        font-style: italic;
+        font-weight: 700;
+      }
+
+      .b-nav .b-logo {
+        justify-self: start;
+      }
+
+      .b-nav-center {
+        font: 10px/1.2 "Courier New", monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .b-nav a {
+        justify-self: end;
+        padding-bottom: 3px;
+        border-bottom: 1px solid currentColor;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .b-landing {
+        min-height: calc(100vh - var(--lab-h) - 62px);
+        background: var(--b-white);
+      }
+
+      .b-cover {
+        display: grid;
+        min-height: 690px;
+        grid-template-columns: 0.8fr minmax(450px, 1.2fr);
+      }
+
+      .b-cover-aside {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 48px clamp(22px, 4vw, 62px);
+        border-right: 1px solid var(--b-ink);
+      }
+
+      .b-cover-aside-top {
+        max-width: 320px;
+        font: 11px/1.55 "Courier New", monospace;
+      }
+
+      .b-access-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 22px;
+        font-weight: 700;
+      }
+
+      .b-access-line::before {
+        width: 30px;
+        height: 1px;
+        background: var(--b-red);
+        content: "";
+      }
+
+      .b-cover-aside blockquote {
+        margin: 70px 0 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 26px;
+        line-height: 1.17;
+      }
+
+      .b-cover-aside blockquote em {
+        color: var(--b-red);
+      }
+
+      .b-cover-aside-bottom {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        padding-top: 25px;
+        border-top: 1px solid var(--b-ink);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .b-cover-main {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 45px clamp(22px, 5vw, 76px) 36px;
+        overflow: hidden;
+      }
+
+      .b-edition {
+        display: flex;
+        justify-content: space-between;
+        font: 10px/1.2 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .b-cover-main h1 {
+        max-width: 900px;
+        margin: 44px 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(66px, 9vw, 132px);
+        font-weight: 400;
+        letter-spacing: -0.04em;
+        line-height: 0.79;
+      }
+
+      .b-cover-main h1 span {
+        display: block;
+        margin-left: 12%;
+        font-style: italic;
+      }
+
+      .b-red-note {
+        position: absolute;
+        top: 47%;
+        right: 6%;
+        max-width: 180px;
+        padding: 14px;
+        color: #fff;
+        background: var(--b-red);
+        font: 11px/1.45 "Courier New", monospace;
+        transform: rotate(2deg);
+      }
+
+      .b-cover-action {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 30px;
+      }
+
+      .b-cover-action p {
+        max-width: 470px;
+        margin: 0;
+        color: #3e3e3c;
+        font-size: 16px;
+        line-height: 1.55;
+      }
+
+      .b-enter {
+        display: flex;
+        min-width: 170px;
+        min-height: 48px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border: 1px solid var(--b-ink);
+        color: #fff;
+        background: var(--b-ink);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .b-ticker {
+        display: grid;
+        grid-template-columns: 200px repeat(3, 1fr);
+        border-top: 1px solid var(--b-ink);
+        border-bottom: 1px solid var(--b-ink);
+      }
+
+      .b-ticker > * {
+        min-height: 86px;
+        padding: 18px 22px;
+        border-right: 1px solid var(--b-ink);
+      }
+
+      .b-ticker > *:last-child {
+        border-right: 0;
+      }
+
+      .b-ticker-label {
+        color: #fff;
+        background: var(--b-red);
+        font: 10px/1.35 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .b-ticker strong {
+        display: block;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 16px;
+        font-weight: 400;
+      }
+
+      .b-ticker small {
+        display: block;
+        margin-top: 6px;
+        color: #656560;
+        font: 9px/1.2 "Courier New", monospace;
+      }
+
+      .b-admin {
+        min-height: calc(100vh - var(--lab-h) - 62px);
+        background: #ededeb;
+      }
+
+      .b-desk-top {
+        display: grid;
+        min-height: 70px;
+        grid-template-columns: 210px 1fr auto;
+        align-items: center;
+        border-bottom: 1px solid var(--b-ink);
+        background: var(--b-white);
+      }
+
+      .b-desk-top > * {
+        height: 100%;
+        padding: 0 22px;
+        border-right: 1px solid var(--b-ink);
+      }
+
+      .b-desk-top .b-logo {
+        display: flex;
+        align-items: center;
+      }
+
+      .b-desk-nav {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        font-size: 11px;
+      }
+
+      .b-desk-nav a.active {
+        color: var(--b-red);
+        font-weight: 700;
+      }
+
+      .b-release {
+        display: flex;
+        min-width: 190px;
+        align-items: center;
+        justify-content: space-between;
+        border: 0;
+        color: #fff;
+        background: var(--b-red);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .b-desk {
+        display: grid;
+        min-height: 760px;
+        grid-template-columns: 210px minmax(0, 1fr) 280px;
+      }
+
+      .b-folio {
+        padding: 28px 22px;
+        border-right: 1px solid var(--b-ink);
+        background: #deded9;
+      }
+
+      .b-folio-title {
+        margin-bottom: 28px;
+        font: 10px/1.2 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .b-folio a {
+        display: grid;
+        grid-template-columns: 26px 1fr;
+        gap: 10px;
+        padding: 14px 0;
+        border-top: 1px solid #9a9a95;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .b-folio a span:first-child {
+        color: #6c6c68;
+        font: 9px/1.4 "Courier New", monospace;
+      }
+
+      .b-folio a.active {
+        color: var(--b-red);
+        font-weight: 700;
+      }
+
+      .b-page {
+        min-width: 0;
+        padding: 38px clamp(28px, 5vw, 80px) 80px;
+        background: var(--b-white);
+      }
+
+      .b-page-meta {
+        display: flex;
+        justify-content: space-between;
+        padding-bottom: 15px;
+        border-bottom: 1px solid var(--b-ink);
+        font: 9px/1.2 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .b-page h1 {
+        max-width: 760px;
+        margin: 54px 0 30px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(46px, 5vw, 78px);
+        font-weight: 400;
+        letter-spacing: -0.035em;
+        line-height: 0.96;
+      }
+
+      .b-page-lead {
+        max-width: 640px;
+        padding-bottom: 34px;
+        border-bottom: 1px solid var(--b-gray);
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 19px;
+        line-height: 1.5;
+      }
+
+      .b-page-body {
+        display: grid;
+        max-width: 720px;
+        grid-template-columns: 130px 1fr;
+        gap: 28px;
+        margin-top: 34px;
+      }
+
+      .b-page-body aside {
+        color: var(--b-red);
+        font: 10px/1.5 "Courier New", monospace;
+      }
+
+      .b-page-body p {
+        margin: 0;
+        color: #353533;
+        font-size: 14px;
+        line-height: 1.75;
+      }
+
+      .b-margin {
+        padding: 28px 20px;
+        border-left: 1px solid var(--b-ink);
+        background: var(--b-bluegray);
+      }
+
+      .b-margin h2 {
+        margin: 0 0 28px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 22px;
+        font-weight: 400;
+      }
+
+      .b-margin-note {
+        padding: 17px 0;
+        border-top: 1px solid #7f8792;
+      }
+
+      .b-margin-note small {
+        font: 9px/1.2 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .b-margin-note strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 13px;
+        line-height: 1.35;
+      }
+
+      .b-margin-note p {
+        margin: 6px 0 0;
+        color: #48505b;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .b-margin button {
+        width: 100%;
+        min-height: 42px;
+        margin-top: 22px;
+        border: 1px solid var(--b-ink);
+        color: #fff;
+        background: var(--b-ink);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      /* Direction C — Practice workbench */
+      .direction-c {
+        --c-yellow: #e9ff58;
+        --c-violet: #27213c;
+        --c-violet-2: #3a3157;
+        --c-white: #fafafa;
+        --c-blue: #9dc7ff;
+        --c-orange: #ff7659;
+        color: var(--c-violet);
+        background: var(--c-yellow);
+        font-family: "Onest", sans-serif;
+      }
+
+      .direction-c .direction-note {
+        color: var(--c-yellow);
+        background: var(--c-violet);
+      }
+
+      .direction-c .direction-note span {
+        color: #c6bedf;
+      }
+
+      .c-landing {
+        min-height: calc(100vh - var(--lab-h) - 62px);
+        background: var(--c-yellow);
+      }
+
+      .c-nav {
+        display: grid;
+        min-height: 74px;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        padding: 0 clamp(18px, 3vw, 48px);
+        border-bottom: 2px solid var(--c-violet);
+      }
+
+      .c-logo {
+        font-family: "Fira Sans Condensed", sans-serif;
+        font-size: 19px;
+        font-weight: 800;
+        letter-spacing: -0.045em;
+        text-transform: uppercase;
+      }
+
+      .c-nav .c-logo {
+        justify-self: start;
+      }
+
+      .c-nav-center {
+        font: 10px/1.2 "Courier New", monospace;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .c-nav a {
+        justify-self: end;
+        padding: 10px 14px;
+        border: 2px solid var(--c-violet);
+        background: var(--c-white);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .c-hero {
+        display: grid;
+        min-height: 675px;
+        grid-template-columns: minmax(0, 1.3fr) minmax(370px, 0.7fr);
+        border-bottom: 2px solid var(--c-violet);
+      }
+
+      .c-hero-copy {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 42px clamp(22px, 4vw, 60px);
+        border-right: 2px solid var(--c-violet);
+      }
+
+      .c-coordinate {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font: 10px/1.2 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .c-coordinate span:last-child {
+        padding: 5px 7px;
+        color: var(--c-yellow);
+        background: var(--c-violet);
+      }
+
+      .c-hero h1 {
+        max-width: 900px;
+        margin: 38px 0;
+        font-family: "Fira Sans Condensed", sans-serif;
+        font-size: clamp(64px, 9vw, 136px);
+        font-stretch: condensed;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 0.76;
+        text-transform: uppercase;
+      }
+
+      .c-hero h1 span {
+        display: inline-block;
+        color: var(--c-white);
+        background: var(--c-violet);
+        transform: rotate(-1deg);
+      }
+
+      .c-hero-foot {
+        display: grid;
+        grid-template-columns: minmax(0, 440px) auto;
+        align-items: end;
+        justify-content: space-between;
+        gap: 30px;
+      }
+
+      .c-hero-foot p {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 1.5;
+      }
+
+      .c-arrow-button {
+        display: grid;
+        width: 68px;
+        height: 68px;
+        place-items: center;
+        border: 2px solid var(--c-violet);
+        color: var(--c-yellow);
+        background: var(--c-violet);
+        font-size: 25px;
+        transition: transform 180ms var(--ease);
+      }
+
+      .c-arrow-button:hover {
+        transform: translate(4px, -4px);
+      }
+
+      .c-bench-preview {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        padding: 30px 24px 24px;
+        overflow: hidden;
+        background: var(--c-white);
+      }
+
+      .c-bench-preview::before {
+        position: absolute;
+        top: -70px;
+        right: -70px;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: var(--c-blue);
+        content: "";
+      }
+
+      .c-bench-title {
+        position: relative;
+        z-index: 1;
+        font: 10px/1.2 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .c-stack {
+        position: relative;
+        flex: 1;
+        margin-top: 42px;
+      }
+
+      .c-sheet {
+        position: absolute;
+        right: 0;
+        left: 0;
+        min-height: 134px;
+        padding: 18px;
+        border: 2px solid var(--c-violet);
+        background: var(--c-white);
+        transition: transform 220ms var(--ease);
+      }
+
+      .c-sheet:nth-child(1) {
+        top: 0;
+        transform: rotate(-2deg);
+      }
+
+      .c-sheet:nth-child(2) {
+        top: 116px;
+        background: var(--c-blue);
+        transform: rotate(1.5deg);
+      }
+
+      .c-sheet:nth-child(3) {
+        top: 234px;
+        color: #fff;
+        background: var(--c-violet);
+        transform: rotate(-0.8deg);
+      }
+
+      .c-sheet:hover {
+        z-index: 5;
+        transform: translateY(-7px) rotate(0);
+      }
+
+      .c-sheet small {
+        font: 9px/1.2 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .c-sheet strong {
+        display: block;
+        max-width: 300px;
+        margin-top: 20px;
+        font-family: "Fira Sans Condensed", sans-serif;
+        font-size: 22px;
+        line-height: 1.02;
+        text-transform: uppercase;
+      }
+
+      .c-toolbelt {
+        display: grid;
+        grid-template-columns: 230px repeat(3, 1fr);
+        border-bottom: 2px solid var(--c-violet);
+      }
+
+      .c-toolbelt > * {
+        min-height: 98px;
+        padding: 18px 20px;
+        border-right: 2px solid var(--c-violet);
+      }
+
+      .c-toolbelt > *:last-child {
+        border-right: 0;
+      }
+
+      .c-toolbelt-label {
+        color: var(--c-white);
+        background: var(--c-violet);
+        font: 10px/1.4 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .c-toolbelt strong {
+        display: block;
+        font-family: "Fira Sans Condensed", sans-serif;
+        font-size: 18px;
+        text-transform: uppercase;
+      }
+
+      .c-toolbelt span {
+        display: block;
+        margin-top: 8px;
+        font: 10px/1.3 "Courier New", monospace;
+      }
+
+      .c-admin {
+        min-height: calc(100vh - var(--lab-h) - 62px);
+        color: var(--c-white);
+        background: var(--c-violet);
+      }
+
+      .c-admin-top {
+        display: grid;
+        min-height: 70px;
+        grid-template-columns: 220px 1fr auto;
+        align-items: center;
+        border-bottom: 1px solid #6b618a;
+      }
+
+      .c-admin-top > * {
+        height: 100%;
+        padding: 0 24px;
+        border-right: 1px solid #6b618a;
+      }
+
+      .c-admin-top .c-logo {
+        display: flex;
+        align-items: center;
+      }
+
+      .c-admin-nav {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        color: #bcb4d4;
+        font-size: 11px;
+      }
+
+      .c-admin-nav a.active {
+        color: var(--c-yellow);
+      }
+
+      .c-new {
+        display: flex;
+        min-width: 180px;
+        align-items: center;
+        justify-content: space-between;
+        border: 0;
+        color: var(--c-violet);
+        background: var(--c-yellow);
+        font-weight: 800;
+      }
+
+      .c-workbench {
+        padding: 34px clamp(18px, 3.6vw, 56px) 80px;
+      }
+
+      .c-workbench-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 270px;
+        gap: 30px;
+        padding-bottom: 34px;
+      }
+
+      .c-workbench-head h1 {
+        margin: 0;
+        font-family: "Fira Sans Condensed", sans-serif;
+        font-size: clamp(48px, 6vw, 88px);
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 0.85;
+        text-transform: uppercase;
+      }
+
+      .c-workbench-head p {
+        align-self: end;
+        margin: 0;
+        color: #c1bad7;
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .c-lane {
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr);
+        border-top: 1px solid #6b618a;
+      }
+
+      .c-lane-label {
+        padding: 24px 20px 24px 0;
+        border-right: 1px solid #6b618a;
+      }
+
+      .c-lane-label strong {
+        display: block;
+        color: var(--c-yellow);
+        font: 11px/1.3 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .c-lane-label span {
+        display: block;
+        margin-top: 7px;
+        color: #a9a0c3;
+        font-size: 11px;
+      }
+
+      .c-lane-items {
+        display: flex;
+        min-width: 0;
+        gap: 0;
+        overflow-x: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #777090 transparent;
+      }
+
+      .c-work-item {
+        display: flex;
+        min-width: 260px;
+        min-height: 126px;
+        flex: 1 0 260px;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 20px;
+        border-right: 1px solid #6b618a;
+        transition:
+          color 180ms ease,
+          background 180ms ease;
+      }
+
+      .c-work-item:hover {
+        color: var(--c-violet);
+        background: var(--c-blue);
+      }
+
+      .c-work-item.orange:hover {
+        background: var(--c-orange);
+      }
+
+      .c-work-item small {
+        color: #a9a0c3;
+        font: 9px/1.2 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .c-work-item:hover small {
+        color: #443b5f;
+      }
+
+      .c-work-item strong {
+        max-width: 260px;
+        font-size: 15px;
+        line-height: 1.25;
+      }
+
+      .c-work-item-action {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 18px;
+        font: 9px/1.2 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .c-workbench-foot {
+        display: grid;
+        grid-template-columns: 190px 1fr;
+        border-top: 1px solid #6b618a;
+        border-bottom: 1px solid #6b618a;
+      }
+
+      .c-workbench-foot > div {
+        min-height: 62px;
+        padding: 15px 20px 15px 0;
+        border-right: 1px solid #6b618a;
+        color: var(--c-yellow);
+        font: 10px/1.4 "Courier New", monospace;
+        text-transform: uppercase;
+      }
+
+      .c-workbench-foot ul {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        padding: 0;
+        margin: 0;
+        overflow-x: auto;
+        list-style: none;
+      }
+
+      .c-workbench-foot li {
+        min-width: max-content;
+        padding: 0 22px;
+        border-right: 1px solid #6b618a;
+        color: #d9d4e7;
+        font-size: 11px;
+      }
+
+      .c-workbench-foot li b {
+        margin-left: 8px;
+        color: var(--c-blue);
+        font: 9px/1 "Courier New", monospace;
+      }
+
+      /* Deliberate Cyrillic type system: neutral Onest, literary Literata,
+         workmanlike Fira Sans Condensed, and IBM Plex Mono for utility text. */
+      body,
+      .direction-a,
+      .direction-b,
+      .direction-c {
+        font-family: "Onest", sans-serif;
+      }
+
+      .a-hero h1 em,
+      .b-logo,
+      .b-cover-aside blockquote,
+      .b-cover-main h1,
+      .b-ticker strong,
+      .b-page h1,
+      .b-page-lead,
+      .b-margin h2 {
+        font-family: "Literata", Georgia, serif;
+      }
+
+      .c-logo,
+      .c-hero h1,
+      .c-sheet strong,
+      .c-toolbelt strong,
+      .c-workbench-head h1 {
+        font-family: "Fira Sans Condensed", sans-serif;
+      }
+
+      .a-wordmark-mark,
+      .a-live,
+      .a-syllabus-head,
+      .a-syllabus-dot,
+      .a-syllabus-item small,
+      .a-ribbon,
+      .a-rail-nav button,
+      .a-program-top span,
+      .a-section-num,
+      .a-material small,
+      .a-queue-item time,
+      .b-nav-center,
+      .b-cover-aside-top,
+      .b-edition,
+      .b-red-note,
+      .b-ticker-label,
+      .b-ticker small,
+      .b-folio-title,
+      .b-folio a span:first-child,
+      .b-page-meta,
+      .b-page-body aside,
+      .b-margin-note small,
+      .c-nav-center,
+      .c-coordinate,
+      .c-bench-title,
+      .c-sheet small,
+      .c-toolbelt-label,
+      .c-toolbelt span,
+      .c-lane-label strong,
+      .c-work-item small,
+      .c-work-item-action,
+      .c-workbench-foot > div,
+      .c-workbench-foot li b {
+        font-family: "IBM Plex Mono", monospace;
+      }
+
+      @media (max-width: 1050px) {
+        .a-hero,
+        .c-hero {
+          grid-template-columns: 1fr;
+        }
+
+        .a-syllabus,
+        .c-bench-preview {
+          min-height: 570px;
+          border-top: 1px solid rgba(255, 255, 255, 0.25);
+          border-left: 0;
+        }
+
+        .c-hero-copy {
+          border-right: 0;
+        }
+
+        .b-cover {
+          grid-template-columns: 0.7fr 1.3fr;
+        }
+
+        .a-admin-shell {
+          grid-template-columns: 70px minmax(0, 1fr);
+        }
+
+        .a-queue {
+          grid-column: 1 / -1;
+          border-top: 1px solid #cbd2ef;
+          border-left: 0;
+        }
+
+        .a-queue {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 20px;
+        }
+
+        .a-queue h2,
+        .a-queue-intro,
+        .a-queue-action {
+          grid-column: 1 / -1;
+        }
+
+        .b-desk {
+          grid-template-columns: 180px minmax(0, 1fr);
+        }
+
+        .b-margin {
+          grid-column: 1 / -1;
+          border-top: 1px solid var(--b-ink);
+          border-left: 0;
+        }
+
+        .b-margin {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 20px;
+        }
+
+        .b-margin h2,
+        .b-margin button {
+          grid-column: 1 / -1;
+        }
+      }
+
+      @media (max-width: 800px) {
+        :root {
+          --lab-h: auto;
+        }
+
+        .labbar {
+          position: relative;
+          grid-template-columns: 1fr;
+          gap: 9px;
+        }
+
+        .lab-title {
+          justify-content: center;
+        }
+
+        .direction-switch {
+          width: 100%;
+        }
+
+        .direction-switch button {
+          min-width: 0;
+          flex: 1;
+          padding-inline: 7px;
+        }
+
+        .surface-switch {
+          width: 100%;
+          justify-self: stretch;
+        }
+
+        .surface-switch button {
+          flex: 1;
+        }
+
+        .direction-note {
+          grid-template-columns: 1fr;
+          gap: 6px;
+        }
+
+        .a-hero h1,
+        .c-hero h1 {
+          font-size: clamp(58px, 13vw, 90px);
+        }
+
+        .a-hero {
+          min-height: auto;
+        }
+
+        .a-hero-copy {
+          min-height: 650px;
+        }
+
+        .b-cover {
+          grid-template-columns: 1fr;
+        }
+
+        .b-cover-aside {
+          min-height: 410px;
+          border-right: 0;
+          border-bottom: 1px solid var(--b-ink);
+        }
+
+        .b-cover-main {
+          min-height: 610px;
+        }
+
+        .b-ticker,
+        .c-toolbelt {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .b-ticker > *,
+        .c-toolbelt > * {
+          border-bottom: 1px solid currentColor;
+        }
+
+        .a-admin-shell,
+        .b-desk {
+          display: block;
+        }
+
+        .a-rail {
+          position: sticky;
+          z-index: 10;
+          top: 0;
+          flex-direction: row;
+          justify-content: space-between;
+          padding: 10px 16px;
+          border-right: 0;
+          border-bottom: 1px solid #cbd2ef;
+        }
+
+        .a-rail-nav {
+          flex-direction: row;
+          margin-top: 0;
+        }
+
+        .a-program-heading,
+        .c-workbench-head {
+          grid-template-columns: 1fr;
+        }
+
+        .a-queue,
+        .b-margin {
+          grid-template-columns: 1fr;
+        }
+
+        .b-desk-top,
+        .c-admin-top {
+          grid-template-columns: 1fr auto;
+        }
+
+        .b-desk-nav,
+        .c-admin-nav {
+          display: none;
+        }
+
+        .b-folio {
+          display: flex;
+          gap: 20px;
+          padding-block: 18px;
+          overflow-x: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--b-ink);
+        }
+
+        .b-folio-title {
+          flex: 0 0 auto;
+          margin: 0;
+        }
+
+        .b-folio a {
+          min-width: 180px;
+          flex: 0 0 auto;
+          border-top: 0;
+          border-left: 1px solid #9a9a95;
+          padding: 0 0 0 14px;
+        }
+
+        .c-lane,
+        .c-workbench-foot {
+          grid-template-columns: 140px minmax(0, 1fr);
+        }
+      }
+
+      @media (max-width: 560px) {
+        .direction-note-palette {
+          display: none;
+        }
+
+        .a-nav-right span,
+        .b-nav-center,
+        .c-nav-center {
+          display: none;
+        }
+
+        .a-nav {
+          padding-inline: 16px;
+        }
+
+        .a-hero-copy {
+          min-height: 590px;
+          padding-inline: 16px;
+        }
+
+        .a-hero h1 {
+          font-size: 56px;
+        }
+
+        .a-hero-bottom {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .a-round-link {
+          width: 62px;
+          height: 62px;
+        }
+
+        .a-syllabus {
+          min-height: 560px;
+          padding-inline: 18px;
+        }
+
+        .a-syllabus::before {
+          left: 19px;
+        }
+
+        .a-ribbon {
+          font-size: 11px;
+        }
+
+        .a-rail-nav button:nth-child(n + 4) {
+          display: none;
+        }
+
+        .a-program {
+          padding-inline: 16px;
+        }
+
+        .a-program-heading h1 {
+          font-size: 43px;
+        }
+
+        .a-material {
+          grid-template-columns: minmax(0, 1fr) 25px;
+        }
+
+        .a-material-action {
+          display: none;
+        }
+
+        .b-nav {
+          grid-template-columns: 1fr auto;
+          padding-inline: 16px;
+        }
+
+        .b-cover-aside {
+          padding-inline: 18px;
+        }
+
+        .b-cover-aside blockquote {
+          font-size: 23px;
+        }
+
+        .b-cover-main {
+          min-height: 570px;
+          padding-inline: 18px;
+        }
+
+        .b-cover-main h1 {
+          font-size: 61px;
+        }
+
+        .b-red-note {
+          top: 43%;
+          right: 18px;
+          max-width: 145px;
+        }
+
+        .b-cover-action {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .b-ticker,
+        .c-toolbelt {
+          grid-template-columns: 1fr;
+        }
+
+        .b-desk-top,
+        .c-admin-top {
+          grid-template-columns: 1fr 142px;
+        }
+
+        .b-release,
+        .c-new {
+          min-width: 0;
+          padding-inline: 12px;
+        }
+
+        .b-page {
+          padding-inline: 18px;
+        }
+
+        .b-page h1 {
+          font-size: 44px;
+        }
+
+        .b-page-body {
+          grid-template-columns: 1fr;
+        }
+
+        .c-nav {
+          grid-template-columns: 1fr auto;
+          padding-inline: 16px;
+        }
+
+        .c-hero-copy {
+          min-height: 600px;
+          padding-inline: 16px;
+        }
+
+        .c-hero h1 {
+          font-size: 60px;
+        }
+
+        .c-hero-foot {
+          grid-template-columns: 1fr;
+        }
+
+        .c-bench-preview {
+          min-height: 550px;
+        }
+
+        .c-workbench {
+          padding-inline: 16px;
+        }
+
+        .c-workbench-head h1 {
+          font-size: 48px;
+        }
+
+        .c-lane,
+        .c-workbench-foot {
+          display: block;
+        }
+
+        .c-lane-label,
+        .c-workbench-foot > div {
+          border-right: 0;
+          border-bottom: 1px solid #6b618a;
+        }
+
+        .concept-flag {
+          right: 7px;
+          bottom: 7px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="labbar">
+      <div class="lab-title">
+        <span class="lab-mark" aria-hidden="true"><span>N</span></span>
+        Лаборатория направлений
+      </div>
+      <nav class="direction-switch" aria-label="Арт-направления">
+        <button type="button" data-direction="a" aria-selected="true">
+          A · Живая программа
+          <small>рекомендую</small>
+        </button>
+        <button type="button" data-direction="b" aria-selected="false">
+          B · Редакционная
+          <small>сдержанно</small>
+        </button>
+        <button type="button" data-direction="c" aria-selected="false">
+          C · Практикум
+          <small>смелее</small>
+        </button>
+      </nav>
+      <nav class="surface-switch" aria-label="Поверхности концепта">
+        <button type="button" data-surface="landing" aria-selected="true">
+          Входная
+        </button>
+        <button type="button" data-surface="admin" aria-selected="false">
+          Админка
+        </button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="direction direction-a" data-direction-panel="a">
+        <div class="direction-note">
+          <div>
+            <strong>A · Живая программа</strong>
+            <span>
+              Курс ощущается не сайтом, а постоянно обновляемым маршрутом.
+              Signature: сквозная линия программы.
+            </span>
+          </div>
+          <div class="direction-note-palette" aria-label="Палитра направления">
+            <span class="swatch" style="background: #3154f5"></span>
+            <span class="swatch" style="background: #c8ff4d"></span>
+            <span class="swatch" style="background: #f3f5ff"></span>
+            <span class="swatch" style="background: #10131c"></span>
+          </div>
+        </div>
+
+        <div class="surface a-landing" data-surface-panel="landing">
+          <nav class="a-nav">
+            <a class="a-wordmark" href="#">
+              <span class="a-wordmark-mark">N</span>
+              Neurokurs
+            </a>
+            <div class="a-nav-right">
+              <span>Пространство участников</span>
+              <a class="a-enter" href="#a-admin" data-go-surface="admin">
+                Войти <span>→</span>
+              </a>
+            </div>
+          </nav>
+          <div class="a-hero">
+            <div class="a-hero-copy">
+              <div class="a-live">Программа обновлена сегодня в 10:24</div>
+              <h1>Знания, которые <em>живут</em> вместе с курсом.</h1>
+              <div class="a-hero-bottom">
+                <p>
+                  Материалы, пояснения и учебные инструменты собраны в одном
+                  маршруте. Вы всегда видите его актуальную версию.
+                </p>
+                <a
+                  class="a-round-link"
+                  href="#a-admin"
+                  data-go-surface="admin"
+                  aria-label="Войти в пространство"
+                  >↗</a
+                >
+              </div>
+            </div>
+            <aside class="a-syllabus">
+              <div class="a-syllabus-head">
+                <span>Программа курса</span>
+                <span>12 материалов</span>
+              </div>
+              <div class="a-syllabus-list">
+                <div class="a-syllabus-item">
+                  <span class="a-syllabus-dot">1</span>
+                  <div>
+                    <small>Введение · 12 минут</small>
+                    <strong>Как устроена AI-автоматизация</strong>
+                  </div>
+                </div>
+                <div class="a-syllabus-item current">
+                  <span class="a-syllabus-dot">2</span>
+                  <div>
+                    <small>Сейчас · практика</small>
+                    <strong>Первая автоматизация в n8n</strong>
+                  </div>
+                </div>
+                <div class="a-syllabus-item">
+                  <span class="a-syllabus-dot">3</span>
+                  <div>
+                    <small>Дальше · инструкция</small>
+                    <strong>Данные, связи и проверка результата</strong>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+          <div class="a-ribbon" aria-hidden="true">
+            <div class="a-ribbon-track">
+              <span>АКТУАЛЬНЫЕ МАТЕРИАЛЫ</span><span>•</span>
+              <span>УЧЕБНЫЕ ИНСТРУМЕНТЫ</span><span>•</span>
+              <span>ОДНА ТОЧКА ДОВЕРИЯ</span><span>•</span>
+              <span>АКТУАЛЬНЫЕ МАТЕРИАЛЫ</span><span>•</span>
+              <span>УЧЕБНЫЕ ИНСТРУМЕНТЫ</span><span>•</span>
+              <span>ОДНА ТОЧКА ДОВЕРИЯ</span><span>•</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="surface a-admin" data-surface-panel="admin" hidden>
+          <div class="a-admin-shell">
+            <aside class="a-rail">
+              <span class="a-wordmark-mark">N</span>
+              <nav class="a-rail-nav" aria-label="Навигация администратора">
+                <button class="active" type="button" aria-label="Программа">ПР</button>
+                <button type="button" aria-label="Люди">ЛЮ</button>
+                <button type="button" aria-label="Инструменты">ИН</button>
+                <button type="button" aria-label="История">ИС</button>
+              </nav>
+            </aside>
+            <section class="a-program">
+              <header class="a-program-top">
+                <span>NEUROKURS / AI-АВТОМАТИЗАЦИЯ</span>
+                <button type="button">+ Новый материал</button>
+              </header>
+              <div class="a-program-heading">
+                <h1>Программа<br />как она есть</h1>
+                <p>
+                  Вы редактируете тот же маршрут, который видит ученик. Никакой
+                  отдельной витрины состояния.
+                </p>
+              </div>
+              <section class="a-program-section">
+                <div class="a-section-num">01</div>
+                <div class="a-section-body">
+                  <div class="a-material">
+                    <div>
+                      <strong>Как устроена AI-автоматизация</strong>
+                      <small>В программе с 12 июля · менял Алексей</small>
+                    </div>
+                    <span class="a-material-action">Открыть в курсе</span>
+                    <button class="a-material-more" type="button" aria-label="Ещё">
+                      ···
+                    </button>
+                  </div>
+                  <div class="a-material">
+                    <div>
+                      <strong>Карта инструментов</strong>
+                      <small>В программе с 18 июля · меняла система</small>
+                    </div>
+                    <span class="a-material-action">Открыть в курсе</span>
+                    <button class="a-material-more" type="button" aria-label="Ещё">
+                      ···
+                    </button>
+                  </div>
+                </div>
+              </section>
+              <section class="a-program-section">
+                <div class="a-section-num">02</div>
+                <div class="a-section-body">
+                  <div class="a-material">
+                    <div>
+                      <strong>Первая автоматизация в n8n</strong>
+                      <small>Изменён сегодня · 4 новых абзаца</small>
+                    </div>
+                    <span class="a-material-action review">Проверить изменения</span>
+                    <button class="a-material-more" type="button" aria-label="Ещё">
+                      ···
+                    </button>
+                  </div>
+                  <div class="a-material">
+                    <div>
+                      <strong>Чек-лист перед запуском</strong>
+                      <small>Готов к добавлению в программу</small>
+                    </div>
+                    <span class="a-material-action review">Добавить в маршрут</span>
+                    <button class="a-material-more" type="button" aria-label="Ещё">
+                      ···
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </section>
+            <aside class="a-queue">
+              <h2>На полях программы</h2>
+              <p class="a-queue-intro">
+                Не метрики, а конкретные решения на сегодня.
+              </p>
+              <article class="a-queue-item">
+                <time>СЕГОДНЯ</time>
+                <strong>Два человека готовы начать</strong>
+                <p>Открыть доступ к программе после проверки данных.</p>
+              </article>
+              <article class="a-queue-item">
+                <time>ДО ПЯТНИЦЫ</time>
+                <strong>Обновить пример с Telegram</strong>
+                <p>Текущая версия использует старый экран настройки.</p>
+              </article>
+              <article class="a-queue-item">
+                <time>БЕЗ СРОКА</time>
+                <strong>Подключить второй инструмент</strong>
+                <p>Место в маршруте уже подготовлено.</p>
+              </article>
+              <button class="a-queue-action" type="button">
+                Разобрать первое →
+              </button>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="direction direction-b"
+        data-direction-panel="b"
+        hidden
+      >
+        <div class="direction-note">
+          <div>
+            <strong>B · Редакционная комната</strong>
+            <span>
+              Курс работает как авторское издание. Админка — редакционный стол.
+              Signature: заметки на полях.
+            </span>
+          </div>
+          <div class="direction-note-palette" aria-label="Палитра направления">
+            <span class="swatch" style="background: #0d0d0d"></span>
+            <span class="swatch" style="background: #fbfbfa"></span>
+            <span class="swatch" style="background: #c92935"></span>
+            <span class="swatch" style="background: #c8d0dc"></span>
+          </div>
+        </div>
+
+        <div class="surface b-landing" data-surface-panel="landing">
+          <nav class="b-nav">
+            <a class="b-logo" href="#">Neurokurs</a>
+            <span class="b-nav-center">Закрытое издание · 2026</span>
+            <a href="#b-admin" data-go-surface="admin">Войти в пространство</a>
+          </nav>
+          <div class="b-cover">
+            <aside class="b-cover-aside">
+              <div class="b-cover-aside-top">
+                <div class="b-access-line">Для участников курса</div>
+                Здесь преподаватель собирает материалы, пояснения и рабочие
+                инструменты в единой актуальной редакции.
+                <blockquote>
+                  Не архив ссылок.<br />
+                  <em>Рабочая версия</em><br />
+                  обучения.
+                </blockquote>
+              </div>
+              <div class="b-cover-aside-bottom">
+                <span>Последняя редакция<br /><b>30 июля, 10:24</b></span>
+                <span>В программе<br /><b>4 раздела / 12 материалов</b></span>
+              </div>
+            </aside>
+            <section class="b-cover-main">
+              <div class="b-edition">
+                <span>Выпуск 01</span>
+                <span>AI-автоматизация</span>
+              </div>
+              <h1>Всё, что нужно <span>для практики.</span></h1>
+              <div class="b-red-note">
+                Сегодня добавлена проверка подключения в практику №2
+              </div>
+              <div class="b-cover-action">
+                <p>
+                  Читайте, пробуйте и возвращайтесь к материалам. Если что-то
+                  изменится, новая версия уже будет здесь.
+                </p>
+                <a class="b-enter" href="#b-admin" data-go-surface="admin">
+                  Открыть выпуск <span>→</span>
+                </a>
+              </div>
+            </section>
+          </div>
+          <div class="b-ticker">
+            <div class="b-ticker-label">В текущей редакции</div>
+            <div>
+              <strong>Первая автоматизация</strong>
+              <small>Практика · 7 минут</small>
+            </div>
+            <div>
+              <strong>Чек-лист запуска</strong>
+              <small>Инструкция · 7 шагов</small>
+            </div>
+            <div>
+              <strong>Рабочее пространство n8n</strong>
+              <small>Инструмент · готов</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="surface b-admin" data-surface-panel="admin" hidden>
+          <header class="b-desk-top">
+            <a class="b-logo" href="#">Neurokurs / desk</a>
+            <nav class="b-desk-nav" aria-label="Разделы">
+              <a class="active" href="#">Редакция</a>
+              <a href="#">Люди</a>
+              <a href="#">Инструменты</a>
+              <a href="#">История</a>
+            </nav>
+            <button class="b-release" type="button">
+              Обновить выпуск <span>→</span>
+            </button>
+          </header>
+          <div class="b-desk">
+            <aside class="b-folio">
+              <div class="b-folio-title">Содержание</div>
+              <a href="#">
+                <span>01</span><span>Как устроена автоматизация</span>
+              </a>
+              <a class="active" href="#">
+                <span>02</span><span>Первая автоматизация в n8n</span>
+              </a>
+              <a href="#">
+                <span>03</span><span>Данные и связи</span>
+              </a>
+              <a href="#">
+                <span>+</span><span>Добавить материал</span>
+              </a>
+            </aside>
+            <article class="b-page">
+              <div class="b-page-meta">
+                <span>Раздел 02 / практика</span>
+                <span>Менял Алексей · сегодня, 10:24</span>
+              </div>
+              <h1>Собираем первую автоматизацию в n8n</h1>
+              <p class="b-page-lead">
+                Короткий маршрут от чистого проекта до работающего сценария:
+                последовательность действий, примеры и проверка результата.
+              </p>
+              <div class="b-page-body">
+                <aside>ЗАМЕТКА<br />ДЛЯ СЕБЯ</aside>
+                <p>
+                  Перед началом убедитесь, что рабочее пространство доступно.
+                  Откройте инструмент из курса: так вы попадёте именно в свою
+                  учебную среду. Затем создайте новый сценарий и добавьте первый
+                  узел. Текст здесь редактируется непосредственно, без перехода
+                  в отдельную «панель контента».
+                </p>
+              </div>
+            </article>
+            <aside class="b-margin">
+              <h2>Поля редактора</h2>
+              <article class="b-margin-note">
+                <small>Нужно решить</small>
+                <strong>Показывать пример ошибки сразу?</strong>
+                <p>Сейчас он находится в следующем материале.</p>
+              </article>
+              <article class="b-margin-note">
+                <small>Два читателя</small>
+                <strong>Не смогли открыть инструмент</strong>
+                <p>Проверить доступ перед обновлением выпуска.</p>
+              </article>
+              <article class="b-margin-note">
+                <small>Изменено</small>
+                <strong>Добавлена проверка подключения</strong>
+                <p>Войдёт в следующий выпуск после просмотра.</p>
+              </article>
+              <button type="button">Посмотреть выпуск глазами ученика</button>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="direction direction-c"
+        data-direction-panel="c"
+        hidden
+      >
+        <div class="direction-note">
+          <div>
+            <strong>C · Практикум</strong>
+            <span>
+              Пространство ощущается как рабочий стол: знания лежат рядом с
+              инструментами. Signature: слои и рабочие дорожки.
+            </span>
+          </div>
+          <div class="direction-note-palette" aria-label="Палитра направления">
+            <span class="swatch" style="background: #e9ff58"></span>
+            <span class="swatch" style="background: #27213c"></span>
+            <span class="swatch" style="background: #9dc7ff"></span>
+            <span class="swatch" style="background: #ff7659"></span>
+          </div>
+        </div>
+
+        <div class="surface c-landing" data-surface-panel="landing">
+          <nav class="c-nav">
+            <a class="c-logo" href="#">Neurokurs</a>
+            <span class="c-nav-center">Private practice space</span>
+            <a href="#c-admin" data-go-surface="admin">Войти ↗</a>
+          </nav>
+          <div class="c-hero">
+            <section class="c-hero-copy">
+              <div class="c-coordinate">
+                <span>Курс / AI-автоматизация</span>
+                <span>Доступ открыт</span>
+              </div>
+              <h1>Сначала <span>понять.</span><br />Потом сделать.</h1>
+              <div class="c-hero-foot">
+                <p>
+                  Тексты, последовательности действий и ваши учебные
+                  инструменты находятся на одном рабочем столе.
+                </p>
+                <a
+                  class="c-arrow-button"
+                  href="#c-admin"
+                  data-go-surface="admin"
+                  aria-label="Открыть рабочий стол"
+                  >↗</a
+                >
+              </div>
+            </section>
+            <aside class="c-bench-preview">
+              <div class="c-bench-title">Сегодня на столе</div>
+              <div class="c-stack">
+                <article class="c-sheet">
+                  <small>Материал / 02</small>
+                  <strong>Первая автоматизация в n8n</strong>
+                </article>
+                <article class="c-sheet">
+                  <small>Проверка / 7 шагов</small>
+                  <strong>Чек-лист перед запуском</strong>
+                </article>
+                <article class="c-sheet">
+                  <small>Инструмент / работает</small>
+                  <strong>Открыть своё пространство n8n →</strong>
+                </article>
+              </div>
+            </aside>
+          </div>
+          <div class="c-toolbelt">
+            <div class="c-toolbelt-label">Состав рабочего пространства</div>
+            <div>
+              <strong>Знания</strong>
+              <span>Тексты и объяснения</span>
+            </div>
+            <div>
+              <strong>Практика</strong>
+              <span>Маршруты и проверки</span>
+            </div>
+            <div>
+              <strong>Инструменты</strong>
+              <span>Готовы к работе</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="surface c-admin" data-surface-panel="admin" hidden>
+          <header class="c-admin-top">
+            <a class="c-logo" href="#">Neurokurs / workbench</a>
+            <nav class="c-admin-nav" aria-label="Разделы">
+              <a class="active" href="#">Стол</a>
+              <a href="#">Программа</a>
+              <a href="#">Люди</a>
+              <a href="#">Инструменты</a>
+            </nav>
+            <button class="c-new" type="button">
+              Новый объект <span>+</span>
+            </button>
+          </header>
+          <section class="c-workbench">
+            <div class="c-workbench-head">
+              <h1>Рабочий стол<br />курса</h1>
+              <p>
+                Здесь нет «обзора показателей». Есть движение реальных объектов:
+                что нужно разобрать, что войдёт в курс и что уже доступно людям.
+              </p>
+            </div>
+            <section class="c-lane">
+              <div class="c-lane-label">
+                <strong>Разобрать</strong>
+                <span>3 предмета</span>
+              </div>
+              <div class="c-lane-items">
+                <article class="c-work-item orange">
+                  <small>Люди / доступ</small>
+                  <strong>Проверить данные Анны и Михаила</strong>
+                  <div class="c-work-item-action">
+                    <span>вчера</span><span>Открыть →</span>
+                  </div>
+                </article>
+                <article class="c-work-item">
+                  <small>Материал / изменения</small>
+                  <strong>Пересмотреть новый пример подключения</strong>
+                  <div class="c-work-item-action">
+                    <span>10:24</span><span>Сравнить →</span>
+                  </div>
+                </article>
+                <article class="c-work-item">
+                  <small>Инструмент / сигнал</small>
+                  <strong>Одна среда n8n долго запускается</strong>
+                  <div class="c-work-item-action">
+                    <span>12 минут</span><span>Проверить →</span>
+                  </div>
+                </article>
+              </div>
+            </section>
+            <section class="c-lane">
+              <div class="c-lane-label">
+                <strong>Следующий выпуск</strong>
+                <span>2 материала</span>
+              </div>
+              <div class="c-lane-items">
+                <article class="c-work-item">
+                  <small>Практика / 02</small>
+                  <strong>Первая автоматизация в n8n</strong>
+                  <div class="c-work-item-action">
+                    <span>Изменено</span><span>Редактировать →</span>
+                  </div>
+                </article>
+                <article class="c-work-item">
+                  <small>Инструкция / 02.1</small>
+                  <strong>Чек-лист перед запуском</strong>
+                  <div class="c-work-item-action">
+                    <span>Новый</span><span>Редактировать →</span>
+                  </div>
+                </article>
+              </div>
+            </section>
+            <section class="c-lane">
+              <div class="c-lane-label">
+                <strong>В пространстве</strong>
+                <span>12 материалов</span>
+              </div>
+              <div class="c-lane-items">
+                <article class="c-work-item">
+                  <small>Раздел / 01</small>
+                  <strong>Как устроена AI-автоматизация</strong>
+                  <div class="c-work-item-action">
+                    <span>12 июля</span><span>Открыть →</span>
+                  </div>
+                </article>
+                <article class="c-work-item">
+                  <small>Справка / 01.2</small>
+                  <strong>Карта учебных инструментов</strong>
+                  <div class="c-work-item-action">
+                    <span>18 июля</span><span>Открыть →</span>
+                  </div>
+                </article>
+              </div>
+            </section>
+            <footer class="c-workbench-foot">
+              <div>Инструменты на столе</div>
+              <ul>
+                <li>n8n <b>12 РАБОТАЮТ</b></li>
+                <li>Новый инструмент <b>МЕСТО ГОТОВО</b></li>
+              </ul>
+            </footer>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div class="concept-flag">Арт-лаборатория · демонстрационные данные</div>
+
+    <script>
+      const directions = new Set(["a", "b", "c"]);
+      const surfaces = new Set(["landing", "admin"]);
+      const directionButtons = Array.from(
+        document.querySelectorAll("[data-direction]"),
+      );
+      const surfaceButtons = Array.from(
+        document.querySelectorAll("[data-surface]"),
+      );
+      const directionPanels = Array.from(
+        document.querySelectorAll("[data-direction-panel]"),
+      );
+
+      let activeDirection = "a";
+      let activeSurface = "landing";
+
+      function render(updateHash = true) {
+        directionPanels.forEach((panel) => {
+          const isDirection = panel.dataset.directionPanel === activeDirection;
+          panel.hidden = !isDirection;
+
+          panel.querySelectorAll("[data-surface-panel]").forEach((surface) => {
+            surface.hidden =
+              !isDirection || surface.dataset.surfacePanel !== activeSurface;
+          });
+        });
+
+        directionButtons.forEach((button) => {
+          button.setAttribute(
+            "aria-selected",
+            String(button.dataset.direction === activeDirection),
+          );
+        });
+
+        surfaceButtons.forEach((button) => {
+          button.setAttribute(
+            "aria-selected",
+            String(button.dataset.surface === activeSurface),
+          );
+        });
+
+        if (updateHash) {
+          history.replaceState(
+            null,
+            "",
+            `#${activeDirection}-${activeSurface}`,
+          );
+        }
+
+        const names = {
+          a: "Живая программа",
+          b: "Редакционная",
+          c: "Практикум",
+        };
+        document.title = `${names[activeDirection]} · ${activeSurface === "landing" ? "Входная" : "Админка"} — Neurokurs`;
+        window.scrollTo({ top: 0, behavior: "instant" });
+      }
+
+      function readHash() {
+        const [direction, surface] = window.location.hash
+          .replace("#", "")
+          .split("-");
+
+        if (directions.has(direction)) activeDirection = direction;
+        if (surfaces.has(surface)) activeSurface = surface;
+      }
+
+      directionButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          activeDirection = button.dataset.direction;
+          render();
+        });
+      });
+
+      surfaceButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          activeSurface = button.dataset.surface;
+          render();
+        });
+      });
+
+      document.querySelectorAll("[data-go-surface]").forEach((link) => {
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          activeSurface = link.dataset.goSurface;
+          render();
+        });
+      });
+
+      window.addEventListener("hashchange", () => {
+        readHash();
+        render(false);
+      });
+
+      readHash();
+      render(false);
+    </script>
+  </body>
+</html>
