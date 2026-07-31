@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
+import { StudentCreateForm } from "@/components/admin/student-create-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +28,8 @@ export default async function StudentsPage() {
           </p>
         </div>
       </div>
+
+      <StudentCreateForm />
 
       <div className="mt-8 overflow-hidden rounded-xl border bg-card">
         {students.length > 0 ? (
