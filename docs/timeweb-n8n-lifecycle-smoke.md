@@ -74,19 +74,17 @@ Terraform provider. В частности, fresh VPS проходит transient
 среду; сохранившийся status становится terminal. `permanent_blocked` и
 `removed` завершаются сразу.
 
-## Реальный disposable E2E
+## Superseded disposable E2E
 
-Локальный `.env` должен иметь права `0600` и содержать production-shaped
-`PLATFORM_PROVIDER=timeweb`, test token и auth/database secrets из среза 1A.
-Project и SSH key читаются из Public API. Параллельные A/CNAME mutations для
-approved hostname во время smoke запрещены. База должна быть отдельной и пустой:
+Этот n8n/DNS/TLS flow superseded ADR-0009 и больше не является текущей кнопкой
+создания сервера. Исполняемый `smoke:timeweb-disposable` удалён, чтобы plain-VPS
+configurator нельзя было ошибочно проверить ожиданиями cloud-init, DNS и TLS.
 
-```bash
-cd platform
-npm run smoke:timeweb-disposable -- --confirm-disposable-smoke
-```
+Актуальный production-shaped create/reconcile/delete описан в
+[Timeweb plain VPS smoke](timeweb-plain-vps-smoke.md). Возврат автоматической
+установки n8n требует отдельного решения о support matrix и нового E2E.
 
-Smoke:
+Исторический smoke проверял:
 
 - создаёт ровно один VPS/IP/A record;
 - подтверждает exact profile и `ready_owner_setup_required`;

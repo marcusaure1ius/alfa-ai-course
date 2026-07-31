@@ -865,7 +865,7 @@ class ProductionTimewebLifecycleAdapter
         });
         return;
       }
-      await this.assertFreshProviderPlan();
+      await this.assertFreshProviderPlan(false);
       if (!this.reserveIpExecutionToken) {
         throw new LifecycleProviderError(
           "STEP_STATE_INVALID",
@@ -1044,14 +1044,16 @@ class ProductionTimewebLifecycleAdapter
     }
   }
 
-  private async assertFreshProviderPlan(): Promise<void> {
+  private async assertFreshProviderPlan(
+    requireApprovedOwnedPublicIp: boolean,
+  ): Promise<void> {
     let approvedOwnedPublicIp:
       | {
           externalId: string;
           address: string;
         }
       | undefined;
-    {
+    if (requireApprovedOwnedPublicIp) {
       const publicIp = await activeResource(
         this.sql,
         this.context.environmentId,
@@ -1145,7 +1147,7 @@ class ProductionTimewebLifecycleAdapter
           "Owned server не найден после timeout; повторное создание запрещено.",
         );
       }
-      await this.assertFreshProviderPlan();
+      await this.assertFreshProviderPlan(true);
       if (!this.createExecutionToken) {
         throw new LifecycleProviderError(
           "STEP_STATE_INVALID",
