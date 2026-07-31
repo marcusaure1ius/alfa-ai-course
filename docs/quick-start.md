@@ -1,6 +1,6 @@
 # Quick Start: n8n одной командой
 
-Проверено: 2026-07-14. Собственный домен, ручная DNS-запись, локальный Git checkout и передача archive участнику для базового пути не нужны.
+Проверено: 2026-07-31. Технический fresh-VPS прогон выполнен для stable v0.1.0. Собственный домен, ручная DNS-запись, локальный Git checkout и передача archive участнику для базового пути не нужны.
 
 ## Что должно быть готово
 
@@ -12,7 +12,7 @@
 | Сеть | закреплённый публичный IPv4, TCP 22/80/443 | публичный IPv4, TCP 22/80/443 |
 | Доступ | SSH key и пользователь с `sudo` | root или пользователь с `sudo` |
 
-1 GiB и 10 GiB — нижняя граница для короткого теста, а не рекомендация для постоянной работы. Если VPS ещё нет, используйте [Timeweb Cloud](timeweb-cloud.md), [пошаговый Timeweb guide](timeweb-clean-install.md) или [Yandex Cloud](yandex-cloud.md).
+1 GiB и 10 GiB — нижняя граница для короткого теста, а не рекомендация для постоянной работы. Timeweb показывает память в GB: его тариф «2 GB» фактически попадает в диапазон 1–2 GiB и ожидаемо даёт предупреждение doctor, поэтому для постоянной работы у этого провайдера выбирайте 4 GB. Если VPS ещё нет, используйте [Timeweb Cloud](timeweb-cloud.md), [пошаговый Timeweb guide](timeweb-clean-install.md) или [Yandex Cloud](yandex-cloud.md).
 
 ## 1. Войдите на VPS
 
@@ -83,4 +83,4 @@ sudo docker compose ps
 - TCP 80/443 заняты неизвестным процессом;
 - installer или [doctor](diagnostics.md) показывает `FAIL`.
 
-Публичное скачивание, checksum и безопасный verify-only проверяются при публикации release. Полный fresh-VPS и новый novice trial остаются отдельными external gates: не считайте их пройденными только по успешному скачиванию installer.
+Публичное скачивание, checksum, safe rerun, reboot, внешний TLS и закрытые `5432/5678` фактически подтверждены для stable v0.1.0 в [participant public install technical E2E](reports/2026-07-31-participant-public-install-e2e.md). Новый novice trial остаётся отдельным external gate: технический прогон агента его не заменяет.

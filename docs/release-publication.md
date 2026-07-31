@@ -11,7 +11,7 @@
 - immutable v0.1.0 installer: `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.0/install.sh`;
 - checksum: соседний asset `install.sh.sha256` в том же versioned release.
 
-Public download, checksum и verify-only подтверждаются release evidence. Fresh-VPS domainless run и novice trial остаются честно не выполненными external gates.
+Public download, checksum и verify-only подтверждаются release evidence. Fresh-VPS domainless run stable v0.1.0 подтверждён 2026-07-31 отдельным [participant public install technical E2E](reports/2026-07-31-participant-public-install-e2e.md): safe rerun, reboot, внешний TLS и network exposure прошли. Novice trial остаётся честно не выполненным external gate.
 
 ## Сборка exact release
 

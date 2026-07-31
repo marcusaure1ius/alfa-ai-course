@@ -17,9 +17,10 @@ fail() { printf 'not ok - %s\n' "$1" >&2; exit 1; }
 
 for guide in "${GUIDES[@]}"; do
   [[ -s "$guide" ]] || fail "missing guide: $guide"
-  grep -q '2026-07-14' "$guide" || fail "missing check date: $guide"
+  grep -Eq 'Проверено[^0-9]*20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$guide" ||
+    fail "missing check date: $guide"
 done
-ok "five onboarding guides exist and state the check date"
+ok "five onboarding guides exist and state an ISO check date"
 
 grep -q 'timeweb.cloud/docs/cloud-servers/manage-servers/create-server' "$ROOT/docs/timeweb-cloud.md"
 grep -q 'timeweb.cloud/docs/cloud-servers/manage-servers/ssh-keys' "$ROOT/docs/timeweb-cloud.md"

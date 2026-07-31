@@ -69,6 +69,7 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Uninstall и перенос workflow](docs/uninstall-and-workflow-portability.md) — data-preserving uninstall, credential-free deterministic export и repeatable batch import;
 - [Destructive lifecycle report](docs/reports/2026-07-14-destructive-lifecycle.md) — реальный disposable backup/delete/restore, update/rollback и uninstall/restart с exact data assertions;
 - [Ubuntu 24.04 E2E report](docs/reports/2026-07-14-ubuntu-e2e.md) — clean install/rerun, reboot, ports, local TLS, workflow import и lifecycle verification на x86_64 guest с явной границей public VPS evidence;
+- [Participant public install E2E](docs/reports/2026-07-31-participant-public-install-e2e.md) — exact stable-команда на clean Timeweb VPS, auto sslip.io, внешний TLS, safe rerun, reboot, network exposure и cleanup;
 - [Quality gates](tests/README.md) — единая команда, local/CI matrix, redacted artifacts и честные external skips;
 - [Generic LLM provider](docs/generic-llm-provider.md) — gateway contract, Connection Test и credential-safe setup;
 - [LLM providers](docs/llm-providers.md) — Yandex AI Studio adapter/model diagnostics и GigaChat OAuth lifecycle, scopes, rotation и troubleshooting;
