@@ -3,11 +3,7 @@
 import * as React from "react";
 import {
   BookOpenText,
-  History,
-  LayoutDashboard,
-  ListChecks,
   Search,
-  Settings2,
   Users,
   Wrench,
 } from "lucide-react";
@@ -25,13 +21,9 @@ import {
 } from "@/components/ui/command";
 
 const entries = [
-  { href: "/admin", label: "Обзор", icon: LayoutDashboard },
   { href: "/admin/students", label: "Ученики", icon: Users },
-  { href: "/admin/content", label: "Контент", icon: BookOpenText },
-  { href: "/admin/infrastructure", label: "Инструменты", icon: Wrench },
-  { href: "/admin/operations", label: "Операции", icon: ListChecks },
-  { href: "/admin/audit", label: "История", icon: History },
-  { href: "/admin/settings", label: "Настройки", icon: Settings2 },
+  { href: "/admin/content", label: "Материалы", icon: BookOpenText },
+  { href: "/admin/tools", label: "Инструменты", icon: Wrench },
 ] as const;
 
 export function CommandMenu() {
@@ -86,7 +78,7 @@ export function CommandMenu() {
       >
         <Search aria-hidden="true" />
         <span className="truncate">Найти раздел</span>
-        <kbd className="ml-auto hidden rounded border bg-muted px-1.5 font-mono text-[0.65rem] sm:inline">
+        <kbd className="ml-auto hidden rounded border bg-muted px-1.5 font-mono text-xs sm:inline">
           ⌘ K
         </kbd>
       </Button>

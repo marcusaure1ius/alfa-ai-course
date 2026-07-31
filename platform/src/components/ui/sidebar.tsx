@@ -258,10 +258,20 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { isMobile, openMobile, toggleSidebar } = useSidebar()
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
+  const wasOpenMobile = React.useRef(openMobile)
+
+  React.useEffect(() => {
+    if (isMobile && wasOpenMobile.current && !openMobile) {
+      queueMicrotask(() => triggerRef.current?.focus())
+    }
+    wasOpenMobile.current = openMobile
+  }, [isMobile, openMobile])
 
   return (
     <Button
+      ref={triggerRef}
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
       variant="ghost"

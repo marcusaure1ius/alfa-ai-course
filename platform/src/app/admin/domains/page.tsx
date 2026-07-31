@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function DomainsPage() {
-  redirect("/admin/infrastructure");
+  redirect("/admin/tools");
 }

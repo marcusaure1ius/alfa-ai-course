@@ -31,9 +31,8 @@ export default function StudentN8nPage() {
                 <div>
                   <h2 className="font-display text-xl">Доступ ещё не подключён</h2>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Когда преподаватель подготовит экземпляр, здесь появится одна
-                    кнопка для входа. Дополнительные серверные параметры не
-                    понадобятся.
+                    Когда преподаватель подготовит инструмент, здесь появится
+                    кнопка для входа.
                   </p>
                 </div>
               </div>

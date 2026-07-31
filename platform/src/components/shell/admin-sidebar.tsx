@@ -2,10 +2,6 @@
 
 import {
   BookOpenText,
-  History,
-  LayoutDashboard,
-  ListChecks,
-  Settings2,
   Wrench,
   Users,
 } from "lucide-react";
@@ -21,7 +17,6 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
   SidebarSeparator,
@@ -29,16 +24,9 @@ import {
 import { NavLink } from "./nav-link";
 
 const workspaceNavigation = [
-  { href: "/admin", label: "Обзор", icon: LayoutDashboard },
   { href: "/admin/students", label: "Ученики", icon: Users },
-  { href: "/admin/content", label: "Контент", icon: BookOpenText },
-  { href: "/admin/infrastructure", label: "Инструменты", icon: Wrench },
-] as const;
-
-const systemNavigation = [
-  { href: "/admin/operations", label: "Операции", icon: ListChecks },
-  { href: "/admin/audit", label: "История", icon: History },
-  { href: "/admin/settings", label: "Настройки", icon: Settings2 },
+  { href: "/admin/content", label: "Материалы", icon: BookOpenText },
+  { href: "/admin/tools", label: "Инструменты", icon: Wrench },
 ] as const;
 
 export function AdminSidebar({ email }: { email: string }) {
@@ -47,35 +35,20 @@ export function AdminSidebar({ email }: { email: string }) {
       <SidebarHeader className="h-16 justify-center px-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              className="pointer-events-none gap-3 hover:bg-transparent data-[state=open]:bg-transparent"
-            >
+            <div className="flex h-12 items-center gap-3 px-2">
               <NeurokursBrand compact />
               <NeurokursBrand className="group-data-[collapsible=icon]:hidden" />
-            </SidebarMenuButton>
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarSeparator />
       <SidebarContent className="py-2">
         <SidebarGroup>
-          <SidebarGroupLabel>Работа</SidebarGroupLabel>
+          <SidebarGroupLabel>Курс</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {workspaceNavigation.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <NavLink {...item} />
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Система</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {systemNavigation.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <NavLink {...item} />
                 </SidebarMenuItem>
@@ -88,7 +61,7 @@ export function AdminSidebar({ email }: { email: string }) {
       <SidebarFooter className="p-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" tooltip={email}>
+            <div className="flex h-12 items-center gap-3 px-2">
               <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
                 {email.slice(0, 1).toUpperCase()}
               </span>
@@ -96,7 +69,7 @@ export function AdminSidebar({ email }: { email: string }) {
                 <span className="truncate text-sm font-medium">{email}</span>
                 <span className="truncate text-xs text-muted-foreground">Аккаунт</span>
               </span>
-            </SidebarMenuButton>
+            </div>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <LogoutButton />

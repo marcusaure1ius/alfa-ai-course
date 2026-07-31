@@ -22,7 +22,7 @@ export default async function AdminMaterialPage({
       <Button asChild variant="ghost" className="-ml-3">
         <Link href="/admin/content">
           <ArrowLeft aria-hidden="true" />
-          Контент
+          Материалы
         </Link>
       </Button>
       <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
@@ -33,7 +33,7 @@ export default async function AdminMaterialPage({
           <h1 className="font-display mt-2 text-page-title">{material.title}</h1>
         </div>
         <Badge variant={material.status === "published" ? "success" : "outline"}>
-          {material.status === "published" ? "Опубликован" : "Черновик"}
+          {material.status === "published" ? "Виден ученикам" : "Черновик"}
         </Badge>
       </div>
       <div className="mt-9">

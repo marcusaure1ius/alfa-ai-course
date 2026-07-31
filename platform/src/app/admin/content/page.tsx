@@ -2,7 +2,6 @@ import { ArrowRight, BookOpenText, Clock3 } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { getAdminMaterials } from "@/server/admin/workspace";
 import { getDatabase } from "@/server/db/client";
 
@@ -24,7 +23,7 @@ export default async function AdminContentPage() {
     <main className="page-container">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-page-title">Контент</h1>
+          <h1 className="font-display text-page-title">Материалы</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {published.length} из {materials.length} материалов опубликовано
           </p>
@@ -62,7 +61,7 @@ export default async function AdminContentPage() {
                           <Link
                             key={material.id}
                             href={`/admin/content/materials/${material.id}`}
-                            className="group flex min-h-16 items-center gap-4 border-t px-5 py-3 transition-colors hover:bg-accent"
+                            className="group grid min-h-16 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-t px-5 py-4 transition-colors hover:bg-accent sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:gap-x-4 sm:py-3"
                           >
                             <BookOpenText
                               className="size-4 shrink-0 text-muted-foreground"
@@ -86,6 +85,7 @@ export default async function AdminContentPage() {
                               </span>
                             </span>
                             <Badge
+                              className="col-start-2 row-start-2 justify-self-start sm:col-start-auto sm:row-start-auto"
                               variant={
                                 material.status === "published"
                                   ? "success"
@@ -93,11 +93,11 @@ export default async function AdminContentPage() {
                               }
                             >
                               {material.status === "published"
-                                ? "Опубликован"
+                                ? "Виден ученикам"
                                 : "Черновик"}
                             </Badge>
                             <ArrowRight
-                              className="size-4 text-muted-foreground"
+                              className="col-start-3 row-start-1 size-4 text-muted-foreground sm:col-start-auto sm:row-start-auto"
                               aria-hidden="true"
                             />
                           </Link>
@@ -115,12 +115,9 @@ export default async function AdminContentPage() {
           <BookOpenText className="size-6 text-muted-foreground" aria-hidden="true" />
           <h2 className="font-display mt-6 text-2xl">Материалов пока нет</h2>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            Сначала создайте курс и его первый раздел через content API. Форма
-            создания появится здесь после согласования структуры программы.
+            В курсе пока нет материалов. После подготовки программы они
+            появятся здесь в порядке изучения.
           </p>
-          <Button asChild variant="outline" className="mt-6">
-            <Link href="/admin">Вернуться в обзор</Link>
-          </Button>
         </section>
       )}
     </main>

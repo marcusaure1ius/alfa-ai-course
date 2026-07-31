@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { CloudProvisioningPreview } from "@/server/providers/provisioning";
 import type { TimewebDeploySelection } from "@/server/providers/timeweb/provisioning";
 
@@ -129,11 +130,11 @@ function DeleteEnvironment({
           }),
         },
       );
-      if (!response.ok) throw new Error("Не удалось удалить сервер.");
+      if (!response.ok) throw new Error("Не удалось удалить среду.");
       onAccepted();
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : "Не удалось удалить сервер.",
+        error instanceof Error ? error.message : "Не удалось удалить среду.",
       );
     } finally {
       setPending(false);
@@ -154,7 +155,7 @@ function DeleteEnvironment({
           <AlertDialogDescription>
             VPS и принадлежащий ему публичный IP будут удалены автоматически.
             Данные на сервере восстановить нельзя. Для подтверждения введите
-            пароль от кабинета.
+            пароль Neurokurs.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-3">
@@ -204,7 +205,7 @@ function DeleteEnvironment({
             Я подтверждаю безвозвратную потерю данных.
           </label>
           <label className="grid gap-1.5 text-sm">
-            Пароль от кабинета
+            Пароль Neurokurs
             <Input
               type="password"
               autoComplete="current-password"
@@ -236,7 +237,7 @@ function DeleteEnvironment({
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             {pending ? <Loader2 aria-hidden="true" className="animate-spin" /> : null}
-            Удалить VPS и IP
+            Удалить среду и ресурсы
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -248,40 +249,52 @@ export function InfrastructureControl() {
   const [preview, setPreview] = useState<CloudProvisioningPreview | null>(null);
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selection, setSelection] = useState<TimewebDeploySelection | null>(null);
-  const [name, setName] = useState("Учебный сервер");
+  const [name, setName] = useState("Учебная среда");
   const [pending, setPending] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async (selected = selection) => {
-    const query = selected
-      ? new URLSearchParams({
-          region: selected.region,
-          presetId: String(selected.presetId),
-          operatingSystemId: String(selected.operatingSystemId),
-          backupsEnabled: String(selected.backupsEnabled),
-        })
-      : null;
-    const [previewResponse, environmentsResponse] = await Promise.all([
-      fetch(
-        `/api/admin/infrastructure/preview${query ? `?${query}` : ""}`,
-        {
+    setLoadError(null);
+    try {
+      const query = selected
+        ? new URLSearchParams({
+            region: selected.region,
+            presetId: String(selected.presetId),
+            operatingSystemId: String(selected.operatingSystemId),
+            backupsEnabled: String(selected.backupsEnabled),
+          })
+        : null;
+      const [previewResponse, environmentsResponse] = await Promise.all([
+        fetch(
+          `/api/admin/infrastructure/preview${query ? `?${query}` : ""}`,
+          {
+            cache: "no-store",
+            credentials: "same-origin",
+          },
+        ),
+        fetch("/api/admin/infrastructure/environments", {
           cache: "no-store",
           credentials: "same-origin",
-        },
-      ),
-      fetch("/api/admin/infrastructure/environments", {
-        cache: "no-store",
-        credentials: "same-origin",
-      }),
-    ]);
-    const nextPreview =
-      (await previewResponse.json()) as CloudProvisioningPreview;
-    setPreview(nextPreview);
-    if (nextPreview.ok) {
-      setSelection((current) => current ?? nextPreview.catalog.defaultSelection);
+        }),
+      ]);
+      const nextPreview =
+        (await previewResponse.json()) as CloudProvisioningPreview;
+      setPreview(nextPreview);
+      if (nextPreview.ok) {
+        setSelection((current) => current ?? nextPreview.catalog.defaultSelection);
+      }
+      if (!environmentsResponse.ok) throw new Error("ENVIRONMENTS_UNAVAILABLE");
+      const data = (await environmentsResponse.json()) as EnvironmentResponse;
+      setEnvironments(data.environments ?? []);
+    } catch {
+      setLoadError(
+        "Не удалось обновить конфигурацию. Проверьте соединение и повторите.",
+      );
+    } finally {
+      setLoaded(true);
     }
-    const data = (await environmentsResponse.json()) as EnvironmentResponse;
-    setEnvironments(data.environments ?? []);
   }, [selection]);
 
   useEffect(() => {
@@ -339,40 +352,43 @@ export function InfrastructureControl() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Button asChild variant="ghost" className="-ml-3 mb-4">
-            <Link href="/admin/infrastructure">
+            <Link href="/admin/tools">
               <ArrowLeft aria-hidden="true" />
               Инструменты
             </Link>
           </Button>
-          <h1 className="font-display text-page-title">Настройка n8n</h1>
+          <h1 className="font-display text-page-title">Среда n8n</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Технические параметры и стоимость среды
+            Вычислительные ресурсы и стоимость
           </p>
         </div>
         <Button variant="outline" onClick={() => void refresh(selection)}>
           <RefreshCw aria-hidden="true" />
-          Обновить конфигурации
+          Обновить тарифы
         </Button>
       </div>
 
+      {loadError ? (
+        <Alert variant="destructive" aria-live="polite">
+          <AlertTriangle aria-hidden="true" />
+          <AlertTitle>Конфигурация не обновлена</AlertTitle>
+          <AlertDescription>{loadError}</AlertDescription>
+        </Alert>
+      ) : null}
+
       {preview?.ok ? (
-        <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#111923] text-slate-50 shadow-xl shadow-slate-950/10">
-          <div className="border-b border-slate-800 px-4 py-5 sm:px-6">
+        <section className="overflow-hidden rounded-xl border bg-card">
+          <div className="border-b px-4 py-5 sm:px-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.16em] text-violet-300">
-                  Premium NVMe
-                </p>
-                <h2 className="mt-2 text-xl font-semibold">
-                  Конфигурация среды
-                </h2>
-                <p className="mt-1 text-sm text-slate-400">
-                  Цены обновлены{" "}
+                <h2 className="font-display text-xl">Конфигурация среды</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Тарифы проверены{" "}
                   {new Date(preview.catalog.checkedAt).toLocaleString("ru-RU")}.
                 </p>
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
-                <label className="grid gap-1.5 text-sm text-slate-300">
+                <label className="grid gap-1.5 text-sm">
                   <span className="flex items-center gap-1.5">
                     <MapPin className="size-4" aria-hidden="true" />
                     Регион
@@ -397,8 +413,8 @@ export function InfrastructureControl() {
                         presetId: recommended.id,
                       });
                     }}
-                    className="h-10 min-w-48 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
-                    aria-label="Регион сервера"
+                    className="min-h-11 min-w-48 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/35"
+                    aria-label="Регион среды"
                   >
                     {preview.catalog.regions.map((region) => (
                       <option key={region.id} value={region.id}>
@@ -407,7 +423,7 @@ export function InfrastructureControl() {
                     ))}
                   </select>
                 </label>
-                <label className="grid gap-1.5 text-sm text-slate-300">
+                <label className="grid gap-1.5 text-sm">
                   Образ
                   <select
                     value={selection?.operatingSystemId ?? ""}
@@ -418,7 +434,7 @@ export function InfrastructureControl() {
                         operatingSystemId: Number(event.target.value),
                       })
                     }
-                    className="h-10 min-w-48 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                    className="min-h-11 min-w-48 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/35"
                     aria-label="Образ операционной системы"
                   >
                     {preview.catalog.operatingSystems.map((operatingSystem) => (
@@ -432,8 +448,8 @@ export function InfrastructureControl() {
             </div>
           </div>
 
-          <div className="space-y-3 p-3 sm:p-5">
-            <div className="hidden grid-cols-[1.1fr_0.8fr_0.9fr_0.9fr_1.2fr] gap-4 px-5 text-xs text-slate-400 sm:grid">
+          <div className="space-y-2 p-3 sm:p-5">
+            <div className="hidden grid-cols-[1.1fr_0.8fr_0.9fr_0.9fr_1.2fr] gap-4 px-4 py-1 text-xs text-muted-foreground sm:grid">
               <span>CPU</span>
               <span>RAM</span>
               <span>NVMe</span>
@@ -451,26 +467,25 @@ export function InfrastructureControl() {
                     setSelection({ ...selection, presetId: preset.id })
                   }
                   aria-pressed={selected}
-                  className={`relative grid w-full grid-cols-2 gap-x-4 gap-y-3 rounded-xl border p-4 text-left transition sm:grid-cols-[1.1fr_0.8fr_0.9fr_0.9fr_1.2fr] sm:items-center sm:px-5 ${
+                  className={`grid min-h-16 w-full grid-cols-2 gap-x-4 gap-y-3 rounded-lg border p-4 text-left transition-colors sm:grid-cols-[1.1fr_0.8fr_0.9fr_0.9fr_1.2fr] sm:items-center ${
                     selected
-                      ? "border-violet-400 bg-slate-800 ring-1 ring-violet-400"
-                      : "border-transparent bg-slate-800/80 hover:border-slate-600 hover:bg-slate-800"
-                  } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300`}
+                      ? "border-foreground/35 bg-accent"
+                      : "border-transparent bg-muted/35 hover:border-border hover:bg-muted"
+                  } focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/35`}
                 >
-                  {selected ? (
-                    <span className="absolute -top-2 left-3 flex items-center gap-1 rounded-full bg-violet-700 px-2 py-0.5 text-[10px] font-semibold text-white">
-                      <Check className="size-3" aria-hidden="true" />
-                      Выбрано
-                    </span>
-                  ) : null}
                   <span>
-                    <span className="block text-[11px] text-slate-300 sm:hidden">
+                    <span className="block text-xs text-muted-foreground sm:hidden">
                       CPU
                     </span>
-                    <span className="font-semibold">{preset.cpu} vCPU</span>
+                    <span className="flex items-center gap-2 font-semibold">
+                      {preset.cpu} vCPU
+                      {selected ? (
+                        <Check className="size-4 text-status-ready" aria-hidden="true" />
+                      ) : null}
+                    </span>
                   </span>
                   <span>
-                    <span className="block text-[11px] text-slate-300 sm:hidden">
+                    <span className="block text-xs text-muted-foreground sm:hidden">
                       RAM
                     </span>
                     <span className="font-semibold">
@@ -478,7 +493,7 @@ export function InfrastructureControl() {
                     </span>
                   </span>
                   <span>
-                    <span className="block text-[11px] text-slate-300 sm:hidden">
+                    <span className="block text-xs text-muted-foreground sm:hidden">
                       NVMe
                     </span>
                     <span className="font-semibold">
@@ -486,7 +501,7 @@ export function InfrastructureControl() {
                     </span>
                   </span>
                   <span>
-                    <span className="block text-[11px] text-slate-300 sm:hidden">
+                    <span className="block text-xs text-muted-foreground sm:hidden">
                       Канал
                     </span>
                     <span className="font-semibold">
@@ -495,11 +510,11 @@ export function InfrastructureControl() {
                         : `${preset.bandwidthMbps} Мбит/с`}
                     </span>
                   </span>
-                  <span className="col-span-2 flex items-baseline justify-between gap-2 border-t border-slate-700/70 pt-3 sm:col-span-1 sm:block sm:border-0 sm:pt-0">
+                  <span className="col-span-2 flex items-baseline justify-between gap-2 border-t pt-3 sm:col-span-1 sm:block sm:border-0 sm:pt-0">
                     <span className="font-semibold">
                       {preset.monthlyRoubles.toLocaleString("ru-RU")} ₽/мес
                     </span>
-                    <span className="text-sm text-slate-300 sm:mt-0.5 sm:block">
+                    <span className="text-sm text-muted-foreground sm:mt-0.5 sm:block">
                       {preset.hourlyRoubles.toLocaleString("ru-RU", {
                         minimumFractionDigits: 2,
                       })}{" "}
@@ -511,7 +526,7 @@ export function InfrastructureControl() {
             })}
           </div>
 
-          <div className="grid gap-3 border-t border-slate-800 p-4 sm:grid-cols-2 sm:p-6">
+          <div className="grid gap-3 border-t bg-muted/20 p-4 sm:grid-cols-2 sm:p-6">
             <button
               type="button"
               role="switch"
@@ -523,20 +538,20 @@ export function InfrastructureControl() {
                   backupsEnabled: !selection.backupsEnabled,
                 })
               }
-              className="flex items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-900/70 p-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+              className="flex min-h-20 items-center justify-between gap-4 rounded-lg border bg-card p-4 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/35"
             >
               <span className="flex gap-3">
-                <HardDrive className="mt-0.5 size-5 text-violet-300" aria-hidden="true" />
+                <HardDrive className="mt-0.5 size-5 text-muted-foreground" aria-hidden="true" />
                 <span>
                   <span className="block font-medium">Автобэкапы</span>
-                  <span className="mt-0.5 block text-xs text-slate-400">
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
                     Раз в неделю, хранить 1 копию · 6 ₽/ГБ за копию
                   </span>
                 </span>
               </span>
               <span
                 className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition ${
-                  selection?.backupsEnabled ? "bg-violet-500" : "bg-slate-700"
+                  selection?.backupsEnabled ? "bg-foreground" : "bg-input"
                 }`}
                 aria-hidden="true"
               >
@@ -547,11 +562,11 @@ export function InfrastructureControl() {
                 />
               </span>
             </button>
-            <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/70 p-4">
-              <ShieldCheck className="size-5 text-emerald-400" aria-hidden="true" />
+            <div className="flex min-h-20 items-center gap-3 rounded-lg border bg-card p-4">
+              <ShieldCheck className="size-5 text-status-ready" aria-hidden="true" />
               <div>
                 <p className="font-medium">Публичный IPv4 включён</p>
-                <p className="mt-0.5 text-xs text-slate-400">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   Создаётся и привязывается сразу ·{" "}
                   {preview.catalog.publicIpv4.monthlyRoubles.toLocaleString("ru-RU")}{" "}
                   ₽/мес
@@ -568,11 +583,21 @@ export function InfrastructureControl() {
             {preview.message}
           </AlertDescription>
         </Alert>
+      ) : !loaded ? (
+        <div className="overflow-hidden rounded-xl border bg-card p-5 sm:p-6">
+          <Skeleton className="h-6 w-52" />
+          <Skeleton className="mt-3 h-4 w-72 max-w-full" />
+          <div className="mt-8 space-y-2">
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+          </div>
+        </div>
       ) : null}
 
       <Card>
         <CardHeader>
-          <CardTitle>Проверить и создать среду</CardTitle>
+          <CardTitle>Создание среды</CardTitle>
           <CardDescription>
             Сейчас платформа создаёт сам сервер с Ubuntu и публичным IP.
             Установка n8n пока запускается отдельно после создания.
@@ -618,9 +643,15 @@ export function InfrastructureControl() {
         </CardContent>
       </Card>
 
-      <section className="grid gap-3" aria-live="polite">
-        {message ? <p className="text-sm">{message}</p> : null}
-        {environments.length === 0 ? (
+      <section className="grid gap-3" aria-live="polite" aria-busy={!loaded}>
+        {message ? (
+          <p className="text-sm" role="status">
+            {message}
+          </p>
+        ) : null}
+        {!loaded ? (
+          <Skeleton className="h-24 w-full rounded-xl" />
+        ) : loadError ? null : environments.length === 0 ? (
           <Card>
             <CardContent className="flex items-center gap-3 py-8 text-muted-foreground">
               <Server aria-hidden="true" />

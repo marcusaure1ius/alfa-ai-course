@@ -12,7 +12,7 @@ export default async function StudentLayout({
   children: React.ReactNode;
 }) {
   const session = await requirePageSession();
-  if (session.role === "admin") redirect("/admin");
+  if (session.role === "admin") redirect("/admin/tools");
   const course = await getStudentWorkspaceCourse(getDatabase(), session.userId);
   const progress = course ? getCourseProgress(course) : null;
   return (

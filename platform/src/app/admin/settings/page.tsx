@@ -1,13 +1,5 @@
-import { Settings2 } from "lucide-react";
-
-import { AdminPlaceholder } from "@/components/shell/admin-placeholder";
+import { redirect } from "next/navigation";
 
 export default function SettingsPage() {
-  return (
-    <AdminPlaceholder
-      title="Настройки"
-      description="Параметры guardrails и профилей появятся без возможности передать произвольный shell script."
-      icon={Settings2}
-    />
-  );
+  redirect("/admin/tools");
 }

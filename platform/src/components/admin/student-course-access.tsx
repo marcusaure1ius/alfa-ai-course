@@ -70,7 +70,9 @@ export function StudentCourseAccess({
                 <div>
                   <p className="text-sm font-medium">{course.title}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {course.status === "published" ? "Опубликован" : "Черновик"}
+                    {course.status === "published"
+                      ? "Доступен ученикам"
+                      : "Черновик"}
                   </p>
                 </div>
                 <Button

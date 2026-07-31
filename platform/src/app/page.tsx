@@ -6,7 +6,7 @@ export default async function HomePage() {
   const session = await getPageSession();
   redirect(
     session?.role === "admin"
-      ? "/admin/infrastructure"
+      ? "/admin/tools"
       : session?.role === "student"
         ? "/student"
         : "/login",

@@ -23,8 +23,8 @@ export const toolDefinitions: readonly ToolDefinition[] = [
   {
     id: "n8n",
     name: "n8n",
-    description: "Среда для практики с автоматизациями и workflow.",
-    setupHref: "/admin/infrastructure/n8n",
+    description: "Среда для практики со сценариями автоматизации.",
+    setupHref: "/admin/tools/n8n",
     studentHref: "/student/tools/n8n",
   },
 ];

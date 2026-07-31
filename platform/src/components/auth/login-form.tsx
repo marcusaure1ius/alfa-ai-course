@@ -55,7 +55,7 @@ export function LoginForm({ inverse = false }: { inverse?: boolean }) {
         throw new Error(body.error ?? "Не удалось войти.");
       }
       router.push(
-        body.user?.role === "student" ? "/student" : "/admin/infrastructure",
+        body.user?.role === "student" ? "/student" : "/admin/tools",
       );
       router.refresh();
     } catch (caught) {

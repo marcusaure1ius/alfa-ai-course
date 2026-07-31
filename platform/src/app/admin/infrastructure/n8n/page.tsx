@@ -1,5 +1,5 @@
-import { InfrastructureControl } from "@/components/infrastructure/infrastructure-control";
+import { redirect } from "next/navigation";
 
-export default function N8nSetupPage() {
-  return <InfrastructureControl />;
+export default function LegacyN8nSetupPage() {
+  redirect("/admin/tools/n8n");
 }

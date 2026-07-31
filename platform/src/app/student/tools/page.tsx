@@ -50,8 +50,8 @@ export default async function StudentToolsPage() {
         <div className="mt-8 flex items-start gap-3 rounded-2xl bg-brand-soft p-5">
           <Wrench className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
           <p className="text-sm leading-6 text-muted-foreground">
-            Инструмент открывается из учебного контекста. IP-адреса, VPS и
-            настройки провайдера остаются в административной части.
+            Инструмент открывается из учебного контекста и не требует
+            дополнительной настройки.
           </p>
         </div>
       </div>

@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { axe } from "vitest-axe";
 
 import { LoginForm } from "./login-form";
 
@@ -36,6 +37,17 @@ function fillCredentials() {
 }
 
 describe("LoginForm", () => {
+  it.each([false, true])(
+    "has no automated accessibility violations (inverse=%s)",
+    async (inverse) => {
+      const { container } = render(<LoginForm inverse={inverse} />);
+      const results = await axe(container, {
+        rules: { "color-contrast": { enabled: false } },
+      });
+      expect(results.violations).toEqual([]);
+    },
+  );
+
   it("keeps the second factor hidden until the server requests it", async () => {
     const request = vi
       .fn()
@@ -100,7 +112,7 @@ describe("LoginForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Подтвердить вход" }));
 
     await waitFor(() =>
-      expect(push).toHaveBeenCalledWith("/admin/infrastructure"),
+      expect(push).toHaveBeenCalledWith("/admin/tools"),
     );
     expect(refresh).toHaveBeenCalledOnce();
   });

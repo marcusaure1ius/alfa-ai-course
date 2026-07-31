@@ -30,14 +30,10 @@ export function StudentShell({
         <div className="flex h-full items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <NeurokursBrand />
-            <span className="hidden h-4 w-px bg-border sm:block" />
-            <span className="hidden text-sm text-muted-foreground sm:block">
-              Учёба
-            </span>
           </div>
           <div className="flex items-center gap-2">
             <details className="group relative hidden sm:block">
-              <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-lg px-2 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
                 <span className="max-w-40 truncate text-sm text-muted-foreground">
                   {displayStudentName(email)}
                 </span>

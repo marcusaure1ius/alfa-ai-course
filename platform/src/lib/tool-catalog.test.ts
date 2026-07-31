@@ -9,14 +9,14 @@ describe("composeToolCatalog", () => {
         id: "n8n",
         name: "n8n",
         description: "Workflow",
-        setupHref: "/admin/infrastructure/n8n",
+        setupHref: "/admin/tools/n8n",
         studentHref: "/student/tools/n8n",
       },
       {
         id: "notebook",
         name: "Notebook",
         description: "Notes",
-        setupHref: "/admin/infrastructure/notebook",
+        setupHref: "/admin/tools/notebook",
         studentHref: "/student/tools/notebook",
       },
     ];

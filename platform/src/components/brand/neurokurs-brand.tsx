@@ -32,7 +32,7 @@ export function NeurokursBrand({
     <span
       aria-label="neurokurs"
       className={cn(
-        "font-display text-[1.1rem] leading-none tracking-[-0.045em]",
+        "font-display text-[1.1rem] leading-none tracking-[-0.035em]",
         inverse ? "text-white" : "text-foreground",
         className,
       )}

@@ -7,7 +7,7 @@ import { getPageSession } from "@/server/auth/page-access";
 export default async function LoginPage() {
   const session = await getPageSession();
   if (session) {
-    redirect(session.role === "admin" ? "/admin/infrastructure" : "/student");
+    redirect(session.role === "admin" ? "/admin/tools" : "/student");
   }
 
   return (
@@ -16,7 +16,7 @@ export default async function LoginPage() {
         <section className="flex min-h-[25rem] flex-col px-6 py-7 sm:px-10 sm:py-9 lg:min-h-0 lg:p-0">
           <NeurokursBrand />
           <div className="my-auto max-w-[43rem] py-14 lg:pr-12">
-            <h1 className="font-display text-[clamp(2.8rem,5.5vw,5.5rem)] leading-[0.98] tracking-[-0.065em]">
+            <h1 className="font-display text-[clamp(2.8rem,5.5vw,5.5rem)] leading-[0.98] tracking-[-0.04em]">
               Сначала понять.
               <br />
               Потом{" "}

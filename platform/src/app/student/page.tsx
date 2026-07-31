@@ -90,8 +90,8 @@ export default async function StudentPage() {
           </div>
         </section>
 
-        <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_19rem]">
-          <section>
+        <div className="mt-8 grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_19rem]">
+          <section className="min-w-0">
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Карта курса</p>
@@ -159,7 +159,7 @@ export default async function StudentPage() {
             </div>
           </section>
 
-          <aside>
+          <aside className="min-w-0">
             <p className="text-sm text-muted-foreground">Для текущего шага</p>
             <Link
               href="/student/tools"
@@ -170,7 +170,7 @@ export default async function StudentPage() {
               </span>
               <h2 className="font-display mt-5 text-xl">Учебные инструменты</h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Открывайте сервисы из контекста материала, без серверных настроек.
+                Всё необходимое для практики доступно рядом с материалами курса.
               </p>
               <span className="mt-5 flex items-center gap-1 text-sm font-medium">
                 Перейти

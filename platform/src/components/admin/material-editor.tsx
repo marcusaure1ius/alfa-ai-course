@@ -103,7 +103,7 @@ export function MaterialEditor({ material }: { material: AdminMaterialItem }) {
             className="h-10 w-full rounded-lg border bg-background px-3 text-sm"
           >
             <option value="draft">Черновик</option>
-            <option value="published">Опубликован</option>
+            <option value="published">Виден ученикам</option>
           </select>
         </label>
         <dl className="mt-6 space-y-4 text-sm">
