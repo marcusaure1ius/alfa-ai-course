@@ -1,97 +1,117 @@
 # T-0058 — student access и release readiness, evidence 2026-07-31
 
 - Дата проверки: 2026-07-31
-- Scope: provider-free student n8n access, admin assignment, owner setup,
-  post-course expiry и release gates
-- Технический итог: **PASS**
-- Production student release: **BLOCKED — нет документального license evidence**
+- Scope: provider-free student access к n8n, admin assignment, owner setup,
+  post-course expiry, production full-story и обязательный cleanup
+- Реализация student access: **PASS**
+- Production cleanup: **PASS**
+- Единый production full-story: **BLOCKED — свежая среда дважды не вышла из
+  bootstrap**
 
-Отчёт не содержит provider credentials, IP, resource/operation IDs, пароль
-локального browser fixture или ссылку на будущий лицензионный документ.
+Отчёт не содержит credentials, IP-адресов, provider/resource/operation IDs,
+паролей, токенов или персональных данных.
 
 ## Реализованный контракт
 
-- Миграция `0009_student_tool_access.sql` добавляет отдельное назначение n8n
-  конкретному ученику и environment, явный срок, revocation и snapshot
-  лицензионного evidence.
-- Admin API проверяет CSRF, роль, активный course membership, готовый
+- Миграция `0009_student_tool_access.sql` добавляет назначение n8n конкретному
+  ученику и environment, срок, revocation и server-side snapshot основания
+  production access.
+- Admin API проверяет CSRF, роль, активное участие ученика в курсе, готовый
   `starter-kit`, healthy state, HTTPS URL и срок не дальше 366 дней.
-- License gate fail-closed: grant допускает только server-side mode
-  `written_permission` или `commercial_agreement` и bounded evidence reference.
-  Browser не получает mode или reference.
-- Student DTO содержит ровно `tool`, `displayName`, `state`, `launchUrl` и
+- Production gate принимает только server-side mode `written_permission`,
+  `commercial_agreement` или `product_owner_risk_acceptance` с bounded evidence
+  reference. Последний режим фиксирует решение владельца продукта и не
+  представляется как разрешение n8n.
+- Student DTO содержит только `tool`, `displayName`, `state`, `launchUrl` и
   `expiresAt`. Provider, VPS, IP, тариф, стоимость, operation logs и admin
   controls отсутствуют.
 - `ready_owner_setup_required` не имитирует автоматическое создание owner:
-  интерфейс направляет пользователя на официальный стартовый экран и запрещает
+  интерфейс направляет ученика на официальный стартовый экран и запрещает
   передавать пароль платформе.
-- После `expires_at` URL скрывается. Admin может выдать новый срок; иначе
-  ученик получает направление за инструкцией самостоятельного запуска. Перенос
-  VPS и billing не обещается.
+- После `expires_at` URL скрывается. Admin может выдать новый срок; иначе ученик
+  получает инструкцию самостоятельного запуска. Передача VPS и billing не
+  обещается.
+- Удаление среды после прерванной установки сначала отменяет resumable install,
+  затем ставит cleanup operation. Это убирает конфликт двух активных mutations
+  и позволяет штатно очистить зависшую среду.
 
 ## Проверки кода
 
-- `npm run quality` — PASS:
-  - ESLint;
-  - TypeScript;
-  - 32 unit test files / 125 tests, включая два automated accessibility checks;
-  - Next.js `16.2.12` production build, 35 routes.
-- `npm run test:integration` — PASS: 7 files / 53 tests.
+- ESLint и TypeScript — PASS.
+- Unit/accessibility tests — PASS: 32 files / 125 tests.
+- `npm run build` — PASS: Next.js 16.2.12, 36 static pages сгенерированы.
+- `npm run test:integration` — PASS: 7 files / 54 tests, включая полный
+  auth/student contract и cleanup после прерванной установки.
 - `npm run test:workflow` — PASS: 1 file / 4 tests.
 - `bash tests/run_static_tests.sh` — PASS: 25 root contract suites.
-- Миграция применена на local PostgreSQL 17 и повторный checksum check прошёл.
+- Secret scan — PASS: 446 text files, 0 findings.
 
-Integration tests отдельно подтверждают:
+Integration tests подтверждают exact provider-free DTO, скрытие URL после
+expiry, server-side evidence snapshot, немедленный revoke, отказ grant без
+production evidence и безопасный переход interrupted install → automatic
+delete.
 
-- exact provider-free DTO;
-- скрытие URL после expiry и при закрытом license gate;
-- сохранение evidence snapshot только server-side;
-- немедленный revoke;
-- отказ grant без license evidence.
+## Production full-story
 
-## Browser verification
+В production выполнены защищённый admin login, создание синтетического ученика,
+назначение курса и проверка student route.
 
-Локальный Next.js проверен через реальный browser с PostgreSQL fixture.
+Проверенный degraded state на desktop 1280×800 и mobile 360×800:
 
-- guest login: content present, error overlay отсутствует, console errors/warnings
-  отсутствуют;
-- admin student detail: license gate видим и grant disabled без evidence;
-- 360 px admin: horizontal scroll отсутствует после исправления длинного email;
-- 360 px student: horizontal scroll отсутствует, owner setup и expiry доступны,
-  provider/VPS/IP/cost terms отсутствуют;
-- 1280 px student: launch URL и owner setup корректно отображаются;
-- на desktop/mobile error overlay и console errors/warnings отсутствуют.
+- ученик видит только статус «Доступ ещё не подключён»;
+- launch action отключён;
+- IP, provider, VPS, root, порты, расходы и operation details отсутствуют;
+- горизонтального переполнения нет;
+- console errors/warnings отсутствуют.
 
-Browser fixture использовал только синтетические локальные данные и
-`local-browser-evidence`; это не production license evidence.
+Production gate настроен в режиме явного принятия риска владельцем продукта с
+отдельной evidence reference. Это решение владельца, а не разрешение n8n.
 
-## Связанное production E2E
+## Воспроизводимый blocker готового состояния
 
-Текущий create/timeline/degraded/delete и n8n install lifecycle подтверждены
-зависимостями задачи:
+Единый production full-story дважды запускался на свежей disposable Ubuntu
+24.04 x86_64 среде с минимальной поддерживаемой конфигурацией.
 
-- [T-0083: fresh VPS create/reconcile/delete](t0083-server-creation-e2e-2026-07-31.md);
-- [T-0086: n8n install, TLS/health, reboot и automatic cleanup](t0086-control-plane-n8n-install-e2e-2026-07-31.md).
+В обоих запусках:
 
-Оба отчёта фиксируют реальные disposable Timeweb/Vercel проверки и возврат
-provider baseline без остаточных billable resources. Новый student access слой
-не развёртывался в production, поэтому единый production full-story после login
-до student view в рамках T-0058 не заявляется.
+1. VPS и публичный IPv4 создавались штатно.
+2. DNS проходил ожидание TTL и становился доступен.
+3. Install operation доходила до server bootstrap.
+4. HTTP endpoint не поднимался, operation становилась resumable.
+5. Повторный resume не переводил среду в `ready_owner_setup_required`.
 
-## Оставшийся release blocker
+Поэтому в рамках T-0058 нельзя честно заявить production-проверку готового
+student launch URL, owner setup, HTTPS/health и всей цепочки до ready state.
+Зависимая T-0086 отдельно подтверждает этот lifecycle на другом disposable
+стенде, но не заменяет единый T-0058 full-story:
+[T-0086: n8n install, TLS/health, reboot и automatic cleanup](t0086-control-plane-n8n-install-e2e-2026-07-31.md).
 
-Официальный n8n Help Center, повторно проверенный 2026-07-31, указывает, что
-hosting и управление клиентскими workflows/credentials в собственном instance
-требует Enterprise license, а явное разрешение по конкретному сценарию выдаётся
-через `license@n8n.io`: [Which license do I need for my use case?](https://support.n8n.io/article/can-i-use-your-license-for-my-use-case).
+## Обязательный cleanup
 
-В текущей модели Timeweb account, VPS и расходы принадлежат школе. До
-production student grant владелец должен предоставить одно из:
+Оба созданных T-0058 стенда удалены через production control plane.
 
-1. письменное разрешение n8n для этого учебного use case;
-2. подходящее коммерческое соглашение n8n.
+- Control plane: обе среды имеют статус «Удалён», IP не назначен, 0 ₽/мес.
+- Provider: список действующих VPS пуст; удалённые тестовые VPS доступны только
+  в восстановительном окне провайдера.
+- DNS: A-записей `n8n.neurokurs.ru` — 0.
+- Не связанные с T-0058 существующие provider resources не изменялись.
 
-После этого нужно добавить production-only mode и evidence reference,
-развернуть exact commit и выполнить единый desktop/mobile full-story с login,
-admin assignment, student view, degraded state и automatic delete. До этого
-задача и release остаются честно blocked.
+Первый cleanup выявил, что прерванная resumable install блокировала delete.
+Исправления `51375b4` и `f2ceebb` добавили видимый cleanup и безопасную отмену
+прерванной установки перед удалением. Второй стенд после того же bootstrap
+сбоя удалён уже штатным production-сценарием.
+
+## Решение по lifecycle
+
+T-0058 должна оставаться **blocked**, а не уходить на review: acceptance
+criterion единого production desktop/mobile full-story с готовым student view
+не выполнен.
+
+Для снятия blocker нужно получить cloud-init/systemd diagnostics через
+поддерживаемый root/serial доступ, исправить или сделать устойчивее bootstrap,
+затем на новой disposable среде пройти create → timeline →
+`ready_owner_setup_required` → student launch → degraded/expiry → automatic
+delete и снова подтвердить нулевой provider/DNS baseline.
+
+Связанный create/delete baseline:
+[T-0083: fresh VPS create/reconcile/delete](t0083-server-creation-e2e-2026-07-31.md).
