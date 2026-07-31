@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "node --import tsx scripts/vercel-build.ts",
     "start": "next start",
     "db:migrate": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/migrate.ts",
     "auth:bootstrap-admin": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/bootstrap-admin.ts",

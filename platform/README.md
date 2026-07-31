@@ -148,6 +148,9 @@ npm run dev
 `npm run db:migrate` безопасен: применённая миграция пропускается, а изменение
 её checksum после применения считается ошибкой.
 
+Production deployment Vercel автоматически выполняет этот migration gate перед
+`next build`. Preview deployment не меняет shared database schema.
+
 ## Первый администратор
 
 После миграций создайте первого администратора один раз. Пароль не передаётся
