@@ -3,6 +3,8 @@
 import * as React from "react";
 import {
   BookOpenText,
+  KeyRound,
+  ListTree,
   Search,
   Users,
   Wrench,
@@ -23,6 +25,8 @@ import {
 const entries = [
   { href: "/admin/students", label: "Ученики", icon: Users },
   { href: "/admin/content", label: "Материалы", icon: BookOpenText },
+  { href: "/admin/program", label: "Программа", icon: ListTree },
+  { href: "/admin/access", label: "Доступы", icon: KeyRound },
   { href: "/admin/tools", label: "Инструменты", icon: Wrench },
 ] as const;
 
@@ -69,7 +73,7 @@ export function CommandMenu() {
         ref={triggerRef}
         type="button"
         variant="outline"
-        className="h-11 w-full justify-start gap-2 text-muted-foreground sm:w-64"
+        className="h-11 w-11 justify-center gap-2 px-0 text-muted-foreground sm:w-64 sm:justify-start sm:px-5"
         onClick={() => {
           rememberFocus();
           setOpen(true);
@@ -77,7 +81,7 @@ export function CommandMenu() {
         aria-label="Открыть поиск и команды"
       >
         <Search aria-hidden="true" />
-        <span className="truncate">Найти раздел</span>
+        <span className="hidden truncate sm:inline">Найти раздел</span>
         <kbd className="ml-auto hidden rounded border bg-muted px-1.5 font-mono text-xs sm:inline">
           ⌘ K
         </kbd>

@@ -2,6 +2,8 @@
 
 import {
   BookOpenText,
+  KeyRound,
+  ListTree,
   Wrench,
   Users,
 } from "lucide-react";
@@ -26,6 +28,8 @@ import { NavLink } from "./nav-link";
 const workspaceNavigation = [
   { href: "/admin/students", label: "Ученики", icon: Users },
   { href: "/admin/content", label: "Материалы", icon: BookOpenText },
+  { href: "/admin/program", label: "Программа", icon: ListTree },
+  { href: "/admin/access", label: "Доступы", icon: KeyRound },
   { href: "/admin/tools", label: "Инструменты", icon: Wrench },
 ] as const;
 

@@ -21,7 +21,7 @@ export default async function StudentN8nPage() {
         </Link>
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <section>
-            <span className="font-display flex size-16 items-center justify-center rounded-2xl bg-foreground text-xl text-background">
+            <span className="font-display flex size-16 items-center justify-center rounded-xl bg-foreground text-xl text-background">
               n8n
             </span>
             <h1 className="font-display mt-6 text-4xl">n8n</h1>
@@ -32,7 +32,7 @@ export default async function StudentN8nPage() {
               <StudentN8nAccessCard access={access} />
             </div>
           </section>
-          <aside className="self-start rounded-2xl bg-highlight p-6">
+          <aside className="self-start rounded-xl bg-highlight p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.08em]">
               Когда понадобится
             </p>

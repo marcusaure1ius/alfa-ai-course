@@ -40,7 +40,7 @@ export default async function StudentProgramPage() {
         </div>
 
         {progress.current ? (
-          <section className="mt-9 rounded-2xl border bg-card p-6 sm:p-8">
+          <section className="mt-9 rounded-xl border bg-card p-6 sm:p-8">
             <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
               <div>
                 <p className="text-sm font-medium text-brand">Текущее место</p>
@@ -82,7 +82,7 @@ export default async function StudentProgramPage() {
               {course.sections.map((section, sectionIndex) => (
                 <section
                   key={section.id}
-                  className="overflow-hidden rounded-2xl border bg-card"
+                  className="overflow-hidden rounded-xl border bg-card"
                 >
                   <div className="flex items-center justify-between gap-4 border-b bg-muted/40 px-5 py-4 sm:px-6">
                     <div>
@@ -156,7 +156,7 @@ export default async function StudentProgramPage() {
             </div>
           </section>
 
-          <aside className="self-start rounded-2xl bg-foreground p-6 text-background xl:sticky xl:top-24">
+          <aside className="self-start rounded-xl bg-foreground p-6 text-background xl:sticky xl:top-24">
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-background/55">
               Ориентир
             </p>

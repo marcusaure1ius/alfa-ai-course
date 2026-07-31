@@ -12,7 +12,7 @@ export function AdminHeader() {
         aria-label="Открыть или свернуть навигацию"
       />
       <NeurokursBrand className="lg:hidden" />
-      <div className="ml-auto min-w-0 flex-1 sm:flex-initial">
+      <div className="ml-auto shrink-0">
         <CommandMenu />
       </div>
     </header>

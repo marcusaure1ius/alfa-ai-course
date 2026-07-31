@@ -28,63 +28,63 @@ export default async function StudentPage() {
   return (
     <div className="px-5 py-8 sm:px-8 sm:py-10 xl:px-12">
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b pb-5 text-sm">
           <div className="flex items-center gap-2 text-muted-foreground">
             <span className="size-2 rounded-full bg-brand" />
-            <span>{currentSection?.title ?? "Текущий раздел"}</span>
+            <span>{course.title} · {currentSection?.title ?? "Текущий раздел"}</span>
           </div>
           <span className="font-medium tabular-nums text-muted-foreground">
             {progress.completed} / {progress.total}
           </span>
         </div>
 
-        <section className="mt-5 overflow-hidden rounded-2xl border bg-card">
+        <section className="mt-6 overflow-hidden rounded-xl bg-foreground text-background">
           <div className="grid lg:grid-cols-[minmax(0,1fr)_22rem]">
             <div className="p-6 sm:p-9 lg:p-11">
-              <p className="text-sm font-medium text-brand">
+              <p className="workspace-kicker !text-background/55">
                 {progress.current.kind === "practice"
-                  ? "Практический шаг"
-                  : "Продолжить обучение"}
+                  ? "ПРАКТИЧЕСКИЙ ШАГ"
+                  : "ТЕКУЩИЙ ШАГ"}
               </p>
               <h1 className="font-display mt-4 max-w-3xl text-3xl leading-[1.12] sm:text-[2.75rem]">
                 {progress.current.title}
               </h1>
               {progress.current.summary ? (
-                <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+                <p className="mt-5 max-w-2xl text-base leading-7 text-background/65 sm:text-lg">
                   {progress.current.summary}
                 </p>
               ) : null}
               <div className="mt-7 flex flex-wrap items-center gap-4">
-                <Button asChild size="lg">
+                <Button asChild size="lg" className="bg-background text-foreground hover:bg-background/85">
                   <Link href={`/student/materials/${progress.current.slug}`}>
                     <Play aria-hidden="true" />
                     Продолжить
                   </Link>
                 </Button>
                 {progress.current.estimatedMinutes ? (
-                  <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-2 text-sm text-background/60">
                     <Clock3 className="size-4" aria-hidden="true" />
                     {progress.current.estimatedMinutes} мин
                   </span>
                 ) : null}
               </div>
             </div>
-            <div className="relative min-h-64 border-t bg-foreground p-7 text-background lg:min-h-full lg:border-l lg:border-t-0">
-              <div className="absolute right-[-3rem] top-[-4rem] size-48 rounded-full bg-brand opacity-90" />
-              <div className="absolute bottom-[-5rem] left-[-2rem] size-44 rounded-full bg-highlight" />
-              <div className="relative flex h-full flex-col justify-between">
-                <p className="max-w-56 text-sm leading-6 text-background/65">
-                  Сначала понять контекст. Затем собрать рабочий результат.
-                </p>
-                <div className="mt-16 grid grid-cols-[auto_1fr_auto] items-center gap-3">
-                  <span className="flex size-11 items-center justify-center rounded-xl bg-background text-foreground">
-                    01
-                  </span>
-                  <span className="h-px bg-background/25" />
-                  <span className="flex size-11 items-center justify-center rounded-xl border border-background/25">
-                    02
-                  </span>
+            <div className="min-h-64 border-t border-background/15 bg-black/20 p-7 lg:min-h-full lg:border-l lg:border-t-0">
+              <div className="flex h-full flex-col justify-between">
+                <div>
+                  <p className="workspace-kicker !text-background/45">МАРШРУТ ШАГА</p>
+                  <div className="mt-6 grid gap-5">
+                    <div className="grid grid-cols-[2rem_1fr] gap-3 border-b border-background/15 pb-5">
+                      <span className="font-display text-sm text-highlight">01</span>
+                      <div><p className="text-sm font-medium">Понять контекст</p><p className="mt-1 text-sm leading-5 text-background/55">Прочитайте материал и выделите главное.</p></div>
+                    </div>
+                    <div className="grid grid-cols-[2rem_1fr] gap-3">
+                      <span className="font-display text-sm text-highlight">02</span>
+                      <div><p className="text-sm font-medium">Собрать результат</p><p className="mt-1 text-sm leading-5 text-background/55">Примените шаг в учебном инструменте.</p></div>
+                    </div>
+                  </div>
                 </div>
+                <p className="mt-8 text-sm leading-6 text-background/50">Один понятный шаг за раз.</p>
               </div>
             </div>
           </div>
@@ -105,7 +105,7 @@ export default async function StudentPage() {
                 <ArrowRight className="size-4" aria-hidden="true" />
               </Link>
             </div>
-            <div className="mt-5 overflow-hidden rounded-2xl border bg-card">
+            <div className="mt-5 overflow-hidden rounded-xl border bg-card">
               {course.sections.map((section, sectionIndex) => (
                 <div
                   key={section.id}
@@ -163,9 +163,9 @@ export default async function StudentPage() {
             <p className="text-sm text-muted-foreground">Для текущего шага</p>
             <Link
               href="/student/tools"
-              className="mt-3 block rounded-2xl border bg-card p-5 transition-colors hover:bg-accent"
+              className="mt-3 block rounded-xl border bg-card p-5 transition-colors hover:bg-accent"
             >
-              <span className="flex size-10 items-center justify-center rounded-xl bg-brand-soft text-brand">
+              <span className="flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
                 <Wrench className="size-5" aria-hidden="true" />
               </span>
               <h2 className="font-display mt-5 text-xl">Учебные инструменты</h2>

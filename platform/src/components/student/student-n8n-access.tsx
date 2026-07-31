@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { ToolProblemDialog } from "@/components/student/tool-problem-dialog";
 import type { StudentN8nAccess } from "@/server/tools/student-access";
 
 const copy: Record<
@@ -76,7 +77,7 @@ export function StudentN8nAccessCard({
   const content = copy[access.state];
   const available = Boolean(access.launchUrl);
   return (
-    <div className="rounded-2xl border bg-card p-6">
+    <div className="rounded-xl border bg-card p-6">
       <div className="flex items-start gap-4">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted">
           <StateIcon state={access.state} />
@@ -97,19 +98,22 @@ export function StudentN8nAccessCard({
           ) : null}
         </div>
       </div>
+      <div className="mt-6 flex flex-wrap gap-3">
       {available ? (
-        <Button asChild className="mt-6">
+        <Button asChild>
           <a href={access.launchUrl ?? "#"} target="_blank" rel="noreferrer">
             <ExternalLink aria-hidden="true" />
             Открыть n8n
           </a>
         </Button>
       ) : (
-        <Button className="mt-6" disabled>
+        <Button disabled>
           <ExternalLink aria-hidden="true" />
           Открыть n8n
         </Button>
       )}
+      <ToolProblemDialog state={content.title} />
+      </div>
       {access.state === "expired" ? (
         <Button asChild variant="link" className="mt-2 px-0">
           <Link href="/student/help">Что делать после окончания доступа</Link>

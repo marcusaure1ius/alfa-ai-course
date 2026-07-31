@@ -245,6 +245,39 @@ export async function getAdminCourses(
   `;
 }
 
+export type AdminSectionOption = {
+  id: string;
+  title: string;
+  courseId: string;
+  courseTitle: string;
+  position: number;
+  nextMaterialPosition: number;
+};
+
+export async function getAdminSections(
+  sql: DatabaseSql,
+): Promise<AdminSectionOption[]> {
+  return sql<AdminSectionOption[]>`
+    SELECT
+      section.id,
+      section.title,
+      section.course_id AS "courseId",
+      course.title AS "courseTitle",
+      section.position,
+      coalesce(
+        (
+          SELECT max(material.position) + 1
+          FROM course_materials AS material
+          WHERE material.section_id = section.id
+        ),
+        0
+      )::int AS "nextMaterialPosition"
+    FROM course_sections AS section
+    JOIN courses AS course ON course.id = section.course_id
+    ORDER BY course.created_at, section.position
+  `;
+}
+
 export async function getAdminStudent(
   sql: DatabaseSql,
   studentId: string,

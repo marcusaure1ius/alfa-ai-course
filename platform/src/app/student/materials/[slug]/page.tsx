@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, Clock3 } from "lucide-react";
 import Link from "next/link";
 
 import { CompleteMaterialButton } from "@/components/student/complete-material-button";
+import { PracticeSubmissionDialog } from "@/components/student/practice-submission-dialog";
 import { MaterialToc } from "@/components/student/material-toc";
 import {
   parseCourseMarkdown,
@@ -105,7 +106,11 @@ export default async function StudentMaterialPage({
             <CompleteMaterialButton
               materialId={material.id}
               completed={Boolean(material.completedAt)}
+              nextHref={next ? `/student/materials/${next.slug}` : null}
             />
+            {material.kind === "practice" ? (
+              <PracticeSubmissionDialog materialId={material.id} />
+            ) : null}
           </div>
         </footer>
       </div>

@@ -2,8 +2,13 @@ import { ArrowRight, BookOpenText, Clock3 } from "lucide-react";
 import Link from "next/link";
 
 import { CourseCreateForm } from "@/components/admin/course-create-form";
+import { MaterialCreateDialog } from "@/components/admin/material-create-dialog";
 import { Badge } from "@/components/ui/badge";
-import { getAdminCourses, getAdminMaterials } from "@/server/admin/workspace";
+import {
+  getAdminCourses,
+  getAdminMaterials,
+  getAdminSections,
+} from "@/server/admin/workspace";
 import { getDatabase } from "@/server/db/client";
 
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
@@ -17,9 +22,10 @@ function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
 
 export default async function AdminContentPage() {
   const sql = getDatabase();
-  const [materials, courseOptions] = await Promise.all([
+  const [materials, courseOptions, sectionOptions] = await Promise.all([
     getAdminMaterials(sql),
     getAdminCourses(sql),
+    getAdminSections(sql),
   ]);
   const published = materials.filter((material) => material.status === "published");
   const courses = groupBy(materials, (material) => material.courseTitle);
@@ -33,9 +39,18 @@ export default async function AdminContentPage() {
             {published.length} из {materials.length} материалов опубликовано
           </p>
         </div>
+        <div className="flex flex-wrap gap-3">
+          <CourseCreateForm />
+          <MaterialCreateDialog sections={sectionOptions} />
+        </div>
       </div>
 
-      <CourseCreateForm />
+      {courseOptions.length > 0 && sectionOptions.length === 0 ? (
+        <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground">
+          Чтобы создать материал, сначала добавьте раздел курса через API или
+          подготовленный импорт программы.
+        </p>
+      ) : null}
 
       {courseOptions.length > 0 ? (
         <section className="mt-8 max-w-2xl" aria-labelledby="courses-title">

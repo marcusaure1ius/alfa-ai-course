@@ -34,12 +34,12 @@ export default async function StudentToolsPage() {
           Здесь только сервисы, которые используются в материалах курса.
         </p>
 
-        <section className="mt-9 overflow-hidden rounded-2xl border bg-card">
+        <section className="mt-9 overflow-hidden rounded-xl border bg-card">
           <Link
             href="/student/tools/n8n"
             className="group grid gap-6 p-6 transition-colors hover:bg-accent sm:grid-cols-[auto_1fr_auto] sm:items-center sm:p-8"
           >
-            <span className="font-display flex size-14 items-center justify-center rounded-2xl bg-foreground text-lg text-background">
+            <span className="font-display flex size-14 items-center justify-center rounded-xl bg-foreground text-lg text-background">
               n8n
             </span>
             <span>
@@ -62,7 +62,7 @@ export default async function StudentToolsPage() {
           </Link>
         </section>
 
-        <div className="mt-8 flex items-start gap-3 rounded-2xl bg-brand-soft p-5">
+        <div className="mt-8 flex items-start gap-3 rounded-xl bg-brand-soft p-5">
           <Wrench className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
           <p className="text-sm leading-6 text-muted-foreground">
             Инструмент открывается из учебного контекста и не требует

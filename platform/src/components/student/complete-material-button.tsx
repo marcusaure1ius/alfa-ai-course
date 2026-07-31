@@ -1,23 +1,39 @@
 "use client";
 
-import { Check, Loader2 } from "lucide-react";
+import { ArrowRight, Check, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { FieldError } from "@/components/ui/field";
 
 export function CompleteMaterialButton({
   materialId,
   completed,
+  nextHref,
 }: {
   materialId: string;
   completed: boolean;
+  nextHref: string | null;
 }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function updateProgress() {
+  async function updateProgress(nextCompleted: boolean) {
     setPending(true);
     setError(null);
     try {
@@ -34,9 +50,11 @@ export function CompleteMaterialButton({
           "content-type": "application/json",
           "x-csrf-token": csrf.csrfToken,
         },
-        body: JSON.stringify({ lastPosition: null, completed: !completed }),
+        body: JSON.stringify({ lastPosition: null, completed: nextCompleted }),
       });
       if (!response.ok) throw new Error("UPDATE_FAILED");
+      if (nextCompleted) setSuccess(true);
+      else setOpen(false);
       router.refresh();
     } catch {
       setError("Не удалось сохранить. Попробуйте ещё раз.");
@@ -45,27 +63,71 @@ export function CompleteMaterialButton({
     }
   }
 
+  if (completed) {
+    return (
+      <div className="flex flex-col items-end gap-2">
+        <Button type="button" variant="outline" onClick={() => void updateProgress(false)} disabled={pending} aria-busy={pending}>
+          {pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}
+          Отметить непройденным
+        </Button>
+        {error ? <FieldError>{error}</FieldError> : null}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col items-end gap-2">
-      <Button
-        type="button"
-        variant={completed ? "outline" : "default"}
-        onClick={() => void updateProgress()}
-        disabled={pending}
-        aria-busy={pending}
-      >
-        {pending ? (
-          <Loader2 className="animate-spin" aria-hidden="true" />
+    <Dialog open={open} onOpenChange={(next) => {
+      if (pending) return;
+      setOpen(next);
+      if (!next) {
+        setSuccess(false);
+        setError(null);
+      }
+    }}>
+      <DialogTrigger asChild>
+        <Button type="button"><Check aria-hidden="true" />Завершить материал</Button>
+      </DialogTrigger>
+      <DialogContent>
+        {success ? (
+          <>
+            <DialogHeader>
+              <span className="mb-2 flex size-12 items-center justify-center rounded-full bg-highlight text-foreground">
+                <Check aria-hidden="true" />
+              </span>
+              <DialogTitle>Материал завершён</DialogTitle>
+              <DialogDescription>
+                Прогресс сохранён. Можно перейти к следующему шагу или вернуться в программу.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button asChild variant="outline"><Link href="/student/program">В программу</Link></Button>
+              <Button asChild>
+                <Link href={nextHref ?? "/student/program"}>
+                  {nextHref ? "Следующий материал" : "Посмотреть программу"}
+                  <ArrowRight aria-hidden="true" />
+                </Link>
+              </Button>
+            </DialogFooter>
+          </>
         ) : (
-          <Check aria-hidden="true" />
+          <>
+            <DialogHeader>
+              <DialogTitle>Завершить материал?</DialogTitle>
+              <DialogDescription>
+                Мы отметим этот шаг пройденным и обновим ваше место в программе. Отметку можно снять позже.
+              </DialogDescription>
+            </DialogHeader>
+            {error ? <FieldError aria-live="polite">{error}</FieldError> : null}
+            <DialogFooter>
+              <DialogClose asChild><Button type="button" variant="outline" disabled={pending}>Отмена</Button></DialogClose>
+              <Button type="button" onClick={() => void updateProgress(true)} disabled={pending} aria-busy={pending}>
+                {pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}
+                {pending ? "Сохраняем…" : "Да, завершить"}
+              </Button>
+            </DialogFooter>
+          </>
         )}
-        {completed ? "Отметить непройденным" : "Завершить материал"}
-      </Button>
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

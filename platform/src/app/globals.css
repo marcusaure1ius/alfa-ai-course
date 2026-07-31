@@ -108,25 +108,25 @@
     --font-styrene-medium: "Styrene A LC Medium", "Helvetica Neue", Arial, sans-serif;
     --font-code: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     --background: #f2f3f5;
-    --foreground: #1d1d1f;
+    --foreground: #030306e0;
     --card: #fdfcfc;
-    --card-foreground: #1d1d1f;
+    --card-foreground: #030306e0;
     --popover: #ffffff;
-    --popover-foreground: #1d1d1f;
+    --popover-foreground: #030306e0;
     --primary: #0e0e0e;
     --primary-foreground: #ffffff;
     --secondary: #eceef1;
-    --secondary-foreground: #1d1d1f;
+    --secondary-foreground: #030306e0;
     --muted: #f0f1f3;
-    --muted-foreground: #666a73;
+    --muted-foreground: #0404138f;
     --accent: #e7e9ec;
-    --accent-foreground: #1d1d1f;
+    --accent-foreground: #030306e0;
     --destructive: #b42318;
     --border: #dadce0;
     --input: #c9ccd2;
     --ring: #ef3124;
     --brand: #ef3124;
-    --brand-foreground: #ffffff;
+    --brand-foreground: #0e0e0e;
     --brand-soft: #ffe9e7;
     --highlight: #c8ff4d;
     --status-ready: #168a58;
@@ -166,7 +166,7 @@
     --input: #45454b;
     --ring: #ff5a4e;
     --brand: #ff5a4e;
-    --brand-foreground: #ffffff;
+    --brand-foreground: #141416;
     --brand-soft: #3a1c1a;
     --highlight: #c8ff4d;
     --status-ready: #54c890;
@@ -216,6 +216,21 @@
     background: var(--card);
   }
 
+  .workspace-section {
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    background: var(--card);
+  }
+
+  .workspace-kicker {
+    font-family: var(--font-styrene-medium);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1rem;
+    letter-spacing: 0.04em;
+    color: var(--muted-foreground);
+  }
+
   .font-display {
     font-family: var(--font-styrene-black);
     font-weight: 500;
@@ -244,6 +259,19 @@
   @media (prefers-reduced-motion: reduce) {
     .login-field-enter {
       animation: none;
+    }
+  }
+
+  @media (min-width: 640px) {
+    .page-container {
+      padding-inline: 2rem;
+      padding-top: 2.5rem;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .page-container {
+      padding-inline: 3rem;
     }
   }
 
@@ -330,17 +358,6 @@
     line-height: 1.65;
   }
 
-  @media (min-width: 40rem) {
-    .page-container {
-      padding-inline: 1.5rem;
-    }
-  }
-
-  @media (min-width: 64rem) {
-    .page-container {
-      padding: 3rem 2.5rem 5rem;
-    }
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
