@@ -71,6 +71,8 @@ Durable state после удаления:
 - active owned resources: `0`;
 - server resource: `deleted`;
 - public IP resource: `deleted`;
+- redacted create operation alias: `create:57763265`;
+- redacted delete operation alias: `delete:ff8438ce`;
 - create: `succeeded`, 5/5 шагов, около 20,4 секунды;
 - delete: `succeeded`, 7/7 шагов, около 2,3 секунды.
 
