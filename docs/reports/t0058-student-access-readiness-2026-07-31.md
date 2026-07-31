@@ -38,13 +38,13 @@
 ## Проверки кода
 
 - ESLint и TypeScript — PASS.
-- Unit/accessibility tests — PASS: 32 files / 125 tests.
-- `npm run build` — PASS: Next.js 16.2.12, 36 static pages сгенерированы.
-- `npm run test:integration` — PASS: 7 files / 54 tests, включая полный
+- Unit/accessibility tests — PASS: 33 files / 133 tests.
+- `npm run build` — PASS: Next.js 16.2.12, 38 static pages сгенерированы.
+- `npm run test:integration` — PASS: 7 files / 55 tests, включая полный
   auth/student contract и cleanup после прерванной установки.
 - `npm run test:workflow` — PASS: 1 file / 4 tests.
 - `bash tests/run_static_tests.sh` — PASS: 25 root contract suites.
-- Secret scan — PASS: 446 text files, 0 findings.
+- Secret scan — PASS: 455 text files, 0 findings.
 
 Integration tests подтверждают exact provider-free DTO, скрытие URL после
 expiry, server-side evidence snapshot, немедленный revoke, отказ grant без
@@ -86,6 +86,48 @@ student launch URL, owner setup, HTTPS/health и всей цепочки до re
 стенде, но не заменяет единый T-0058 full-story:
 [T-0086: n8n install, TLS/health, reboot и automatic cleanup](t0086-control-plane-n8n-install-e2e-2026-07-31.md).
 
+## Read-only recheck и локальная remediation
+
+После двух сбоев baseline повторно проверен без создания или восстановления
+ресурсов:
+
+- действующих VPS нет, две T-0058 машины доступны только в provider recovery
+  window;
+- A-запись `n8n.neurokurs.ru` отсутствует;
+- обе среды в control plane имеют статус «Удалён», IP не назначен, 0 ₽/мес.;
+- публичный installer `v0.1.0` повторно скачан и совпал с закреплённым SHA-256;
+  verify-only завершился без системных изменений.
+
+Code-level диагностика выявила два конкретных дефекта recovery-контракта:
+
+1. `bootstrapping` наблюдался примерно пять минут, хотя один только bounded
+   network wait допускает 20 минут, а полный installer — до 45 минут. Workflow
+   поэтому освобождал transient step раньше собственного допустимого bootstrap
+   budget.
+2. Installer запускался непосредственно из одноразового `cloud-init runcmd`.
+   После interruption у него не было отдельного systemd lifecycle, сохранённого
+   attempt counter или автоматической безопасной повторной попытки; control
+   plane resume мог только снова проверять порт 80.
+
+Профиль `starter-kit-v0.1.1` исправляет этот контракт:
+
+- отдельный enabled systemd oneshot запускается через `--no-block` и переживает
+  завершение `cloud-final`;
+- retry ограничен четырьмя попытками, persistent attempt budget и systemd
+  start limit; `Restart=always` и бесконечный timeout не используются;
+- status атомарно содержит phase/profile/attempt и redacted exit/error stage;
+- log ограничен 64 KiB и скрывает IP и secret-like значения;
+- повторный запуск сохраняет `.env`, encryption key и volumes, а success marker
+  не позволяет повторять уже завершённый bootstrap;
+- окно внешнего наблюдения ограничено 50 минутами и согласовано с 45-минутным
+  systemd timeout.
+
+Regression test фактически выполняет transient installer failure, проверяет
+redacted status/log, повторно запускает тот же bootstrap до успеха и
+подтверждает, что третий запуск не увеличивает attempt counter. Сгенерированные
+cloud-config, Bash script и systemd unit отдельно проверены в Ubuntu 24.04 LTS
+x86_64; production readiness из этих локальных проверок не заявляется.
+
 ## Обязательный cleanup
 
 Оба созданных T-0058 стенда удалены через production control plane.
@@ -107,9 +149,10 @@ T-0058 должна оставаться **blocked**, а не уходить н�
 criterion единого production desktop/mobile full-story с готовым student view
 не выполнен.
 
-Для снятия blocker нужно получить cloud-init/systemd diagnostics через
-поддерживаемый root/serial доступ, исправить или сделать устойчивее bootstrap,
-затем на новой disposable среде пройти create → timeline →
+Для снятия blocker нужно получить сохранённые on-host cloud-init/systemd
+diagnostics через подтверждённый provider restore или поддерживаемую console,
+развернуть исправленный profile, затем на новой disposable среде пройти
+create → timeline →
 `ready_owner_setup_required` → student launch → degraded/expiry → automatic
 delete и снова подтвердить нулевой provider/DNS baseline.
 

@@ -372,9 +372,15 @@ Environment открывается из конкретного инструме�
 - скачивает установочный артефакт exact release URL;
 - проверяет закреплённый SHA-256;
 - передаёт публичный `N8N_HOST`;
-- запускает installer в non-interactive режиме;
+- запускает installer в non-interactive режиме через отдельный systemd unit,
+  который не зависит от времени жизни `cloud-final` или Vercel deployment;
+- ограничивает число автоматических повторов и общее окно внешнего наблюдения;
+  бесконечные timeout/restart запрещены;
+- повторно использует тот же installer, `.env`, persistent volumes, VPS и IP;
+  успешный marker делает повторный запуск идемпотентным;
 - сохраняет локальные secrets только на VPS по контракту starter kit;
-- записывает bounded результат bootstrap без вывода секретов.
+- атомарно записывает phase, номер попытки и redacted error stage, а bounded log
+  скрывает IP и secret-like значения.
 
 Использование `releases/latest` в production profile запрещено.
 

@@ -44,7 +44,9 @@ Production adapter:
 - резервирует `n8n.neurokurs.ru` и создаёт только owned A record;
 - перед destructive mutation записывает durable marker;
 - отправляет allowlisted `PATCH` того же server ID с Ubuntu 24.04 и exact
-  `starter-kit-v0.1.0` cloud-init;
+  `starter-kit-v0.1.1` cloud-init; bootstrap выполняется отдельным bounded
+  systemd unit, поэтому interruption cloud-final или deployment не превращает
+  установку в невозобновляемый one-shot;
 - после reimage проверяет OS/status, повторно прикрепляет исходный SSH key и
   подтверждает DNS, 80/443, закрытые 5432/5678, TLS, `/healthz`, editor и
   `ready_owner_setup_required`;
