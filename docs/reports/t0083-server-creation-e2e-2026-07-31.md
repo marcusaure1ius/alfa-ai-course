@@ -93,7 +93,7 @@ Durable state после удаления:
   `2b3613a590afa9baba3901177a16d916863761b5ab439795b3871cc9089c990d`;
 - smoke CLI `--help`/guard contract — PASS.
 
-## Production hotfix
+## Production release
 
 Чтобы не включать параллельные незавершённые UI-изменения, production artifact
 собран в отдельном clean worktree от последнего production commit `027007a` с
@@ -109,3 +109,23 @@ Durable state после удаления:
 
 Первоначальный hotfix сделал доступным исправленный порядок preflight. Полный
 fresh-VPS E2E выше теперь отдельно подтверждает production mutation path.
+
+После независимого одобрения UI-задачи `T-0082` выпущен единый production
+release с UI и server fix:
+
+- exact artifact commit:
+  `75d154cfac506ceaf65fa2b5943f2cef9689bc6d`;
+- включённые UI-коммиты: `d6860519cde44d0c86c59a40bdd8321605782bb5`
+  и `df56f64786b679a8bdac469016508ad5009931d7`;
+- включённый server fix:
+  `dad82aa1a12e63ee7af5c34dad18830c0c6eef60`;
+- final Vercel deployment: `dpl_DxGX17scyd6EFk4b866WFTz8LzEG`;
+- target/status: `production / READY`;
+- deployment metadata подтверждает exact commit без `gitDirty`;
+- alias: `https://neurokurs.ru`;
+- post-deploy HTTP: `/login` — `200`, unauthenticated infrastructure preview —
+  `401` fail-closed;
+- production HTML содержит UI-маркеры T-0082: обновлённый login headline,
+  `login-field-enter` и корректный `username` field;
+- Vercel runtime errors за окно проверки: `0`;
+- deployment error/fatal logs: `0`.
