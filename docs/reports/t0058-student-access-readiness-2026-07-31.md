@@ -128,9 +128,31 @@ redacted status/log, повторно запускает тот же bootstrap �
 cloud-config, Bash script и systemd unit отдельно проверены в Ubuntu 24.04 LTS
 x86_64; production readiness из этих локальных проверок не заявляется.
 
+## Provider restore audit 2026-08-01
+
+Владелец отдельно подтвердил восстановление удалённого `n8n-neurokurs`,
+разовый сбор 2 000 ₽, тариф 980 ₽/мес. и немедленное удаление после
+диагностики. Провайдер потребовал пополнить недостающие 505 ₽; после пополнения
+и подтверждения restore история операций зафиксировала четыре списания на
+общую сумму 2 000 ₽. Дополнительные 980 ₽ не оплачивались.
+
+Восстановленный сервер появился в списке действующих, но provider назначил
+только IPv6. Из текущей среды IPv6 route отсутствовал, поэтому существующий SSH
+key нельзя было использовать для подключения. Provider serial console был
+доступен, но требовал интерактивный root-login; пароль не извлекался и не
+передавался агенту. Сохранённые on-host cloud-init/systemd diagnostics получить
+не удалось.
+
+Чтобы остановить дальнейшее потребление, сервер немедленно удалён по ранее
+подтверждённому владельцем сценарию. Проверка provider UI после удаления снова
+показала пустой список действующих VPS; восстановленный ресурс доступен только
+в разделе удалённых. Отчёт и evidence не содержат IP, provider IDs, credentials
+или платёжные реквизиты.
+
 ## Обязательный cleanup
 
-Оба созданных T-0058 стенда удалены через production control plane.
+Оба созданных T-0058 стенда и кратко восстановленный для диагностики
+`n8n-neurokurs` удалены.
 
 - Control plane: обе среды имеют статус «Удалён», IP не назначен, 0 ₽/мес.
 - Provider: список действующих VPS пуст; удалённые тестовые VPS доступны только
@@ -145,14 +167,15 @@ x86_64; production readiness из этих локальных проверок �
 
 ## Решение по lifecycle
 
-T-0058 должна оставаться **blocked**, а не уходить на review: acceptance
-criterion единого production desktop/mobile full-story с готовым student view
-не выполнен.
+Разработка T-0058 завершена на уровне кода и локальных/production-software
+gates, но задача должна оставаться **blocked**, а не уходить на review:
+acceptance criterion единого production desktop/mobile full-story с готовым
+student view не выполнен.
 
-Для снятия blocker нужно получить сохранённые on-host cloud-init/systemd
-diagnostics через подтверждённый provider restore или поддерживаемую console,
-развернуть исправленный profile, затем на новой disposable среде пройти
-create → timeline →
+Для снятия blocker нужен новый явно разрешённый способ production-validation,
+который не повторяет платное восстановление без гарантированного доступа:
+поддерживаемый IPv4/console channel либо другой заранее проверенный disposable
+стенд. Затем требуется развернуть исправленный profile и пройти create → timeline →
 `ready_owner_setup_required` → student launch → degraded/expiry → automatic
 delete и снова подтвердить нулевой provider/DNS baseline.
 
