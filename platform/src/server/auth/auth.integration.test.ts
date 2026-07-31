@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
@@ -767,6 +767,73 @@ describe("durable fake infrastructure lifecycle", () => {
     } finally {
       await secondSql.end();
     }
+  });
+
+  it("cancels a resumable install before reserving cleanup", async () => {
+    const { adminLogin } = await provisionUsers();
+    const create = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Interrupted install cleanup",
+      idempotencyKey: "create-before-interrupted-install-cleanup-01",
+      scenario: "success",
+    });
+    await createEnvironmentWorkflow({
+      operationId: create.accepted.operationId,
+      scenario: "success",
+    });
+    const environment = await sql<{ id: string }[]>`
+      SELECT environment_id AS id
+      FROM operations
+      WHERE id = ${create.accepted.operationId}
+    `;
+    const installOperationId = randomUUID();
+    await sql`
+      INSERT INTO operations (
+        id, environment_id, kind, status, requested_by_user_id,
+        requested_by_session_id, idempotency_key, input_snapshot,
+        started_at, updated_at
+      )
+      VALUES (
+        ${installOperationId}, ${environment[0]!.id}, 'install_environment',
+        'running', ${adminLogin.session.userId}, ${adminLogin.session.sessionId},
+        'interrupted-install-cleanup-01', '{}'::jsonb, now(), now()
+      )
+    `;
+    await sql`
+      INSERT INTO operation_steps (
+        id, operation_id, step_order, kind, logical_key, status,
+        attempt_count, retry_class, updated_at
+      )
+      VALUES (
+        ${randomUUID()}, ${installOperationId}, 50, 'bootstrapping',
+        'bootstrapping', 'failed', 20, 'transient',
+        now() - interval '3 minutes'
+      )
+    `;
+
+    const deletion = await reserveDeleteOperation(sql, adminLogin.session, {
+      environmentId: environment[0]!.id,
+      confirmationName: "Interrupted install cleanup",
+      confirmedLoss: true,
+      idempotencyKey: "delete-after-interrupted-install-01",
+      scenario: "success",
+    });
+    const rows = await sql<
+      { install_status: string; delete_status: string; environment_status: string }[]
+    >`
+      SELECT install.status AS install_status,
+        deletion.status AS delete_status,
+        environments.status AS environment_status
+      FROM operations AS install
+      JOIN operations AS deletion
+        ON deletion.id = ${deletion.accepted.operationId}
+      JOIN environments ON environments.id = install.environment_id
+      WHERE install.id = ${installOperationId}
+    `;
+    expect(rows[0]).toEqual({
+      install_status: "cancelled",
+      delete_status: "queued",
+      environment_status: "deleting",
+    });
   });
 
   it.each(["dns_failure", "tls_failure"] as const)(
