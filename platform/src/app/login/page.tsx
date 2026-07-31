@@ -16,16 +16,13 @@ export default async function LoginPage() {
         <section className="flex min-h-[25rem] flex-col px-6 py-7 sm:px-10 sm:py-9 lg:min-h-0 lg:p-0">
           <NeurokursBrand />
           <div className="my-auto max-w-[43rem] py-14 lg:pr-12">
-            <h1 className="font-display text-[clamp(2.8rem,5.5vw,5.5rem)] leading-[0.98] tracking-[-0.04em]">
-              Сначала понять.
-              <br />
-              Потом{" "}
-              <span className="relative inline-block whitespace-nowrap">
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-x-[-0.08em] bottom-[0.02em] h-[0.54em] rounded-full bg-highlight"
-                />
-                <span className="relative">сделать.</span>
+            <h1 className="font-display text-[clamp(2.15rem,9.2vw,4.6rem)] leading-[1.02] tracking-[-0.04em]">
+              <span className="block whitespace-nowrap">Сначала понять.</span>
+              <span className="mt-[0.08em] block whitespace-nowrap">
+                Потом{" "}
+                <span className="-mx-[0.08em] inline-block rounded-[0.24em] bg-highlight px-[0.08em] py-[0.03em] leading-[0.92]">
+                  сделать.
+                </span>
               </span>
             </h1>
             <p className="mt-8 max-w-[36rem] text-balance text-lg leading-7 text-muted-foreground sm:text-xl sm:leading-8">

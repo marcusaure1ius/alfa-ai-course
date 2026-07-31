@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BookOpenText,
   CircleHelp,
   ListTree,
   Menu,
@@ -97,25 +96,16 @@ export function StudentNavigation({
           );
         })}
       </div>
-      <div className="mt-auto space-y-3 border-t p-4">
-        <div className="flex items-start gap-3 rounded-lg bg-brand-soft p-3">
-          <BookOpenText
-            className="mt-0.5 size-4 shrink-0 text-brand"
-            aria-hidden="true"
-          />
-          <p className="text-sm leading-5 text-muted-foreground">
-            Материалы и инструменты курса собраны здесь.
-          </p>
-        </div>
-        {mobile && email ? (
+      {mobile && email ? (
+        <div className="mt-auto border-t p-4">
           <div>
             <p className="truncate px-2 pb-1 text-xs text-muted-foreground">
               {email}
             </p>
             <LogoutButton />
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </nav>
   );
 }

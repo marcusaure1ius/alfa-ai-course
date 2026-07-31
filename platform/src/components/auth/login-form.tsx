@@ -16,6 +16,7 @@ export function LoginForm({ inverse = false }: { inverse?: boolean }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [credentialsUnlocked, setCredentialsUnlocked] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,28 +70,34 @@ export function LoginForm({ inverse = false }: { inverse?: boolean }) {
     <form
       className={inverse ? "grid gap-5 text-white" : "grid gap-5"}
       onSubmit={submit}
+      onFocusCapture={() => setCredentialsUnlocked(true)}
+      onPointerDownCapture={() => setCredentialsUnlocked(true)}
       aria-busy={pending}
     >
-      <label className="grid gap-2 text-sm font-medium">
+      <label className="login-field-enter grid gap-2 text-sm font-medium">
         Email
         <Input
           type="email"
+          name="username"
           autoComplete="username"
           placeholder="name@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          readOnly={!credentialsUnlocked}
           disabled={pending}
           required
         />
       </label>
-      <label className="grid gap-2 text-sm font-medium">
+      <label className="login-field-enter login-field-enter-delay grid gap-2 text-sm font-medium">
         Пароль
         <Input
           type="password"
+          name="password"
           autoComplete="current-password"
           placeholder="Введите пароль"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
+          readOnly={!credentialsUnlocked}
           disabled={pending}
           minLength={12}
           required

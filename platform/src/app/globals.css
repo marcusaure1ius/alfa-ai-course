@@ -222,6 +222,31 @@
     letter-spacing: -0.035em;
   }
 
+  @keyframes login-field-enter {
+    from {
+      opacity: 0;
+      transform: translateY(0.625rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .login-field-enter {
+    animation: login-field-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .login-field-enter-delay {
+    animation-delay: 90ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .login-field-enter {
+      animation: none;
+    }
+  }
+
   .text-page-title {
     font-size: 2rem;
     line-height: 1.1875;

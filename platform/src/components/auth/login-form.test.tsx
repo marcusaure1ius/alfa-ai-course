@@ -37,6 +37,30 @@ function fillCredentials() {
 }
 
 describe("LoginForm", () => {
+  it("keeps entered credentials readable on the inverse login surface", () => {
+    render(<LoginForm inverse />);
+
+    for (const label of ["Email", "Пароль"]) {
+      const input = screen.getByLabelText(label);
+      expect(input.className).toContain("font-sans");
+      expect(input.className).toContain("text-foreground");
+      expect(input.className).toContain("caret-foreground");
+    }
+  });
+
+  it("defers the protected credential preview until form interaction", () => {
+    render(<LoginForm inverse />);
+
+    const email = screen.getByLabelText("Email") as HTMLInputElement;
+    const password = screen.getByLabelText("Пароль") as HTMLInputElement;
+    expect(email.readOnly).toBe(true);
+    expect(password.readOnly).toBe(true);
+
+    fireEvent.focus(email);
+    expect(email.readOnly).toBe(false);
+    expect(password.readOnly).toBe(false);
+  });
+
   it.each([false, true])(
     "has no automated accessibility violations (inverse=%s)",
     async (inverse) => {
