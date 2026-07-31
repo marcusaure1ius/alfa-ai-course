@@ -74,6 +74,23 @@ fresh-VPS PASS. Поэтому новые платные mutation не выпо�
   `c4258b8f53f5a741b325613f63918490625b549e338cc9df979a98b9c7ed606d`;
 - smoke CLI `--help`/guard contract — PASS.
 
+## Production hotfix
+
+Чтобы не включать параллельные незавершённые UI-изменения, production artifact
+собран в отдельном clean worktree от последнего production commit `027007a` с
+единственным cherry-pick исправления T-0083.
+
+- artifact commit: `96c429d9b25ac7273f714a6a647fee2b595504bd`;
+- Vercel deployment: `dpl_CoPwJKSf8dkZdhimChCnVAV1w2dw`;
+- target/status: `production / READY`;
+- alias: `https://neurokurs.ru`;
+- post-deploy HTTP: `/login` — `200`, unauthenticated infrastructure preview —
+  `401` fail-closed;
+- post-deploy Vercel error/fatal log scan: `0`.
+
+Deployment делает доступным исправленный порядок preflight. Он не является
+fresh-VPS E2E и не снимает funding blocker.
+
 ## Условие продолжения
 
 Для полного E2E нужен balance, достаточный для решения Timeweb по самому
