@@ -12,7 +12,10 @@ export type FakeScenario =
   | "backup_unavailable"
   | "partial_cleanup";
 
-export type OperationKind = "create_environment" | "delete_environment";
+export type OperationKind =
+  | "create_environment"
+  | "install_environment"
+  | "delete_environment";
 export type OperationStatus =
   | "queued"
   | "running"
@@ -35,7 +38,7 @@ export type MutationResourceKind = "server" | "public_ip" | "dns_record";
 export type GuardedMutationCommand = Readonly<{
   version: typeof MUTATION_COMMAND_VERSION;
   operationId: string;
-  action: "create" | "delete";
+  action: "create" | "install" | "delete";
   resourceKind: MutationResourceKind;
 }>;
 

@@ -10,6 +10,7 @@ import {
 } from "../operations/repository";
 import { createEnvironmentWorkflow } from "../../workflows/infrastructure/create";
 import { deleteEnvironmentWorkflow } from "../../workflows/infrastructure/delete";
+import { installEnvironmentWorkflow } from "../../workflows/infrastructure/install";
 
 export const CRON_RECONCILIATION_VERSION = "cron-reconcile-v1" as const;
 
@@ -28,20 +29,16 @@ export async function reconcileOrphanedFakeWorkflows(): Promise<CronReconciliati
 
   for (const candidate of candidates) {
     try {
+      const command = {
+        operationId: candidate.operationId,
+        scenario: candidate.scenario,
+      };
       const run =
         candidate.kind === "create_environment"
-          ? await start(createEnvironmentWorkflow, [
-              {
-                operationId: candidate.operationId,
-                scenario: candidate.scenario,
-              },
-            ])
-          : await start(deleteEnvironmentWorkflow, [
-              {
-                operationId: candidate.operationId,
-                scenario: candidate.scenario,
-              },
-            ]);
+          ? await start(createEnvironmentWorkflow, [command])
+          : candidate.kind === "install_environment"
+            ? await start(installEnvironmentWorkflow, [command])
+            : await start(deleteEnvironmentWorkflow, [command]);
       await attachReconciledWorkflowRun(
         sql,
         candidate.operationId,

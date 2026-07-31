@@ -10,6 +10,7 @@ import { MUTATION_COMMAND_VERSION } from "./contracts";
 import {
   authorizeMutationStep,
   reserveCreateOperation,
+  resumeInterruptedInstallOperation,
 } from "./repository";
 
 const databaseUrl =
@@ -91,6 +92,90 @@ describe("guarded Timeweb mutation authorization", () => {
     ).rejects.toMatchObject({
       code: "STALE_REAUTH",
     });
+  });
+
+  it("keeps an already-authorized durable operation running after the interactive window expires", async () => {
+    const operationId = await createOperation();
+    await sql`
+      UPDATE operations SET status = 'running' WHERE id = ${operationId}
+    `;
+    await sql`
+      UPDATE auth_sessions
+      SET reauthenticated_at = now() - interval '11 minutes',
+          revoked_at = now()
+      WHERE id = ${actor.sessionId}
+    `;
+
+    await expect(
+      authorizeMutationStep(sql, createCommand(operationId)),
+    ).resolves.toMatchObject({
+      environmentId: expect.any(String),
+    });
+  });
+
+  it("resumes only a released transient install step without creating a new operation", async () => {
+    const createOperationId = await createOperation();
+    const environment = await sql<{ id: string }[]>`
+      SELECT environment_id AS id
+      FROM operations
+      WHERE id = ${createOperationId}
+    `;
+    const environmentId = environment[0]!.id;
+    await sql`
+      UPDATE operations SET status = 'succeeded' WHERE id = ${createOperationId}
+    `;
+    await sql`
+      UPDATE environments SET status = 'active' WHERE id = ${environmentId}
+    `;
+    const installOperationId = randomUUID();
+    await sql`
+      INSERT INTO operations (
+        id, environment_id, kind, status, requested_by_user_id,
+        requested_by_session_id, idempotency_key, input_snapshot,
+        workflow_run_id
+      )
+      VALUES (
+        ${installOperationId}, ${environmentId}, 'install_environment',
+        'running', ${actor.userId}, ${actor.sessionId},
+        ${`resume-install-${randomUUID()}`},
+        ${sql.json({
+          scenario: "success",
+          confirmed: true,
+          confirmedName: "Основная среда",
+        })},
+        'old-failed-workflow-run'
+      )
+    `;
+    await sql`
+      INSERT INTO operation_steps (
+        id, operation_id, step_order, kind, logical_key, status,
+        attempt_count, retry_class, updated_at
+      )
+      VALUES (
+        ${randomUUID()}, ${installOperationId}, 40, 'provider_installing',
+        'provider_installing', 'failed', 3, 'transient',
+        now() - interval '3 minutes'
+      )
+    `;
+
+    await expect(
+      resumeInterruptedInstallOperation(sql, actor, {
+        environmentId,
+        confirmationName: "Основная среда",
+        confirmedLoss: true,
+      }),
+    ).resolves.toMatchObject({
+      accepted: { operationId: installOperationId },
+      resumed: true,
+    });
+    await expect(
+      sql<{ count: number; workflow_run_id: string | null }[]>`
+        SELECT count(*) OVER ()::int AS count, workflow_run_id
+        FROM operations
+        WHERE environment_id = ${environmentId}
+          AND kind = 'install_environment'
+      `,
+    ).resolves.toEqual([{ count: 1, workflow_run_id: null }]);
   });
 
   it("requires a fresh session-bound MFA proof before a production provider call", async () => {

@@ -54,6 +54,12 @@ export class FakeTimewebReadAdapter implements TimewebReadAdapter {
           name: "Ubuntu",
           version: "26.04",
         },
+        {
+          id: "201",
+          family: "linux",
+          name: "Ubuntu",
+          version: "24.04",
+        },
       ],
       locations: [
         {

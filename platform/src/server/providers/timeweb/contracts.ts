@@ -224,6 +224,22 @@ export type TimewebUpdateServerInput = Readonly<{
   name: string;
 }>;
 
+export type TimewebInstallServerInput = Readonly<{
+  resource: OwnedProviderResource & Readonly<{ kind: "server" }>;
+  operatingSystemId: number;
+  sshKeyId: number;
+  cloudInit: string;
+}>;
+
+export type TimewebInstallationReconciliation =
+  | Readonly<{ state: "absent" }>
+  | Readonly<{
+      state: "present";
+      resource: OwnedProviderResource & Readonly<{ kind: "server" }>;
+      status: TimewebServerStatus;
+      operatingSystemId: number | null;
+    }>;
+
 export type TimewebServerReconciliation =
   | Readonly<{ state: "absent" }>
   | Readonly<{
@@ -257,6 +273,14 @@ export interface TimewebMutationAdapter {
     settings: TimewebAutoBackupSettings,
   ): Promise<void>;
   updateServer(input: TimewebUpdateServerInput): Promise<void>;
+  installServer(input: TimewebInstallServerInput): Promise<void>;
+  ensureServerSshKey(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+    sshKeyId: number,
+  ): Promise<void>;
+  reconcileInstallation(
+    resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
+  ): Promise<TimewebInstallationReconciliation>;
   rebootServer(
     resource: OwnedProviderResource & Readonly<{ kind: "server" }>,
   ): Promise<void>;

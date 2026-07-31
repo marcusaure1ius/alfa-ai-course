@@ -5,6 +5,7 @@ import { getRun, start } from "@workflow/core/runtime";
 
 import { POST as createEndpoint } from "@/app/api/admin/infrastructure/environments/route";
 import { DELETE as deleteEndpoint } from "@/app/api/admin/infrastructure/environments/[id]/route";
+import { POST as installEndpoint } from "@/app/api/admin/infrastructure/environments/[id]/install-n8n/route";
 import type { AuthSession } from "@/server/auth/service";
 import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/server/auth/config";
 import { hashOpaqueToken } from "@/server/auth/crypto";
@@ -137,6 +138,28 @@ describe("Vercel Workflow orchestration", () => {
       },
     );
     expect(missingLossConfirmation.status).toBe(400);
+    const installProxyResponse = await installEndpoint(
+      new Request(
+        "http://localhost:3000/api/admin/infrastructure/environments/11111111-1111-4111-8111-111111111111/install-n8n",
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            confirmationName: "API среда",
+            confirmedLoss: true,
+            idempotencyKey: "proxy-install-key-0001",
+            providerResourceId: "54321",
+            cloudInit: "#!/bin/sh",
+          }),
+        },
+      ),
+      {
+        params: Promise.resolve({
+          id: "11111111-1111-4111-8111-111111111111",
+        }),
+      },
+    );
+    expect(installProxyResponse.status).toBe(400);
     expect(
       await sql<{ count: number }[]>`
         SELECT count(*)::int AS count FROM operations
@@ -215,5 +238,170 @@ describe("Vercel Workflow orchestration", () => {
       GROUP BY operations.id
     `;
     expect(rows[0]).toEqual({ servers: 1, attempts: 2 });
+  });
+
+  it("installs n8n as a separate idempotent operation on the same VPS", async () => {
+    const csrf = issueCsrfToken();
+    const headers = {
+      cookie: `${CSRF_COOKIE_NAME}=${csrf.nonce}; ${SESSION_COOKIE_NAME}=${sessionToken}`,
+      origin: "http://localhost:3000",
+      "content-type": "application/json",
+      "x-csrf-token": csrf.token,
+    };
+    const createResponse = await createEndpoint(
+      new Request("http://localhost:3000/api/admin/infrastructure/environments", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: "Install среда",
+          idempotencyKey: "install-create-idempotency-01",
+          simulation: "success",
+          deployment: fakeDeployment,
+        }),
+      }),
+    );
+    expect(createResponse.status, await createResponse.clone().text()).toBe(202);
+    const createBody = (await createResponse.json()) as { operationId: string };
+    const createRows = await sql<
+      { workflow_run_id: string; environment_id: string }[]
+    >`
+      SELECT workflow_run_id, environment_id
+      FROM operations
+      WHERE id = ${createBody.operationId}
+    `;
+    await expect(
+      getRun(createRows[0]!.workflow_run_id).returnValue,
+    ).resolves.toEqual({ status: "active" });
+    const environmentId = createRows[0]!.environment_id;
+    const installRequest = () =>
+      new Request(
+        `http://localhost:3000/api/admin/infrastructure/environments/${environmentId}/install-n8n`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            confirmationName: "Install среда",
+            confirmedLoss: true,
+            idempotencyKey: "install-operation-idempotency-01",
+            simulation: "success",
+          }),
+        },
+      );
+    const first = await installEndpoint(installRequest(), {
+      params: Promise.resolve({ id: environmentId }),
+    });
+    const second = await installEndpoint(installRequest(), {
+      params: Promise.resolve({ id: environmentId }),
+    });
+    expect(first.status, await first.clone().text()).toBe(202);
+    expect(second.status, await second.clone().text()).toBe(202);
+    const firstBody = (await first.json()) as { operationId: string };
+    const secondBody = (await second.json()) as { operationId: string };
+    expect(secondBody.operationId).toBe(firstBody.operationId);
+
+    const installRows = await sql<{ workflow_run_id: string }[]>`
+      SELECT workflow_run_id FROM operations WHERE id = ${firstBody.operationId}
+    `;
+    await expect(
+      getRun(installRows[0]!.workflow_run_id).returnValue,
+    ).resolves.toEqual({ status: "ready_owner_setup_required" });
+
+    const result = await sql<
+      {
+        servers: number;
+        public_ips: number;
+        dns_records: number;
+        installations: number;
+        install_calls: number;
+        public_url: string | null;
+      }[]
+    >`
+      SELECT
+        count(*) FILTER (
+          WHERE provider_resources.resource_kind = 'server'
+            AND provider_resources.lifecycle_status <> 'deleted'
+        )::int AS servers,
+        count(*) FILTER (
+          WHERE provider_resources.resource_kind = 'public_ip'
+            AND provider_resources.lifecycle_status <> 'deleted'
+        )::int AS public_ips,
+        count(*) FILTER (
+          WHERE provider_resources.resource_kind = 'dns_record'
+            AND provider_resources.lifecycle_status <> 'deleted'
+        )::int AS dns_records,
+        (SELECT count(*)::int FROM software_installations
+          WHERE environment_id = ${environmentId}) AS installations,
+        (SELECT count(*)::int FROM fake_provider_events
+          WHERE operation_id = ${firstBody.operationId}
+            AND event_key = 'install_server') AS install_calls,
+        environments.public_url
+      FROM environments
+      LEFT JOIN provider_resources
+        ON provider_resources.environment_id = environments.id
+      WHERE environments.id = ${environmentId}
+      GROUP BY environments.id
+    `;
+    expect(result[0]).toEqual({
+      servers: 1,
+      public_ips: 1,
+      dns_records: 1,
+      installations: 1,
+      install_calls: 1,
+      public_url: "https://n8n.neurokurs.ru",
+    });
+
+    const deleteResponse = await deleteEndpoint(
+      new Request(
+        `http://localhost:3000/api/admin/infrastructure/environments/${environmentId}`,
+        {
+          method: "DELETE",
+          headers,
+          body: JSON.stringify({
+            confirmationName: "Install среда",
+            confirmedLoss: true,
+            idempotencyKey: "install-cleanup-idempotency-01",
+            simulation: "success",
+          }),
+        },
+      ),
+      { params: Promise.resolve({ id: environmentId }) },
+    );
+    expect(
+      deleteResponse.status,
+      await deleteResponse.clone().text(),
+    ).toBe(202);
+    const deleteBody = (await deleteResponse.json()) as { operationId: string };
+    const deleteRows = await sql<{ workflow_run_id: string }[]>`
+      SELECT workflow_run_id FROM operations WHERE id = ${deleteBody.operationId}
+    `;
+    await expect(
+      getRun(deleteRows[0]!.workflow_run_id).returnValue,
+    ).resolves.toEqual({ status: "deleted" });
+    await expect(
+      sql<
+        {
+          owned_resources: number;
+          installation_status: string;
+          public_url: string | null;
+        }[]
+      >`
+        SELECT
+          (SELECT count(*)::int FROM provider_resources
+            WHERE environment_id = ${environmentId}
+              AND lifecycle_status <> 'deleted') AS owned_resources,
+          software_installations.status AS installation_status,
+          environments.public_url
+        FROM environments
+        JOIN software_installations
+          ON software_installations.environment_id = environments.id
+        WHERE environments.id = ${environmentId}
+      `,
+    ).resolves.toEqual([
+      {
+        owned_resources: 0,
+        installation_status: "deleted",
+        public_url: null,
+      },
+    ]);
   });
 });
