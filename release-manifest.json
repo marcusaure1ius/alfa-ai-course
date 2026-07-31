@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "assessmentDate": "2026-07-31",
+  "release": {
+    "tag": "v0.1.1",
+    "channel": "stable",
+    "url": "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/tag/v0.1.1",
+    "publicRepository": "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit",
+    "releaseTargetCommit": "aabeb82dd8254b15d44e1cfbea0f7389a47ff8e9",
+    "embeddedSourceCommit": "68063340c8113d98586f71704c30adc6d1f0eb3a",
+    "embeddedSourceTree": "6b135a83a78470d6430df7d3e85670587391abb4"
+  },
+  "readiness": {
+    "technicalArtifact": "verified",
+    "controlledPilot": "go-with-conditions",
+    "completeMvpClaim": "no-go",
+    "blockingCriterion": "MVP-13"
+  },
+  "assets": {
+    "installer": {
+      "name": "install.sh",
+      "sha256": "34eae99bfcf17439bb079a9355cd3697aca8a7df306f7095ddda51f9ac52d941",
+      "bytes": 1191474
+    },
+    "checksumSidecar": {
+      "name": "install.sh.sha256",
+      "sha256": "91898e77c8b30704a5675fb308d7b5b65bab2441b4ecc975a1dce827aa702c29",
+      "bytes": 77
+    },
+    "embeddedArchive": {
+      "sha256": "6bd12fd976440eea398196bedc4d1d80d878212026bae02064a2cb562d773701",
+      "fileCount": 169,
+      "sortedFileChecksumManifestSha256": "e6109aab10547dfdf1e5b72881e0b3b28329e61aeb9939a1b92cd73e4bb1e048"
+    }
+  },
+  "pins": {
+    "n8n": "docker.n8n.io/n8nio/n8n:2.29.10",
+    "postgresql": "postgres:17.10-bookworm",
+    "caddy": "caddy:2.11.4-alpine",
+    "dockerEngineApt": "5:29.6.1-1~ubuntu.24.04~noble",
+    "dockerComposePluginApt": "5.3.1-1~ubuntu.24.04~noble",
+    "updateSourceN8n": "docker.n8n.io/n8nio/n8n:2.29.9",
+    "updateTargetN8n": "docker.n8n.io/n8nio/n8n:2.29.10"
+  },
+  "resolvedDigestEvidence": {
+    "scope": "disposable linux/amd64 destructive rehearsal 2026-07-14; tags remain the canonical pins",
+    "n8n2299": "sha256:e0d9593724e36d2584a1686148155e881233b38ae1833101c97c6463c0d36711",
+    "n8n22910": "sha256:9cb60554716a0ab11a966e79ed65171e1bbf00b6d262ba12aa119bba22eb6000",
+    "postgresql1710Bookworm": "sha256:cacdc53e3b6e247307efda28b8bf9d96155249c527544ed8efff7e6427446fdb",
+    "caddy2114Alpine": "sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648"
+  },
+  "artifactBoundary": {
+    "secretScan": "pass: 166 text files, 0 findings",
+    "excluded": [
+      "runtime .env",
+      "private keys and credentials",
+      "database dumps and backups",
+      "test-results and logs",
+      "Docker volumes and other runtime data",
+      ".git metadata",
+      "Course Control Plane platform/ product"
+    ]
+  }
+}

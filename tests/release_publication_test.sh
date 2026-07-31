@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 STABLE_URL='https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh'
-VERSIONED_URL='https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.0/install.sh'
+VERSIONED_URL='https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.1/install.sh'
 COUNT=0
 
 ok() { COUNT=$((COUNT + 1)); printf 'ok %d - %s\n' "$COUNT" "$1"; }
@@ -28,7 +28,7 @@ for file in \
   grep -Fq "$STABLE_URL" "$file" || fail "stable install URL missing: ${file#"$ROOT/"}"
 done
 grep -Fq "$VERSIONED_URL" "$ROOT/docs/release-publication.md" \
-  || fail 'immutable v0.1.0 URL is missing'
+  || fail 'immutable v0.1.1 URL is missing'
 ok 'stable and immutable GitHub Release URLs are documented'
 
 if git -C "$ROOT" grep -nE 'RELEASE-HOST\.example|REAL-STABLE-HOST' -- '*.md'; then
