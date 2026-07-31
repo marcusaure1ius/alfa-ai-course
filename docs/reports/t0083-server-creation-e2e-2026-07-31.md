@@ -2,8 +2,8 @@
 
 - Дата проверки: 2026-07-31
 - Scope: текущий `timeweb-provisioning-v3` plain-VPS configurator
-- Итог на момент отчёта: **PARTIAL / provider funding blocker**
-- Новые Timeweb mutation: **не выполнялись**
+- Итог: **PASS**
+- Disposable Timeweb mutation: **выполнены и полностью удалены**
 
 ## Подтверждённые факты
 
@@ -17,7 +17,7 @@ Live read-only preflight с локальным production-shaped adapter:
 - SSH keys: `2`;
 - Ubuntu: `22.04`, `24.04`, `26.04`;
 - floating IPv4: `180 ₽/месяц`;
-- balance: `503,78 ₽`;
+- balance после пополнения: `1003,53 ₽`;
 - текущий provider `monthly_fee`: `181 ₽`.
 
 Нормализованный configurator вернул по пять актуальных Premium NVMe shapes для
@@ -49,29 +49,48 @@ Regression integration test выполняет production-shaped initial preflig
 mocked Timeweb contract, доказывает ровно один IP mutation и наличие exact
 active owned resource в durable state.
 
-## Почему реальная mutation не запускалась
+## Реальный disposable E2E
 
-Предыдущие owner-authorized попытки 2026-07-30 уже доказали, что Timeweb
-завершает создание как `no_paid`, когда account не покрывает актуальную
-стоимость. Текущий минимальный поддержанный plan `980 ₽/месяц` больше live
-balance `503,78 ₽`; кроме того, account уже показывает `monthly_fee 181 ₽`.
+После owner-authorized пополнения выполнен production-shaped smoke с отдельной
+пустой PostgreSQL database:
 
-Запуск ещё одной заведомо неуспешной попытки мог создать тарифицируемый IPv4,
-снова задействовать daily IP limit и потребовать cleanup, но не мог дать
-fresh-VPS PASS. Поэтому новые платные mutation не выполнялись. Это внешнее
-ограничение account, а не успешное E2E evidence.
+1. live preflight выбрал минимальный Moscow Premium NVMe plan, Ubuntu 26.04
+   x86_64 и отдельный публичный IPv4 — `980 ₽/месяц`;
+2. production MFA login и fresh re-auth прошли;
+3. create operation создала один IPv4 и один VPS;
+4. reconcile дождался provider status `on`, подтвердил exact IPv4 binding и
+   применение backup policy;
+5. повтор create с тем же idempotency key вернул исходную operation и не
+   создал дубль;
+6. delete operation удалила VPS и созданный IPv4;
+7. live provider catalog вернулся к baseline `0 VPS / 1 исходный IP`.
+
+Durable state после удаления:
+
+- environment: `deleted`;
+- active owned resources: `0`;
+- server resource: `deleted`;
+- public IP resource: `deleted`;
+- create: `succeeded`, 5/5 шагов, около 20,4 секунды;
+- delete: `succeeded`, 7/7 шагов, около 2,3 секунды.
+
+Временная smoke database
+`course_platform_timeweb_smoke_20260731_0834` удалена после фиксации
+агрегированного evidence. Provider resource IDs, IP-адрес и credentials в
+отчёт и logs не включены.
 
 ## Выполненные проверки
 
 - live read-only Timeweb catalog/preflight — PASS;
+- disposable create/reconcile/delete и возврат provider baseline — PASS;
 - targeted production initial-preflight regression — PASS;
-- platform quality — PASS: ESLint, TypeScript, 26 test files / 105 tests,
+- platform quality — PASS: ESLint, TypeScript, 28 test files / 110 tests,
   Next.js 16.2.12 production build;
 - integration suite — PASS: 6 files / 47 tests;
 - Workflow suite — PASS: 1 file / 3 tests;
 - repository `make quality` — PASS, `QUALITY_FAILURES=0`, artifact
-  `test-results/quality/20260731T075904Z-23596`, manifest SHA-256
-  `c4258b8f53f5a741b325613f63918490625b549e338cc9df979a98b9c7ed606d`;
+  `test-results/quality/20260731T083411Z-75350`, manifest SHA-256
+  `2b3613a590afa9baba3901177a16d916863761b5ab439795b3871cc9089c990d`;
 - smoke CLI `--help`/guard contract — PASS.
 
 ## Production hotfix
@@ -88,20 +107,5 @@ fresh-VPS PASS. Поэтому новые платные mutation не выпо�
   `401` fail-closed;
 - post-deploy Vercel error/fatal log scan: `0`.
 
-Deployment делает доступным исправленный порядок preflight. Он не является
-fresh-VPS E2E и не снимает funding blocker.
-
-## Условие продолжения
-
-Для полного E2E нужен balance, достаточный для решения Timeweb по самому
-дешёвому поддержанному plan, и сброшенный daily public-IP limit. После этого
-запускается:
-
-```bash
-cd platform
-npm run smoke:timeweb-plain-vps -- --confirm-disposable-smoke
-```
-
-PASS требует реальный status `on`, exact IPv4 binding, применённую backup
-policy, idempotency replay, successful delete и возврат live provider catalog к
-baseline `0 VPS / 1 исходный IP`.
+Первоначальный hotfix сделал доступным исправленный порядок preflight. Полный
+fresh-VPS E2E выше теперь отдельно подтверждает production mutation path.
