@@ -945,6 +945,60 @@ describe("durable fake infrastructure lifecycle", () => {
     expect(rows[0]).toEqual({ status: "cleanup_required", active_ips: 1 });
   });
 
+  it("creates a new environment after deletion instead of restoring the tombstone", async () => {
+    const { adminLogin } = await provisionUsers();
+    const first = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Первая среда",
+      idempotencyKey: "create-before-terminal-delete-01",
+      scenario: "success",
+    });
+    await createEnvironmentWorkflow({
+      operationId: first.accepted.operationId,
+      scenario: "success",
+    });
+    const firstEnvironment = await sql<{ id: string }[]>`
+      SELECT environment_id AS id
+      FROM operations
+      WHERE id = ${first.accepted.operationId}
+    `;
+    const deletion = await reserveDeleteOperation(sql, adminLogin.session, {
+      environmentId: firstEnvironment[0]!.id,
+      confirmationName: "Первая среда",
+      confirmedLoss: true,
+      idempotencyKey: "terminal-delete-01",
+      scenario: "success",
+    });
+    await expect(
+      deleteEnvironmentWorkflow({
+        operationId: deletion.accepted.operationId,
+        scenario: "success",
+      }),
+    ).resolves.toEqual({ status: "deleted" });
+
+    const second = await reserveCreateOperation(sql, adminLogin.session, {
+      name: "Новая среда",
+      idempotencyKey: "create-after-terminal-delete-02",
+      scenario: "success",
+    });
+    const secondEnvironment = await sql<{ id: string }[]>`
+      SELECT environment_id AS id
+      FROM operations
+      WHERE id = ${second.accepted.operationId}
+    `;
+    const states = await sql<{ id: string; status: string }[]>`
+      SELECT id, status
+      FROM environments
+      WHERE id IN (${firstEnvironment[0]!.id}, ${secondEnvironment[0]!.id})
+      ORDER BY name
+    `;
+
+    expect(secondEnvironment[0]!.id).not.toBe(firstEnvironment[0]!.id);
+    expect(states).toEqual([
+      { id: secondEnvironment[0]!.id, status: "creating" },
+      { id: firstEnvironment[0]!.id, status: "deleted" },
+    ]);
+  });
+
   it("constructs a production delete adapter without a create provider plan", async () => {
     const { adminLogin } = await provisionUsers();
     const create = await reserveCreateOperation(sql, adminLogin.session, {

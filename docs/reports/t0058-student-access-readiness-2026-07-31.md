@@ -34,14 +34,18 @@
 - Удаление среды после прерванной установки сначала отменяет resumable install,
   затем ставит cleanup operation. Это убирает конфликт двух активных mutations
   и позволяет штатно очистить зависшую среду.
+- `deleted` является терминальным состоянием: restore/install/resume для
+  tombstone отсутствуют, а следующий запуск создаёт новый environment с новым
+  ID.
 
 ## Проверки кода
 
 - ESLint и TypeScript — PASS.
-- Unit/accessibility tests — PASS: 33 files / 133 tests.
+- Unit/accessibility tests — PASS: 33 files / 135 tests.
 - `npm run build` — PASS: Next.js 16.2.12, 38 static pages сгенерированы.
-- `npm run test:integration` — PASS: 7 files / 55 tests, включая полный
-  auth/student contract и cleanup после прерванной установки.
+- `npm run test:integration` — PASS: 7 files / 56 tests, включая полный
+  auth/student contract, cleanup после прерванной установки и терминальный
+  delete → fresh create lifecycle.
 - `npm run test:workflow` — PASS: 1 file / 4 tests.
 - `bash tests/run_static_tests.sh` — PASS: 25 root contract suites.
 - Secret scan — PASS: 455 text files, 0 findings.
@@ -98,7 +102,8 @@ student launch URL, owner setup, HTTPS/health и всей цепочки до re
 - публичный installer `v0.1.0` повторно скачан и совпал с закреплённым SHA-256;
   verify-only завершился без системных изменений.
 
-Code-level диагностика выявила два конкретных дефекта recovery-контракта:
+Code-level диагностика выявила два конкретных дефекта resume-контракта ещё
+существующей установки:
 
 1. `bootstrapping` наблюдался примерно пять минут, хотя один только bounded
    network wait допускает 20 минут, а полный installer — до 45 минут. Workflow
@@ -128,7 +133,7 @@ redacted status/log, повторно запускает тот же bootstrap �
 cloud-config, Bash script и systemd unit отдельно проверены в Ubuntu 24.04 LTS
 x86_64; production readiness из этих локальных проверок не заявляется.
 
-## Provider restore audit 2026-08-01
+## Исторический provider restore incident 2026-08-01
 
 Владелец отдельно подтвердил восстановление удалённого `n8n-neurokurs`,
 разовый сбор 2 000 ₽, тариф 980 ₽/мес. и немедленное удаление после
@@ -149,6 +154,12 @@ key нельзя было использовать для подключения
 в разделе удалённых. Отчёт и evidence не содержат IP, provider IDs, credentials
 или платёжные реквизиты.
 
+После этого инцидента владелец зафиксировал терминальную продуктовую политику:
+удалённый VPS не восстанавливается. Эта разовая provider-операция остаётся в
+отчёте только как финансовый и операционный факт и не является поддерживаемым
+сценарием Neurokurs. Любая следующая проверка начинается с новой disposable
+среды, созданной control plane.
+
 ## Обязательный cleanup
 
 Оба созданных T-0058 стенда и кратко восстановленный для диагностики
@@ -156,7 +167,7 @@ key нельзя было использовать для подключения
 
 - Control plane: обе среды имеют статус «Удалён», IP не назначен, 0 ₽/мес.
 - Provider: список действующих VPS пуст; удалённые тестовые VPS доступны только
-  в восстановительном окне провайдера.
+  как исторические записи провайдера и не будут восстанавливаться.
 - DNS: A-записей `n8n.neurokurs.ru` — 0.
 - Не связанные с T-0058 существующие provider resources не изменялись.
 
@@ -172,10 +183,10 @@ gates, но задача должна оставаться **blocked**, а не 
 acceptance criterion единого production desktop/mobile full-story с готовым
 student view не выполнен.
 
-Для снятия blocker нужен новый явно разрешённый способ production-validation,
-который не повторяет платное восстановление без гарантированного доступа:
-поддерживаемый IPv4/console channel либо другой заранее проверенный disposable
-стенд. Затем требуется развернуть исправленный profile и пройти create → timeline →
+Для снятия blocker нужен один новый disposable VPS, созданный control plane;
+provider restore удалённого ресурса запрещён. Перед созданием нужно подтвердить
+поддерживаемый IPv4/console channel. Затем требуется развернуть исправленный
+profile и пройти create → timeline →
 `ready_owner_setup_required` → student launch → degraded/expiry → automatic
 delete и снова подтвердить нулевой provider/DNS baseline.
 

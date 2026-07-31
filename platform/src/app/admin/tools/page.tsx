@@ -121,8 +121,8 @@ export default async function AdminToolsPage() {
               действия
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Проверьте состояние и продолжите безопасное восстановление в
-              карточке экземпляра.
+              Проверьте текущий экземпляр. Если он удалён, создайте новый:
+              удалённые среды не восстанавливаются.
             </p>
           </div>
           <Button asChild variant="outline" size="sm">

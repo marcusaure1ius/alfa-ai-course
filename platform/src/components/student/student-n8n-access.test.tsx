@@ -70,4 +70,21 @@ describe("StudentN8nAccessCard", () => {
         .getAttribute("href"),
     ).toBe("/student/help");
   });
+
+  it("не обещает восстановление удалённой среды", () => {
+    render(
+      <StudentN8nAccessCard
+        access={{
+          tool: "n8n",
+          displayName: "n8n",
+          state: "attention",
+          launchUrl: null,
+          expiresAt: null,
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/удалённые среды не восстанавливаются/i)).toBeTruthy();
+    expect(screen.queryByText(/безопасно восстановить/i)).toBeNull();
+  });
 });

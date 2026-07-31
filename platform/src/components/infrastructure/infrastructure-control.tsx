@@ -893,6 +893,11 @@ export function InfrastructureControl() {
                     <p className="mt-2 text-sm text-muted-foreground">
                       Сервер готов. n8n ещё не установлен.
                     </p>
+                  ) : environment.status === "deleted" ? (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Удаление окончательное. Чтобы продолжить, создайте новую
+                      среду.
+                    </p>
                   ) : null}
                   {environment.status === "cleanup_required" ? (
                     <ul className="mt-2 space-y-1 text-xs text-destructive">
