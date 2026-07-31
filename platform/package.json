@@ -16,6 +16,7 @@
     "auth:enroll-admin-totp": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/enroll-admin-totp.ts",
     "smoke:timeweb-plain-vps": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/timeweb-plain-vps-smoke.ts",
     "smoke:timeweb-n8n-install": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/timeweb-n8n-install-smoke.ts",
+    "smoke:t0058-production-student": "node --conditions=react-server --import tsx scripts/t0058-production-student.ts",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
