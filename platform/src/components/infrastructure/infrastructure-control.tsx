@@ -927,7 +927,9 @@ export function InfrastructureControl() {
                   ) : null}
                   {["active", "degraded", "cleanup_required"].includes(
                     environment.status,
-                  ) && !environment.currentOperation ? (
+                  ) &&
+                  (!environment.currentOperation ||
+                    environment.currentOperation.canResume) ? (
                     <DeleteEnvironment
                       environment={environment}
                       onAccepted={() => void refresh()}
