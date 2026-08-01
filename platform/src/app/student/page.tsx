@@ -1,10 +1,11 @@
 import {
   ArrowRight,
   Check,
+  CheckCircle2,
   Circle,
   Clock3,
+  ListTree,
   Play,
-  Wrench,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -20,86 +21,106 @@ export default async function StudentPage() {
   const course = await getStudentWorkspaceCourse(getDatabase(), session.userId);
   if (!course) return <StudentEmptyState kind="locked" />;
   const progress = getCourseProgress(course);
-  if (!progress.current) return <StudentEmptyState kind="empty" />;
+  if (progress.state === "empty") return <StudentEmptyState kind="empty" />;
+  const current = progress.current;
+  const complete = progress.state === "complete";
   const currentSection = course.sections.find((section) =>
-    section.materials.some((material) => material.id === progress.current?.id),
+    section.materials.some((material) => material.id === current?.id),
   );
 
   return (
     <div className="px-5 py-8 sm:px-8 sm:py-10 xl:px-12">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b pb-5 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="size-2 rounded-full bg-brand" />
-            <span>{course.title} · {currentSection?.title ?? "Текущий раздел"}</span>
+          <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+            <span className="size-2 shrink-0 rounded-full bg-brand" aria-hidden="true" />
+            <span className="min-w-0 break-words">
+              {course.title}
+              {currentSection ? ` · ${currentSection.title}` : ""}
+            </span>
           </div>
           <span className="font-medium tabular-nums text-muted-foreground">
-            {progress.completed} / {progress.total}
+            <span className="sr-only">Прогресс курса: </span>
+            {progress.completed} из {progress.total}
+            <span className="sr-only"> материалов завершено</span>
           </span>
         </div>
 
-        <section className="mt-6 overflow-hidden rounded-xl bg-foreground text-background">
-          <div className="grid lg:grid-cols-[minmax(0,1fr)_22rem]">
-            <div className="p-6 sm:p-9 lg:p-11">
-              <p className="workspace-kicker !text-background/55">
-                {progress.current.kind === "practice"
+        <section
+          className="mt-6 overflow-hidden rounded-xl bg-foreground text-background"
+          aria-labelledby="student-next-step-title"
+        >
+          <div className="p-6 sm:p-9 xl:p-11">
+            <p className="workspace-kicker !text-background/70">
+              {complete
+                ? "КУРС ЗАВЕРШЁН"
+                : current?.kind === "practice"
                   ? "ПРАКТИЧЕСКИЙ ШАГ"
                   : "ТЕКУЩИЙ ШАГ"}
-              </p>
-              <h1 className="font-display mt-4 max-w-3xl text-3xl leading-[1.12] sm:text-[2.75rem]">
-                {progress.current.title}
-              </h1>
-              {progress.current.summary ? (
-                <p className="mt-5 max-w-2xl text-base leading-7 text-background/65 sm:text-lg">
-                  {progress.current.summary}
-                </p>
-              ) : null}
-              <div className="mt-7 flex flex-wrap items-center gap-4">
-                <Button asChild size="lg" className="bg-background text-foreground hover:bg-background/85">
-                  <Link href={`/student/materials/${progress.current.slug}`}>
+            </p>
+            <h1
+              id="student-next-step-title"
+              className="font-display mt-4 max-w-4xl break-words text-3xl leading-[1.12] text-balance sm:text-[2.75rem]"
+            >
+              {complete ? "Вы прошли все материалы" : current?.title}
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-background/75 sm:text-lg">
+              {complete
+                ? "Программа остаётся доступной: к любому материалу можно вернуться и повторить его в удобном темпе."
+                : current?.summary ||
+                  "Откройте следующий материал и продолжайте с первого незавершённого шага."}
+            </p>
+            <div className="mt-7 flex flex-wrap items-center gap-4">
+              {complete ? (
+                <Button
+                  asChild
+                  size="lg"
+                  className="bg-background text-foreground hover:bg-background/85"
+                >
+                  <Link href="/student/program">
+                    <ListTree aria-hidden="true" />
+                    Открыть программу
+                  </Link>
+                </Button>
+              ) : current ? (
+                <Button
+                  asChild
+                  size="lg"
+                  className="bg-background text-foreground hover:bg-background/85"
+                >
+                  <Link href={`/student/materials/${current.slug}`}>
                     <Play aria-hidden="true" />
                     Продолжить
                   </Link>
                 </Button>
-                {progress.current.estimatedMinutes ? (
-                  <span className="flex items-center gap-2 text-sm text-background/60">
-                    <Clock3 className="size-4" aria-hidden="true" />
-                    {progress.current.estimatedMinutes} мин
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <div className="min-h-64 border-t border-background/15 bg-black/20 p-7 lg:min-h-full lg:border-l lg:border-t-0">
-              <div className="flex h-full flex-col justify-between">
-                <div>
-                  <p className="workspace-kicker !text-background/45">МАРШРУТ ШАГА</p>
-                  <div className="mt-6 grid gap-5">
-                    <div className="grid grid-cols-[2rem_1fr] gap-3 border-b border-background/15 pb-5">
-                      <span className="font-display text-sm text-highlight">01</span>
-                      <div><p className="text-sm font-medium">Понять контекст</p><p className="mt-1 text-sm leading-5 text-background/55">Прочитайте материал и выделите главное.</p></div>
-                    </div>
-                    <div className="grid grid-cols-[2rem_1fr] gap-3">
-                      <span className="font-display text-sm text-highlight">02</span>
-                      <div><p className="text-sm font-medium">Собрать результат</p><p className="mt-1 text-sm leading-5 text-background/55">Примените шаг в учебном инструменте.</p></div>
-                    </div>
-                  </div>
-                </div>
-                <p className="mt-8 text-sm leading-6 text-background/50">Один понятный шаг за раз.</p>
-              </div>
+              ) : null}
+              {!complete && current?.estimatedMinutes ? (
+                <span className="flex items-center gap-2 text-sm text-background/75">
+                  <Clock3 className="size-4" aria-hidden="true" />
+                  {current.estimatedMinutes} мин
+                </span>
+              ) : complete ? (
+                <span className="flex items-center gap-2 text-sm text-background/75">
+                  <CheckCircle2 className="size-4" aria-hidden="true" />
+                  {progress.completed} из {progress.total} завершено
+                </span>
+              ) : null}
             </div>
           </div>
         </section>
 
-        <div className="mt-8 grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_19rem]">
-          <section className="min-w-0">
+        <div className="mt-8 min-w-0">
+          <section className="min-w-0" aria-labelledby="student-course-map-title">
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Карта курса</p>
-                <h2 className="font-display mt-1 text-2xl">Материалы по порядку</h2>
+                <h2 id="student-course-map-title" className="font-display mt-1 text-2xl">
+                  Материалы по порядку
+                </h2>
               </div>
               <Link
                 href="/student/program"
-                className="hidden items-center gap-1 text-sm font-medium hover:underline sm:flex"
+                className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-2 text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 Вся программа
                 <ArrowRight className="size-4" aria-hidden="true" />
@@ -111,16 +132,22 @@ export default async function StudentPage() {
                   key={section.id}
                   className={sectionIndex > 0 ? "border-t" : undefined}
                 >
-                  <div className="bg-muted/50 px-5 py-3 text-sm font-semibold">
+                  <h3 className="break-words bg-muted/50 px-5 py-3 text-sm font-semibold">
                     {sectionIndex + 1}. {section.title}
-                  </div>
+                  </h3>
                   {section.materials.map((material) => {
-                    const active = material.id === progress.current?.id;
+                    const active = material.id === current?.id;
+                    const statusLabel = material.completedAt
+                      ? "Завершено"
+                      : active
+                        ? "Текущий материал"
+                        : "Ещё не начато";
                     return (
                       <Link
                         key={material.id}
                         href={`/student/materials/${material.slug}`}
-                        className="group flex min-h-14 items-center gap-3 border-t px-5 py-3 transition-colors hover:bg-accent"
+                        aria-current={active ? "step" : undefined}
+                        className="group flex min-h-14 items-center gap-3 border-t px-5 py-3 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
                       >
                         {material.completedAt ? (
                           <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
@@ -137,10 +164,11 @@ export default async function StudentPage() {
                           />
                         )}
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">
+                          <span className="block break-words text-sm font-medium">
                             {material.title}
                           </span>
                           <span className="mt-0.5 block text-xs text-muted-foreground">
+                            <span className="sr-only">{statusLabel}. </span>
                             {material.kind === "practice" ? "Практика" : "Материал"}
                             {material.estimatedMinutes
                               ? ` · ${material.estimatedMinutes} мин`
@@ -148,7 +176,7 @@ export default async function StudentPage() {
                           </span>
                         </span>
                         <ArrowRight
-                          className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                          className="size-4 shrink-0 text-muted-foreground opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100"
                           aria-hidden="true"
                         />
                       </Link>
@@ -158,26 +186,6 @@ export default async function StudentPage() {
               ))}
             </div>
           </section>
-
-          <aside className="min-w-0">
-            <p className="text-sm text-muted-foreground">Для текущего шага</p>
-            <Link
-              href="/student/tools"
-              className="mt-3 block rounded-xl border bg-card p-5 transition-colors hover:bg-accent"
-            >
-              <span className="flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
-                <Wrench className="size-5" aria-hidden="true" />
-              </span>
-              <h2 className="font-display mt-5 text-xl">Учебные инструменты</h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Всё необходимое для практики доступно рядом с материалами курса.
-              </p>
-              <span className="mt-5 flex items-center gap-1 text-sm font-medium">
-                Перейти
-                <ArrowRight className="size-4" aria-hidden="true" />
-              </span>
-            </Link>
-          </aside>
         </div>
       </div>
     </div>

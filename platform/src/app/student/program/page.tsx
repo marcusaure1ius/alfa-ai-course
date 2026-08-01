@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Check,
+  CheckCircle2,
   Circle,
   Clock3,
   Play,
@@ -39,7 +40,7 @@ export default async function StudentProgramPage() {
           </p>
         </div>
 
-        {progress.current ? (
+        {progress.state === "in_progress" && progress.current ? (
           <section className="mt-9 rounded-xl border bg-card p-6 sm:p-8">
             <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
               <div>
@@ -65,6 +66,25 @@ export default async function StudentProgramPage() {
                 style={{ width: `${progress.percent}%` }}
                 aria-hidden="true"
               />
+            </div>
+          </section>
+        ) : progress.state === "complete" ? (
+          <section className="mt-9 rounded-xl bg-foreground p-6 text-background sm:p-8">
+            <div className="flex items-start gap-4">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-highlight text-foreground">
+                <CheckCircle2 className="size-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-background/75">
+                  Курс завершён
+                </p>
+                <h2 className="font-display mt-2 break-words text-2xl sm:text-3xl">
+                  Все материалы пройдены
+                </h2>
+                <p className="mt-3 max-w-2xl text-base leading-7 text-background/75">
+                  Можно вернуться к любому разделу и повторить нужный материал.
+                </p>
+              </div>
             </div>
           </section>
         ) : (

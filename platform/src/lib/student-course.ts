@@ -4,6 +4,7 @@ import type {
 } from "@/server/course/contracts";
 
 export type StudentCourseProgress = {
+  state: "empty" | "in_progress" | "complete";
   completed: number;
   total: number;
   percent: number;
@@ -19,12 +20,15 @@ export function flattenMaterials(course: StudentCourse): StudentMaterialSummary[
 export function getCourseProgress(course: StudentCourse): StudentCourseProgress {
   const materials = flattenMaterials(course);
   const completed = materials.filter((material) => material.completedAt).length;
-  const current =
-    materials.find((material) => !material.completedAt) ??
-    materials.at(-1) ??
-    null;
+  const current = materials.find((material) => !material.completedAt) ?? null;
   const currentIndex = current ? materials.findIndex((item) => item.id === current.id) : -1;
   return {
+    state:
+      materials.length === 0
+        ? "empty"
+        : current
+          ? "in_progress"
+          : "complete",
     completed,
     total: materials.length,
     percent: materials.length === 0 ? 0 : Math.round((completed / materials.length) * 100),

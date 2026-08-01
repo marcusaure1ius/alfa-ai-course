@@ -46,7 +46,7 @@ export const LogoutButton = forwardRef<HTMLButtonElement, LogoutButtonProps>(
         variant="ghost"
         size="sm"
         className={cn(
-          "w-full justify-start group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:px-2",
+          "min-h-11 w-full justify-start group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:px-2",
           className,
         )}
         onClick={(event) => {

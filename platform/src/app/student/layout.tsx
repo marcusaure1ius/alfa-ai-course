@@ -21,12 +21,9 @@ export default async function StudentLayout({
       courseTitle={course?.title ?? null}
       progressLabel={
         progress && progress.total > 0
-          ? `${progress.completed} из ${progress.total} материалов`
-          : null
-      }
-      currentMaterialHref={
-        progress?.current
-          ? `/student/materials/${progress.current.slug}`
+          ? progress.state === "complete"
+            ? "Курс завершён"
+            : `${progress.completed} из ${progress.total} материалов`
           : null
       }
     >
