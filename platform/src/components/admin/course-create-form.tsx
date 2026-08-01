@@ -17,6 +17,11 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  createContentAddress,
+  sanitizeContentAddressInput,
+} from "@/lib/content-address";
 
 async function csrfToken(): Promise<string> {
   const response = await fetch("/api/auth/csrf", { cache: "no-store", credentials: "same-origin" });
@@ -25,11 +30,12 @@ async function csrfToken(): Promise<string> {
   return body.csrfToken;
 }
 
-export function CourseCreateForm() {
+export function CourseCreateForm({ primary = false }: { primary?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
+  const [slugCustomized, setSlugCustomized] = useState(false);
   const [description, setDescription] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +46,12 @@ export function CourseCreateForm() {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const normalizedSlug = createContentAddress(slug);
     const nextTitleError = title.trim().length < 2 ? "Введите название курса." : null;
-    const nextSlugError = !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ? "Используйте латиницу, цифры и дефисы." : null;
+    const nextSlugError = !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalizedSlug) || normalizedSlug.length < 2
+      ? "Адрес должен содержать не меньше двух символов."
+      : null;
+    setSlug(normalizedSlug);
     setTitleError(nextTitleError);
     setSlugError(nextSlugError);
     if (nextTitleError || nextSlugError) {
@@ -56,7 +66,7 @@ export function CourseCreateForm() {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json", "x-csrf-token": csrf },
-        body: JSON.stringify({ title, slug, description }),
+        body: JSON.stringify({ title, slug: normalizedSlug, description }),
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
@@ -65,6 +75,7 @@ export function CourseCreateForm() {
       setOpen(false);
       setTitle("");
       setSlug("");
+      setSlugCustomized(false);
       setDescription("");
       router.refresh();
     } catch (caught) {
@@ -76,29 +87,79 @@ export function CourseCreateForm() {
 
   return (
     <Dialog open={open} onOpenChange={(next) => !pending && setOpen(next)}>
-      <DialogTrigger asChild><Button type="button" variant="outline"><Plus aria-hidden="true" />Создать курс</Button></DialogTrigger>
+      <DialogTrigger asChild><Button type="button" variant={primary ? "default" : "outline"}><Plus aria-hidden="true" />Создать курс</Button></DialogTrigger>
       <DialogContent onOpenAutoFocus={(event) => { event.preventDefault(); titleRef.current?.focus(); }}>
         <form onSubmit={submit} className="grid gap-5" noValidate>
           <DialogHeader>
             <DialogTitle>Создать курс</DialogTitle>
             <DialogDescription>Новый курс появится как черновик и не будет виден ученикам до публикации.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field>
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
+            <Field className="grid-rows-[1.25rem_3rem_minmax(2.5rem,auto)]">
               <FieldLabel htmlFor="course-title">Название</FieldLabel>
-              <Input ref={titleRef} id="course-title" value={title} onChange={(event) => { setTitle(event.target.value); setTitleError(null); }} maxLength={120} aria-invalid={Boolean(titleError)} aria-describedby={titleError ? "course-title-error" : undefined} />
-              {titleError ? <FieldError id="course-title-error">{titleError}</FieldError> : null}
+              <Input
+                ref={titleRef}
+                id="course-title"
+                value={title}
+                onChange={(event) => {
+                  const nextTitle = event.target.value;
+                  setTitle(nextTitle);
+                  if (!slugCustomized) setSlug(createContentAddress(nextTitle));
+                  setTitleError(null);
+                }}
+                maxLength={120}
+                aria-invalid={Boolean(titleError)}
+                aria-describedby={titleError ? "course-title-error" : "course-title-help"}
+              />
+              {titleError ? (
+                <FieldError id="course-title-error">{titleError}</FieldError>
+              ) : (
+                <FieldDescription id="course-title-help" className="whitespace-nowrap">
+                  Так курс увидят ученики
+                </FieldDescription>
+              )}
             </Field>
-            <Field>
-              <FieldLabel htmlFor="course-slug">Slug</FieldLabel>
-              <Input ref={slugRef} id="course-slug" value={slug} onChange={(event) => { setSlug(event.target.value.toLowerCase()); setSlugError(null); }} placeholder="n8n-start" aria-invalid={Boolean(slugError)} aria-describedby={slugError ? "course-slug-help course-slug-error" : "course-slug-help"} />
-              <FieldDescription id="course-slug-help">Адрес курса: латиница, цифры и дефисы.</FieldDescription>
-              {slugError ? <FieldError id="course-slug-error">{slugError}</FieldError> : null}
+            <Field className="grid-rows-[1.25rem_3rem_minmax(2.5rem,auto)]">
+              <FieldLabel htmlFor="course-slug">Адрес курса</FieldLabel>
+              <Input
+                ref={slugRef}
+                id="course-slug"
+                value={slug}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  const sanitizedValue = sanitizeContentAddressInput(nextValue);
+                  setSlug(sanitizedValue);
+                  setSlugCustomized(sanitizedValue.length > 0);
+                  setSlugError(null);
+                }}
+                onBlur={() => {
+                  const normalizedSlug = createContentAddress(slug);
+                  if (normalizedSlug) {
+                    setSlug(normalizedSlug);
+                    return;
+                  }
+                  setSlug(createContentAddress(title));
+                  setSlugCustomized(false);
+                }}
+                placeholder="osnovy-n8n"
+                maxLength={80}
+                spellCheck={false}
+                autoCapitalize="none"
+                aria-invalid={Boolean(slugError)}
+                aria-describedby={slugError ? "course-slug-error" : "course-slug-help"}
+              />
+              {slugError ? (
+                <FieldError id="course-slug-error">{slugError}</FieldError>
+              ) : (
+                <FieldDescription id="course-slug-help" className="whitespace-nowrap">
+                  Автоматически — можно изменить
+                </FieldDescription>
+              )}
             </Field>
           </div>
           <Field>
             <FieldLabel htmlFor="course-description">Описание</FieldLabel>
-            <textarea id="course-description" className="min-h-24 resize-y rounded-md border border-input bg-card px-3.5 py-3 text-base leading-6 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 md:text-sm" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} />
+            <Textarea id="course-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} />
           </Field>
           {error ? <FieldError aria-live="polite">{error}</FieldError> : null}
           <DialogFooter>

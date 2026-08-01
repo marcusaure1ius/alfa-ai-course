@@ -40,7 +40,7 @@ export function getN8nStudentAccessLicenseGate(
     return {
       ready: false,
       reason:
-        "До выдачи доступа зафиксируйте основание production-доступа в server environment.",
+        "В настройках сервера не указано основание доступа к n8n.",
     };
   }
   if (
@@ -52,7 +52,7 @@ export function getN8nStudentAccessLicenseGate(
     return {
       ready: false,
       reason:
-        "Для решения о production-доступе нужна непустая ссылка или идентификатор evidence.",
+        "В настройках сервера не указана ссылка или идентификатор подтверждающего решения.",
     };
   }
   return { ready: true, mode, evidenceReference };

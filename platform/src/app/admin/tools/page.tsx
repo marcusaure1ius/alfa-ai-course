@@ -64,10 +64,7 @@ export default async function AdminToolsPage() {
     <main className="page-container">
       <div className="flex flex-wrap items-end justify-between gap-5 border-b pb-6">
         <div>
-          <p className="workspace-kicker">СЕРВИСЫ И ЭКЗЕМПЛЯРЫ</p>
-          <h1 className="font-display mt-2 text-page-title">
-            Учебные инструменты
-          </h1>
+          <h1 className="font-display text-page-title">Учебные инструменты</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Экземпляры, к которым имеют доступ ученики и команда курса.
           </p>

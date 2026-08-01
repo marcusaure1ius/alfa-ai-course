@@ -15,8 +15,14 @@ function toolAccessError(error: unknown): Response | null {
     FORBIDDEN: [403, "Доступ запрещён."],
     NOT_FOUND: [404, "Назначение не найдено."],
     INVALID_EXPIRY: [400, "Выберите будущую дату не дальше одного года."],
-    LICENSE_GATE: [409, "Сначала зафиксируйте основание production-доступа."],
-    ENVIRONMENT_NOT_READY: [409, "Среда или доступ к курсу ещё не готовы."],
+    LICENSE_GATE: [
+      409,
+      "В настройках сервера не указано подтверждение доступа к n8n.",
+    ],
+    ENVIRONMENT_NOT_READY: [
+      409,
+      "Среда инструмента или доступ к курсам ещё не готовы.",
+    ],
   } as const;
   const [status, message] = mapping[error.code];
   return courseError(status, error.code, message);

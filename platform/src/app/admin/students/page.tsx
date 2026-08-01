@@ -1,17 +1,16 @@
-import { ArrowRight, Search } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import Link from "next/link";
 
 import { StudentCreateForm } from "@/components/admin/student-create-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getAdminCourses, getAdminStudents } from "@/server/admin/workspace";
 import { getDatabase } from "@/server/db/client";
 
@@ -53,14 +52,22 @@ export default async function StudentsPage({
             <input className="h-12 w-full rounded-md border border-input bg-card pl-10 pr-3.5 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 md:text-sm" type="search" name="q" defaultValue={params.q} placeholder="Email ученика" />
           </span>
         </label>
-        <label className="grid gap-2 text-sm font-medium">
-          Статус
-          <select className="h-12 rounded-md border border-input bg-card px-3.5 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 md:text-sm" name="status" defaultValue={status}>
-            <option value="all">Все</option>
-            <option value="active">Активные</option>
-            <option value="blocked">Заблокированные</option>
-          </select>
-        </label>
+        <div className="grid gap-2 text-sm font-medium">
+          <span id="student-status-label">Статус</span>
+          <Select name="status" defaultValue={status}>
+            <SelectTrigger
+              aria-labelledby="student-status-label"
+              className="w-full bg-card px-3.5 text-base data-[size=default]:h-12 md:text-sm"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper" align="start">
+              <SelectItem value="all">Все</SelectItem>
+              <SelectItem value="active">Активные</SelectItem>
+              <SelectItem value="blocked">Заблокированные</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Button type="submit" variant="outline">Применить</Button>
       </form>
 
@@ -72,7 +79,7 @@ export default async function StudentsPage({
                 <Link
                   key={student.id}
                   href={`/admin/students/${student.id}`}
-                  className="flex min-h-24 items-center gap-4 px-5 py-4 transition-colors hover:bg-accent"
+                  className="group flex min-h-24 items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block break-all text-sm font-medium">
@@ -101,43 +108,60 @@ export default async function StudentsPage({
                       Добавлен {new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeZone: "Europe/Moscow" }).format(new Date(student.createdAt))}
                     </span>
                   </span>
-                  <ArrowRight
-                    className="size-4 shrink-0 text-muted-foreground"
+                  <ChevronRight
+                    className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
                     aria-hidden="true"
                   />
                 </Link>
               ))}
             </div>
             <div className="hidden md:block">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="px-5">Ученик</TableHead>
-                    <TableHead>Доступ</TableHead>
-                    <TableHead>Прогресс</TableHead>
-                    <TableHead>Добавлен</TableHead>
-                    <TableHead className="w-12">
-                      <span className="sr-only">Открыть</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <div role="table" aria-label="Ученики">
+                <div role="rowgroup" className="border-b">
+                  <div
+                    role="row"
+                    className="grid grid-cols-[minmax(0,1.5fr)_minmax(10rem,0.7fr)_minmax(8rem,0.55fr)_minmax(10rem,0.7fr)_2rem] items-center gap-4 px-5"
+                  >
+                    <span role="columnheader" className="py-3 text-left text-sm font-medium">
+                      Ученик
+                    </span>
+                    <span role="columnheader" className="py-3 text-left text-sm font-medium">
+                      Доступ
+                    </span>
+                    <span role="columnheader" className="py-3 text-left text-sm font-medium">
+                      Прогресс
+                    </span>
+                    <span role="columnheader" className="py-3 text-left text-sm font-medium">
+                      Добавлен
+                    </span>
+                    <span role="columnheader" className="sr-only">
+                      Открыть
+                    </span>
+                  </div>
+                </div>
+                <div role="rowgroup" className="divide-y">
                   {visibleStudents.map((student) => (
-                    <TableRow key={student.id}>
-                      <TableCell className="px-5 py-4">
+                    <div
+                      key={student.id}
+                      role="row"
+                      className="group relative grid grid-cols-[minmax(0,1.5fr)_minmax(10rem,0.7fr)_minmax(8rem,0.55fr)_minmax(10rem,0.7fr)_2rem] items-center gap-4 px-5 transition-colors duration-200 hover:bg-muted/35 focus-within:bg-muted/35 motion-reduce:transition-none"
+                    >
+                      <div role="cell" className="py-4">
                         <Link
                           href={`/admin/students/${student.id}`}
-                          className="font-medium hover:underline"
-                        >
+                          className="absolute inset-0 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                          aria-label={`Открыть ученика ${student.email}`}
+                        />
+                        <span className="pointer-events-none relative z-20 font-medium">
                           {student.email}
-                        </Link>
-                        {student.status === "blocked" ? (
-                          <Badge variant="destructive" className="ml-2">
-                            Заблокирован
-                          </Badge>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>
+                          {student.status === "blocked" ? (
+                            <Badge variant="destructive" className="ml-2">
+                              Заблокирован
+                            </Badge>
+                          ) : null}
+                        </span>
+                      </div>
+                      <div role="cell" className="pointer-events-none py-4">
                         {student.courseTitles.length > 0 ? (
                           <span className="text-sm">
                             {student.courseTitles.join(", ")}
@@ -145,29 +169,31 @@ export default async function StudentsPage({
                         ) : (
                           <Badge variant="outline">Нет курса</Badge>
                         )}
-                      </TableCell>
-                      <TableCell className="tabular-nums text-muted-foreground">
+                      </div>
+                      <div
+                        role="cell"
+                        className="pointer-events-none py-4 tabular-nums text-muted-foreground"
+                      >
                         {student.publishedMaterials > 0
                           ? `${student.completedMaterials} / ${student.publishedMaterials}`
                           : "—"}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      </div>
+                      <div
+                        role="cell"
+                        className="pointer-events-none py-4 text-sm text-muted-foreground"
+                      >
                         {new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeZone: "Europe/Moscow" }).format(new Date(student.createdAt))}
-                      </TableCell>
-                      <TableCell>
-                        <Button asChild variant="ghost" size="icon-sm">
-                          <Link
-                            href={`/admin/students/${student.id}`}
-                            aria-label={`Открыть ${student.email}`}
-                          >
-                            <ArrowRight aria-hidden="true" />
-                          </Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                      </div>
+                      <div role="cell" className="pointer-events-none py-4">
+                        <ChevronRight
+                          className="relative z-20 size-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+                          aria-hidden="true"
+                        />
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+              </div>
             </div>
           </>
         ) : students.length === 0 ? (

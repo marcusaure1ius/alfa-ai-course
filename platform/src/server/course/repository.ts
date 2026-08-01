@@ -22,7 +22,9 @@ export class CourseContentError extends Error {
       | "NOT_FOUND"
       | "FORBIDDEN"
       | "INVALID_SECTION"
-      | "POSITION_CONFLICT",
+      | "POSITION_CONFLICT"
+      | "SECTION_NOT_EMPTY"
+      | "CONFIRMATION_MISMATCH",
   ) {
     super(code);
   }
@@ -75,6 +77,78 @@ export async function createCourse(
   `;
   await appendAudit(sql, actor.userId, "course.created", "course", id);
   return id;
+}
+
+export async function updateCourse(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  courseId: string,
+  input: {
+    slug: string;
+    title: string;
+    description: string;
+    status: PublicationStatus;
+  },
+  context: RequestAuditContext = {},
+): Promise<void> {
+  requireAdminActor(actor);
+  const publication = publicationFields(input.status, actor.userId);
+  await sql.begin(async (transaction) => {
+    const rows = await transaction<Array<{ id: string }>>`
+      UPDATE courses
+      SET slug = ${input.slug}, title = ${input.title},
+        description = ${input.description}, status = ${input.status},
+        version = version + 1, updated_by_user_id = ${actor.userId},
+        published_by_user_id = ${publication.publishedByUserId},
+        published_at = ${publication.publishedAt}, updated_at = now()
+      WHERE id = ${courseId}
+      RETURNING id
+    `;
+    if (!rows[0]) throw new CourseContentError("NOT_FOUND");
+    await appendAudit(
+      transaction,
+      actor.userId,
+      "course.updated",
+      "course",
+      courseId,
+      context,
+    );
+  });
+}
+
+export async function deleteCourse(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  courseId: string,
+  confirmationTitle: string,
+  context: RequestAuditContext = {},
+): Promise<void> {
+  requireAdminActor(actor);
+  await sql.begin(async (transaction) => {
+    const rows = await transaction<Array<{ title: string }>>`
+      SELECT title
+      FROM courses
+      WHERE id = ${courseId}
+      FOR UPDATE
+    `;
+    const course = rows[0];
+    if (!course) throw new CourseContentError("NOT_FOUND");
+    if (course.title !== confirmationTitle) {
+      throw new CourseContentError("CONFIRMATION_MISMATCH");
+    }
+    await transaction`
+      DELETE FROM courses
+      WHERE id = ${courseId}
+    `;
+    await appendAudit(
+      transaction,
+      actor.userId,
+      "course.deleted",
+      "course",
+      courseId,
+      context,
+    );
+  });
 }
 
 export async function createSection(
@@ -326,6 +400,131 @@ export async function reorderSectionMaterials(
       transaction,
       actor.userId,
       "course.materials.reordered",
+      "course_section",
+      sectionId,
+      context,
+    );
+  });
+}
+
+export async function reorderCourseSections(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  courseId: string,
+  sectionIds: string[],
+  context: RequestAuditContext = {},
+): Promise<void> {
+  requireAdminActor(actor);
+  await sql.begin(async (transaction) => {
+    const rows = await transaction<Array<{ id: string; position: number }>>`
+      SELECT id, position
+      FROM course_sections
+      WHERE course_id = ${courseId}
+      ORDER BY position
+      FOR UPDATE
+    `;
+    const existingIds = rows.map((row) => row.id);
+    if (
+      existingIds.length !== sectionIds.length ||
+      new Set(sectionIds).size !== sectionIds.length ||
+      existingIds.some((id) => !sectionIds.includes(id))
+    ) {
+      throw new CourseContentError("NOT_FOUND");
+    }
+
+    const temporaryBase =
+      Math.max(-1, ...rows.map((row) => row.position)) + sectionIds.length + 1;
+    for (const [index, id] of sectionIds.entries()) {
+      await transaction`
+        UPDATE course_sections
+        SET position = ${temporaryBase + index}, updated_at = now()
+        WHERE id = ${id} AND course_id = ${courseId}
+      `;
+    }
+    for (const [position, id] of sectionIds.entries()) {
+      await transaction`
+        UPDATE course_sections
+        SET position = ${position}, version = version + 1,
+          updated_by_user_id = ${actor.userId}, updated_at = now()
+        WHERE id = ${id} AND course_id = ${courseId}
+      `;
+    }
+    await appendAudit(
+      transaction,
+      actor.userId,
+      "course.sections.reordered",
+      "course",
+      courseId,
+      context,
+    );
+  });
+}
+
+export async function deleteSection(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  sectionId: string,
+  context: RequestAuditContext = {},
+): Promise<void> {
+  requireAdminActor(actor);
+  await sql.begin(async (transaction) => {
+    const sections = await transaction<
+      Array<{ course_id: string; position: number }>
+    >`
+      SELECT course_id, position
+      FROM course_sections
+      WHERE id = ${sectionId}
+      FOR UPDATE
+    `;
+    const section = sections[0];
+    if (!section) throw new CourseContentError("NOT_FOUND");
+
+    const materialRows = await transaction<Array<{ count: number }>>`
+      SELECT count(*)::int AS count
+      FROM course_materials
+      WHERE section_id = ${sectionId}
+    `;
+    if ((materialRows[0]?.count ?? 0) > 0) {
+      throw new CourseContentError("SECTION_NOT_EMPTY");
+    }
+
+    await transaction`
+      DELETE FROM course_sections
+      WHERE id = ${sectionId}
+    `;
+
+    const following = await transaction<Array<{ id: string; position: number }>>`
+      SELECT id, position
+      FROM course_sections
+      WHERE course_id = ${section.course_id}
+        AND position > ${section.position}
+      ORDER BY position
+      FOR UPDATE
+    `;
+    const temporaryBase =
+      Math.max(section.position, ...following.map((row) => row.position)) +
+      following.length +
+      1;
+    for (const [index, row] of following.entries()) {
+      await transaction`
+        UPDATE course_sections
+        SET position = ${temporaryBase + index}, updated_at = now()
+        WHERE id = ${row.id}
+      `;
+    }
+    for (const [index, row] of following.entries()) {
+      await transaction`
+        UPDATE course_sections
+        SET position = ${section.position + index}, version = version + 1,
+          updated_by_user_id = ${actor.userId}, updated_at = now()
+        WHERE id = ${row.id}
+      `;
+    }
+
+    await appendAudit(
+      transaction,
+      actor.userId,
+      "course.section.deleted",
       "course_section",
       sectionId,
       context,

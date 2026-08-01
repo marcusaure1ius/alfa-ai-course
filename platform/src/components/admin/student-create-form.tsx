@@ -203,7 +203,7 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
               ))}
             </select>
             <FieldDescription>
-              Доступ к n8n и срок выдаются отдельно в карточке ученика.
+              Доступ к инструментам и срок выдаются отдельно в карточке ученика.
             </FieldDescription>
           </Field>
 

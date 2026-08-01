@@ -81,15 +81,15 @@ export function StudentN8nAccessControl({
       {licenseGate.ready ? (
         <Alert>
           <ShieldCheck aria-hidden="true" />
-          <AlertTitle>Основание production-доступа зафиксировано</AlertTitle>
+          <AlertTitle>Подтверждение доступа к n8n добавлено</AlertTitle>
           <AlertDescription>
-            При выдаче доступа ссылка на решение сохраняется server-side.
+            При назначении инструмента ссылка на решение сохраняется на сервере.
           </AlertDescription>
         </Alert>
       ) : (
         <Alert variant="destructive">
           <TriangleAlert aria-hidden="true" />
-          <AlertTitle>Выдача доступа заблокирована</AlertTitle>
+          <AlertTitle>Доступ к n8n пока закрыт</AlertTitle>
           <AlertDescription>{licenseGate.reason}</AlertDescription>
         </Alert>
       )}
@@ -142,7 +142,7 @@ export function StudentN8nAccessControl({
           </div>
         ) : (
           <p className="text-sm leading-6 text-muted-foreground">
-            Основная n8n-среда ещё не создана.
+            n8n пока нельзя назначить: основная среда ещё не создана.
           </p>
         )}
       </div>

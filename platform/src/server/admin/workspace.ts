@@ -29,8 +29,12 @@ export type AdminOverview = {
 
 const actionLabels: Record<string, string> = {
   "course.created": "Создан курс",
+  "course.updated": "Обновлён курс",
+  "course.deleted": "Удалён курс",
   "course.section.created": "Добавлен раздел",
   "course.section.updated": "Обновлён раздел",
+  "course.section.deleted": "Удалён раздел",
+  "course.sections.reordered": "Изменён порядок разделов",
   "course.material.created": "Создан материал",
   "course.material.updated": "Обновлён материал",
   "course.publication.changed": "Изменена публикация курса",
@@ -131,9 +135,9 @@ export async function getAdminOverview(sql: DatabaseSql): Promise<AdminOverview>
   if (row.draft_materials > 0) {
     attention.push({
       key: "materials",
-      title: "Черновики материалов",
+      title: "Черновики заданий",
       detail: "Можно проверить и опубликовать.",
-      href: "/admin/content",
+      href: "/admin/program",
       count: row.draft_materials,
       tone: "neutral",
     });
@@ -236,11 +240,16 @@ export type AdminCourseOption = {
   status: "draft" | "published";
 };
 
+export type AdminCourseItem = AdminCourseOption & {
+  slug: string;
+  description: string;
+};
+
 export async function getAdminCourses(
   sql: DatabaseSql,
-): Promise<AdminCourseOption[]> {
-  return sql<AdminCourseOption[]>`
-    SELECT id, title, status
+): Promise<AdminCourseItem[]> {
+  return sql<AdminCourseItem[]>`
+    SELECT id, slug, title, description, status
     FROM courses
     ORDER BY created_at
   `;

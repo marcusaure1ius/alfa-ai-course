@@ -60,7 +60,27 @@ describe("StudentN8nAccessControl", () => {
 
     const button = screen.getByRole("button", { name: "Открыть доступ к n8n" });
     expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Доступ к n8n пока закрыт")).toBeTruthy();
     expect(screen.getByText("Нужно подтверждение.")).toBeTruthy();
+  });
+
+  it("объясняет отсутствие основной среды", () => {
+    render(
+      <StudentN8nAccessControl
+        studentId="student-1"
+        access={null}
+        licenseGate={{ ready: false, reason: "Нужно подтверждение." }}
+        expiryDates={{
+          minimum: "2026-08-01",
+          recommended: "2026-08-30",
+          maximum: "2027-07-31",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText("n8n пока нельзя назначить: основная среда ещё не создана."),
+    ).toBeTruthy();
   });
 
   it("оставляет отзыв доступным после удаления license config", () => {

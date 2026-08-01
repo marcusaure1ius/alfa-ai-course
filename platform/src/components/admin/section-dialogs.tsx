@@ -22,6 +22,17 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  createContentAddress,
+  sanitizeContentAddressInput,
+} from "@/lib/content-address";
 import type {
   AdminCourseOption,
   AdminSectionOption,
@@ -42,9 +53,9 @@ async function csrfToken(): Promise<string> {
 function sectionErrors(title: string, slug: string) {
   return {
     title: title.trim().length < 2 ? "Введите название раздела." : null,
-    slug: /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
+    slug: slug.length >= 2 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
       ? null
-      : "Используйте латиницу, цифры и дефисы.",
+      : "Адрес должен содержать не меньше двух символов.",
   };
 }
 
@@ -60,12 +71,14 @@ export function SectionCreateDialog({
   const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
+  const [slugCustomized, setSlugCustomized] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [slugError, setSlugError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const slugRef = useRef<HTMLInputElement>(null);
+  const courseRef = useRef<HTMLButtonElement>(null);
   const nextPosition = useMemo(() => {
     const positions = sections
       .filter((section) => section.courseId === courseId)
@@ -75,11 +88,14 @@ export function SectionCreateDialog({
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const next = sectionErrors(title, slug);
+    const normalizedSlug = createContentAddress(slug);
+    const next = sectionErrors(title, normalizedSlug);
+    setSlug(normalizedSlug);
     setTitleError(next.title);
     setSlugError(next.slug);
     if (!courseId) {
       setError("Сначала создайте курс.");
+      courseRef.current?.focus();
       return;
     }
     if (next.title || next.slug) {
@@ -99,7 +115,7 @@ export function SectionCreateDialog({
         },
         body: JSON.stringify({
           title: title.trim(),
-          slug,
+          slug: normalizedSlug,
           position: nextPosition,
         }),
       });
@@ -112,6 +128,7 @@ export function SectionCreateDialog({
       setOpen(false);
       setTitle("");
       setSlug("");
+      setSlugCustomized(false);
       router.refresh();
     } catch (caught) {
       setError(
@@ -147,65 +164,111 @@ export function SectionCreateDialog({
           </DialogHeader>
           <Field>
             <FieldLabel htmlFor="section-course">Курс</FieldLabel>
-            <select
-              id="section-course"
-              className="h-12 w-full rounded-md border border-input bg-card px-3.5 text-base outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 md:text-sm"
+            <Select
               value={courseId}
-              onChange={(event) => setCourseId(event.target.value)}
+              onValueChange={(value) => {
+                setCourseId(value);
+                setError(null);
+              }}
               disabled={pending}
             >
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>
-                  {course.title}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                ref={courseRef}
+                id="section-course"
+                className="h-12 w-full bg-card px-3.5 text-base md:text-sm"
+                aria-invalid={!courseId || undefined}
+                aria-describedby="section-course-help"
+              >
+                <SelectValue placeholder="Выберите курс" />
+              </SelectTrigger>
+              <SelectContent position="popper" align="start" sideOffset={4}>
+                {courses.map((course) => (
+                  <SelectItem key={course.id} value={course.id}>
+                    {course.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldDescription id="section-course-help">
+              Раздел появится в программе выбранного курса
+            </FieldDescription>
           </Field>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field>
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
+            <Field className="grid-rows-[1.25rem_3rem_minmax(2.5rem,auto)]">
               <FieldLabel htmlFor="section-title">Название</FieldLabel>
               <Input
                 ref={titleRef}
                 id="section-title"
                 value={title}
                 onChange={(event) => {
-                  setTitle(event.target.value);
+                  const nextTitle = event.target.value;
+                  setTitle(nextTitle);
+                  if (!slugCustomized) {
+                    setSlug(createContentAddress(nextTitle));
+                  }
                   setTitleError(null);
                 }}
                 maxLength={120}
                 disabled={pending}
                 aria-invalid={Boolean(titleError)}
-                aria-describedby={titleError ? "section-title-error" : undefined}
+                aria-describedby={
+                  titleError ? "section-title-error" : "section-title-help"
+                }
               />
               {titleError ? (
                 <FieldError id="section-title-error">{titleError}</FieldError>
-              ) : null}
+              ) : (
+                <FieldDescription
+                  id="section-title-help"
+                  className="whitespace-nowrap"
+                >
+                  Так раздел увидят ученики
+                </FieldDescription>
+              )}
             </Field>
-            <Field>
-              <FieldLabel htmlFor="section-slug">Slug</FieldLabel>
+            <Field className="grid-rows-[1.25rem_3rem_minmax(2.5rem,auto)]">
+              <FieldLabel htmlFor="section-slug">Адрес раздела</FieldLabel>
               <Input
                 ref={slugRef}
                 id="section-slug"
                 value={slug}
                 onChange={(event) => {
-                  setSlug(event.target.value.toLowerCase());
+                  const sanitizedValue = sanitizeContentAddressInput(
+                    event.target.value,
+                  );
+                  setSlug(sanitizedValue);
+                  setSlugCustomized(sanitizedValue.length > 0);
                   setSlugError(null);
                 }}
-                placeholder="start-here"
+                onBlur={() => {
+                  const normalizedSlug = createContentAddress(slug);
+                  if (normalizedSlug) {
+                    setSlug(normalizedSlug);
+                    return;
+                  }
+                  setSlug(createContentAddress(title));
+                  setSlugCustomized(false);
+                }}
+                placeholder="pervye-shagi"
+                maxLength={80}
+                spellCheck={false}
+                autoCapitalize="none"
                 disabled={pending}
                 aria-invalid={Boolean(slugError)}
                 aria-describedby={
-                  slugError
-                    ? "section-slug-help section-slug-error"
-                    : "section-slug-help"
+                  slugError ? "section-slug-error" : "section-slug-help"
                 }
               />
-              <FieldDescription id="section-slug-help">
-                Системный адрес внутри курса.
-              </FieldDescription>
               {slugError ? (
                 <FieldError id="section-slug-error">{slugError}</FieldError>
-              ) : null}
+              ) : (
+                <FieldDescription
+                  id="section-slug-help"
+                  className="whitespace-nowrap"
+                >
+                  Автоматически — можно изменить
+                </FieldDescription>
+              )}
             </Field>
           </div>
           {error ? <FieldError aria-live="polite">{error}</FieldError> : null}
@@ -254,7 +317,9 @@ export function SectionEditDialog({ section }: { section: AdminSectionOption }) 
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const next = sectionErrors(title, slug);
+    const normalizedSlug = createContentAddress(slug);
+    const next = sectionErrors(title, normalizedSlug);
+    setSlug(normalizedSlug);
     setTitleError(next.title);
     setSlugError(next.slug);
     if (next.title || next.slug) {
@@ -272,7 +337,11 @@ export function SectionEditDialog({ section }: { section: AdminSectionOption }) 
           "content-type": "application/json",
           "x-csrf-token": csrf,
         },
-        body: JSON.stringify({ title: title.trim(), slug, status }),
+        body: JSON.stringify({
+          title: title.trim(),
+          slug: normalizedSlug,
+          status,
+        }),
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as
@@ -320,8 +389,8 @@ export function SectionEditDialog({ section }: { section: AdminSectionOption }) 
               Изменения названия и видимости применятся ко всей программе курса.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field>
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
+            <Field className="grid-rows-[1.25rem_3rem_minmax(2.5rem,auto)]">
               <FieldLabel htmlFor={`section-title-${section.id}`}>
                 Название
               </FieldLabel>
@@ -337,56 +406,91 @@ export function SectionEditDialog({ section }: { section: AdminSectionOption }) 
                 disabled={pending}
                 aria-invalid={Boolean(titleError)}
                 aria-describedby={
-                  titleError ? `section-title-error-${section.id}` : undefined
+                  titleError
+                    ? `section-title-error-${section.id}`
+                    : `section-title-help-${section.id}`
                 }
               />
               {titleError ? (
                 <FieldError id={`section-title-error-${section.id}`}>
                   {titleError}
                 </FieldError>
-              ) : null}
+              ) : (
+                <FieldDescription
+                  id={`section-title-help-${section.id}`}
+                  className="whitespace-nowrap"
+                >
+                  Так раздел увидят ученики
+                </FieldDescription>
+              )}
             </Field>
-            <Field>
-              <FieldLabel htmlFor={`section-slug-${section.id}`}>Slug</FieldLabel>
+            <Field className="grid-rows-[1.25rem_3rem_minmax(2.5rem,auto)]">
+              <FieldLabel htmlFor={`section-slug-${section.id}`}>
+                Адрес раздела
+              </FieldLabel>
               <Input
                 ref={slugRef}
                 id={`section-slug-${section.id}`}
                 value={slug}
                 onChange={(event) => {
-                  setSlug(event.target.value.toLowerCase());
+                  setSlug(sanitizeContentAddressInput(event.target.value));
                   setSlugError(null);
                 }}
+                onBlur={() => setSlug(createContentAddress(slug))}
+                maxLength={80}
+                spellCheck={false}
+                autoCapitalize="none"
                 disabled={pending}
                 aria-invalid={Boolean(slugError)}
                 aria-describedby={
-                  slugError ? `section-slug-error-${section.id}` : undefined
+                  slugError
+                    ? `section-slug-error-${section.id}`
+                    : `section-slug-help-${section.id}`
                 }
               />
               {slugError ? (
                 <FieldError id={`section-slug-error-${section.id}`}>
                   {slugError}
                 </FieldError>
-              ) : null}
+              ) : (
+                <FieldDescription
+                  id={`section-slug-help-${section.id}`}
+                  className="whitespace-nowrap"
+                >
+                  Используется в ссылках раздела
+                </FieldDescription>
+              )}
             </Field>
           </div>
           <Field>
             <FieldLabel htmlFor={`section-status-${section.id}`}>
               Видимость
             </FieldLabel>
-            <select
-              id={`section-status-${section.id}`}
-              className="h-12 w-full rounded-md border border-input bg-card px-3.5 text-base outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 md:text-sm"
+            <Select
               value={status}
-              onChange={(event) =>
-                setStatus(event.target.value as "draft" | "published")
+              onValueChange={(value) =>
+                setStatus(value as "draft" | "published")
               }
               disabled={pending}
             >
-              <option value="draft">Черновик — скрыт от учеников</option>
-              <option value="published">Опубликован — виден ученикам</option>
-            </select>
-            <FieldDescription>
-              Материалы раздела также должны быть опубликованы, чтобы ученик их
+              <SelectTrigger
+                id={`section-status-${section.id}`}
+                className="h-12 w-full bg-card px-3.5 text-base md:text-sm"
+                aria-describedby={`section-status-help-${section.id}`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="start" sideOffset={4}>
+                <SelectItem value="draft">
+                  Черновик — скрыт от учеников
+                </SelectItem>
+                <SelectItem value="published">
+                  Опубликован — виден ученикам
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <FieldDescription id={`section-status-help-${section.id}`}>
+              Задания раздела также должны быть опубликованы, чтобы ученик их
               увидел.
             </FieldDescription>
           </Field>

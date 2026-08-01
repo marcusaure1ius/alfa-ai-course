@@ -7,7 +7,22 @@ import {
 
 describe("n8n student access license gate", () => {
   it("закрыт по умолчанию", () => {
-    expect(getN8nStudentAccessLicenseGate({})).toMatchObject({ ready: false });
+    expect(getN8nStudentAccessLicenseGate({})).toEqual({
+      ready: false,
+      reason: "В настройках сервера не указано основание доступа к n8n.",
+    });
+  });
+
+  it("понятно сообщает об отсутствующем подтверждении решения", () => {
+    expect(
+      getN8nStudentAccessLicenseGate({
+        N8N_STUDENT_ACCESS_LICENSE_MODE: "written_permission",
+      }),
+    ).toEqual({
+      ready: false,
+      reason:
+        "В настройках сервера не указана ссылка или идентификатор подтверждающего решения.",
+    });
   });
 
   it("принимает только разрешённый mode и bounded evidence reference", () => {

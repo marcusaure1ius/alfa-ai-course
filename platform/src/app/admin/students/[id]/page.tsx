@@ -62,10 +62,11 @@ export default async function StudentDetailPage({
 
       <section className="mt-10 max-w-3xl" aria-labelledby="access-title">
         <h2 id="access-title" className="font-display text-xl">
-          Доступ к курсу
+          Доступ к курсам
         </h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Изменение применяется сразу к кабинету ученика.
+          Назначайте ученику один или несколько курсов. Изменения применяются
+          сразу.
         </p>
         <div className="mt-4">
           <StudentCourseAccess
@@ -76,12 +77,13 @@ export default async function StudentDetailPage({
         </div>
       </section>
 
-      <section className="mt-10 max-w-3xl" aria-labelledby="n8n-access-title">
-        <h2 id="n8n-access-title" className="font-display text-xl">
-          Доступ к n8n
+      <section className="mt-10 max-w-3xl" aria-labelledby="tools-access-title">
+        <h2 id="tools-access-title" className="font-display text-xl">
+          Доступ к инструментам
         </h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Ученик получит только состояние и HTTPS-ссылку основной среды.
+          Инструменты назначаются отдельно. Для каждого можно задать свой срок
+          доступа.
         </p>
         <div className="mt-4">
           <StudentN8nAccessControl
