@@ -113,6 +113,33 @@ describe("starter kit bootstrap profile", () => {
     expect(cloudInit).not.toContain('sh "$installer" >"$log_file" 2>&1');
   });
 
+  it("recovers only a pinned installer image-pull rate limit through a pinned mirror", () => {
+    const cloudInit = buildStarterKitCloudInit();
+
+    expect(STARTER_KIT_BOOTSTRAP_PROFILE.version).toBe("starter-kit-v0.1.2");
+    expect(cloudInit).toContain('if [ "$installer_code" -ne 23 ]');
+    expect(cloudInit).toContain("grep -Fq '429 Too Many Requests'");
+    expect(cloudInit).toContain("phase=recovering_registry_rate_limit");
+    expect(cloudInit).toContain(
+      "docker pull mirror.gcr.io/library/postgres:17.10-bookworm",
+    );
+    expect(cloudInit).toContain(
+      "docker pull mirror.gcr.io/library/caddy:2.11.4-alpine",
+    );
+    expect(cloudInit).toContain(
+      `docker pull mirror.gcr.io/n8nio/n8n:${STARTER_KIT_BOOTSTRAP_PROFILE.n8nVersion}`,
+    );
+    expect(cloudInit).toContain(
+      `docker tag mirror.gcr.io/n8nio/n8n:${STARTER_KIT_BOOTSTRAP_PROFILE.n8nVersion} docker.n8n.io/n8nio/n8n:${STARTER_KIT_BOOTSTRAP_PROFILE.n8nVersion}`,
+    );
+    expect(cloudInit).toContain(
+      'docker compose --project-directory "$project_dir" --env-file "$project_dir/.env" up -d --wait --wait-timeout 300',
+    );
+    expect(cloudInit).toContain(
+      '"$project_dir/scripts/doctor.sh" --env-file "$project_dir/.env" --local-only',
+    );
+  });
+
   it("resumes the same bootstrap after a transient installer failure", async () => {
     const root = await mkdtemp(join(tmpdir(), "t0058-bootstrap-"));
     const state = join(root, "state");
@@ -201,6 +228,99 @@ exit 2
 
     await execFileAsync("/bin/bash", [scriptPath], { env: environment });
     expect(await readFile(join(state, "attempts"), "utf8")).toBe("2\n");
+  });
+
+  it("completes the same attempt through the pinned mirror after exit 23 and 429", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t0058-bootstrap-mirror-"));
+    const state = join(root, "state");
+    const log = join(root, "bootstrap.log");
+    const bin = join(root, "bin");
+    const project = join(root, "project");
+    const scriptPath = join(root, "bootstrap");
+    const installerFixture = join(root, "installer-fixture");
+    await mkdir(bin);
+    await mkdir(join(project, "scripts"), { recursive: true });
+    await writeFile(join(project, ".env"), "N8N_HOST=example.invalid\n", {
+      mode: 0o600,
+    });
+    await writeFile(
+      join(project, "scripts", "doctor.sh"),
+      "#!/bin/sh\nprintf 'doctor passed\\n'\n",
+      { mode: 0o700 },
+    );
+
+    const script = extractBootstrapScript(buildStarterKitCloudInit())
+      .replace(
+        "state_dir=/var/lib/neurokurs-bootstrap",
+        'state_dir="$HARNESS_STATE"',
+      )
+      .replace(
+        "log_file=/var/log/neurokurs-bootstrap.log",
+        'log_file="$HARNESS_LOG"',
+      )
+      .replace(
+        "project_dir=/opt/n8n-entrepreneur-starter-kit",
+        'project_dir="$HARNESS_PROJECT"',
+      )
+      .replace(
+        /\/usr\/bin\/timeout \d+ \/bin\/bash -c\s+'until getent[^']+'/,
+        "true",
+      );
+    await writeFile(scriptPath, script, { mode: 0o700 });
+    await writeFile(
+      installerFixture,
+      "#!/bin/sh\nprintf '429 Too Many Requests\\n'\nexit 23\n",
+      { mode: 0o700 },
+    );
+    await writeFile(join(bin, "apt-get"), "#!/bin/sh\nexit 0\n", {
+      mode: 0o700,
+    });
+    await writeFile(
+      join(bin, "curl"),
+      `#!/bin/sh
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then
+    shift
+    cp "$HARNESS_INSTALLER" "$1"
+    exit 0
+  fi
+  shift
+done
+exit 2
+`,
+      { mode: 0o700 },
+    );
+    await writeFile(join(bin, "sha256sum"), "#!/bin/sh\nexit 0\n", {
+      mode: 0o700,
+    });
+    await writeFile(
+      join(bin, "docker"),
+      "#!/bin/sh\nprintf 'docker %s\\n' \"$*\"\n",
+      { mode: 0o700 },
+    );
+
+    const environment = {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH ?? ""}`,
+      HARNESS_STATE: state,
+      HARNESS_LOG: log,
+      HARNESS_INSTALLER: installerFixture,
+      HARNESS_PROJECT: project,
+    };
+    await execFileAsync("/bin/bash", [scriptPath], { env: environment });
+
+    expect(await readFile(join(state, "status"), "utf8")).toBe(
+      `phase=ready_owner_setup_required\nprofile=${STARTER_KIT_BOOTSTRAP_PROFILE.version}\nattempt=1\n`,
+    );
+    const output = await readFile(log, "utf8");
+    expect(output).toContain(
+      "docker pull mirror.gcr.io/library/postgres:17.10-bookworm",
+    );
+    expect(output).toContain(
+      `docker tag mirror.gcr.io/n8nio/n8n:${STARTER_KIT_BOOTSTRAP_PROFILE.n8nVersion} docker.n8n.io/n8nio/n8n:${STARTER_KIT_BOOTSTRAP_PROFILE.n8nVersion}`,
+    );
+    expect(output).toContain("doctor passed");
+    expect((await stat(join(state, "succeeded"))).mode & 0o777).toBe(0o600);
   });
 
   it("rejects a hostname outside the approved managed subdomain", () => {

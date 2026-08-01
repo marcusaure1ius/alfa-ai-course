@@ -7,7 +7,7 @@ export const COURSE_DNS_LABEL = "n8n" as const;
 export const COURSE_DNS_TTL_SECONDS = 600 as const;
 
 export const STARTER_KIT_BOOTSTRAP_PROFILE = Object.freeze({
-  version: "starter-kit-v0.1.1",
+  version: "starter-kit-v0.1.2",
   release: "v0.1.0",
   installerUrl:
     "https://github.com/marcusaure1ius/" +
@@ -127,6 +127,9 @@ run_logged() {
 phase=initializing
 on_error() {
   code=$?
+  if [ "$#" -ge 1 ]; then
+    code="$1"
+  fi
   trap - ERR
   write_status failed "$code" "$phase"
   trim_log
@@ -157,8 +160,31 @@ run_logged sha256sum -c "$checksum_file"
 
 phase=installing
 write_status "$phase"
-env N8N_HOST=${shellSingleQuoted(hostname)} TIMEZONE=${shellSingleQuoted(profile.timezone)} \
-  sh "$installer" 2>&1 | redact_output >> "$log_file"
+installer_attempt_log="$state_dir/installer-attempt.log"
+install -m 0600 /dev/null "$installer_attempt_log"
+if env N8N_HOST=${shellSingleQuoted(hostname)} TIMEZONE=${shellSingleQuoted(profile.timezone)} \
+  sh "$installer" 2>&1 | redact_output | tee -a "$installer_attempt_log" >> "$log_file"; then
+  :
+else
+  installer_code=$?
+  if [ "$installer_code" -ne 23 ] || ! grep -Fq '429 Too Many Requests' "$installer_attempt_log"; then
+    on_error "$installer_code"
+  fi
+
+  phase=recovering_registry_rate_limit
+  write_status "$phase"
+  project_dir=/opt/n8n-entrepreneur-starter-kit
+  test -r "$project_dir/.env"
+  test -x "$project_dir/scripts/doctor.sh"
+  run_logged docker pull mirror.gcr.io/library/postgres:17.10-bookworm
+  run_logged docker tag mirror.gcr.io/library/postgres:17.10-bookworm postgres:17.10-bookworm
+  run_logged docker pull mirror.gcr.io/library/caddy:2.11.4-alpine
+  run_logged docker tag mirror.gcr.io/library/caddy:2.11.4-alpine caddy:2.11.4-alpine
+  run_logged docker pull mirror.gcr.io/n8nio/n8n:${profile.n8nVersion}
+  run_logged docker tag mirror.gcr.io/n8nio/n8n:${profile.n8nVersion} docker.n8n.io/n8nio/n8n:${profile.n8nVersion}
+  run_logged docker compose --project-directory "$project_dir" --env-file "$project_dir/.env" up -d --wait --wait-timeout 300
+  run_logged "$project_dir/scripts/doctor.sh" --env-file "$project_dir/.env" --local-only
+fi
 chmod 0600 "$log_file"
 trim_log
 
