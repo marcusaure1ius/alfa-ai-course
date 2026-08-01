@@ -342,6 +342,14 @@ Production mutation adapter имеет только typed create/update/delete/r
 provider IDs и feature gates не настраиваются. В preview/development workflow
 использует fake adapter и не совершает реальных provider mutation.
 
+`/api/v1/account/services/cost` возвращает цену только уже активных сервисов.
+При нулевом baseline цена нового IPv4 задаётся двумя несекретными production
+переменными после ручной сверки с [официальной страницей Timeweb](https://timeweb.cloud/docs/public-ip):
+`TIMEWEB_PUBLIC_IPV4_MONTHLY_ROUBLES` и
+`TIMEWEB_PUBLIC_IPV4_PRICE_VERIFIED_AT`. Подтверждение действует семь суток;
+отсутствующее, некорректное или просроченное значение блокирует paid create.
+Если API уже видит активный IPv4, его цена имеет приоритет.
+
 Полный контракт, reconciliation и checklist production-подключения описаны в
 [`docs/timeweb-mutation-guard.md`](../docs/timeweb-mutation-guard.md).
 
