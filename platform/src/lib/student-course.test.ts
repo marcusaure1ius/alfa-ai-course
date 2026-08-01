@@ -4,6 +4,7 @@ import type { StudentCourse } from "@/server/course/contracts";
 import {
   displayStudentName,
   getCourseProgress,
+  getStudentProgressLabel,
   studentInitial,
 } from "./student-course";
 
@@ -58,12 +59,12 @@ describe("student course view model", () => {
   });
 
   it("returns an empty state when the course has no published materials", () => {
-    expect(
-      getCourseProgress({
-        ...course,
-        sections: [{ ...course.sections[0]!, materials: [] }],
-      }),
-    ).toEqual({
+    const progress = getCourseProgress({
+      ...course,
+      sections: [{ ...course.sections[0]!, materials: [] }],
+    });
+
+    expect(progress).toEqual({
       state: "empty",
       completed: 0,
       total: 0,
@@ -72,6 +73,7 @@ describe("student course view model", () => {
       previous: null,
       next: null,
     });
+    expect(getStudentProgressLabel(progress)).toBe("Программа готовится");
   });
 
   it("returns a terminal state without inventing a current material", () => {
@@ -95,6 +97,9 @@ describe("student course view model", () => {
       previous: null,
       next: null,
     });
+    expect(getStudentProgressLabel(getCourseProgress(completedCourse))).toBe(
+      "Курс завершён",
+    );
   });
 
   it("derives a compact profile label without inventing personal data", () => {

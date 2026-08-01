@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { StudentShell } from "@/components/student/student-shell";
-import { getCourseProgress } from "@/lib/student-course";
+import {
+  getCourseProgress,
+  getStudentProgressLabel,
+} from "@/lib/student-course";
 import { requirePageSession } from "@/server/auth/page-access";
 import { getStudentWorkspaceCourse } from "@/server/course/repository";
 import { getDatabase } from "@/server/db/client";
@@ -19,13 +22,7 @@ export default async function StudentLayout({
     <StudentShell
       email={session.email}
       courseTitle={course?.title ?? null}
-      progressLabel={
-        progress && progress.total > 0
-          ? progress.state === "complete"
-            ? "Курс завершён"
-            : `${progress.completed} из ${progress.total} материалов`
-          : null
-      }
+      progressLabel={getStudentProgressLabel(progress)}
     >
       {children}
     </StudentShell>

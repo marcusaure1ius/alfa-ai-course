@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 
 import { StudentNavigation } from "./student-navigation";
+import { getStudentProgressLabel } from "@/lib/student-course";
 
 let pathname = "/student";
 
@@ -18,11 +19,11 @@ afterEach(() => {
   pathname = "/student";
 });
 
-function renderNavigation() {
+function renderNavigation(progressLabel = "1 из 3 материалов") {
   return render(
     <StudentNavigation
       courseTitle="Автоматизация бизнеса"
-      progressLabel="1 из 3 материалов"
+      progressLabel={progressLabel}
     />,
   );
 }
@@ -46,6 +47,25 @@ describe("StudentNavigation", () => {
     const overview = screen.getByRole("link", { name: "Обзор" });
     expect(overview.getAttribute("href")).toBe("/student");
     expect(overview.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("keeps an assigned empty course truthful across layout and navigation", () => {
+    const emptyLabel = getStudentProgressLabel({
+      state: "empty",
+      completed: 0,
+      total: 0,
+      percent: 0,
+      current: null,
+      previous: null,
+      next: null,
+    });
+
+    renderNavigation(emptyLabel ?? undefined);
+
+    expect(screen.getByText("Программа готовится")).toBeTruthy();
+    expect(
+      screen.queryByText("Курс появится после выдачи доступа"),
+    ).toBeNull();
   });
 
   it("marks a section route without creating two active destinations", () => {

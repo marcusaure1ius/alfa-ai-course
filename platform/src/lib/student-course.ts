@@ -13,6 +13,15 @@ export type StudentCourseProgress = {
   next: StudentMaterialSummary | null;
 };
 
+export function getStudentProgressLabel(
+  progress: StudentCourseProgress | null,
+): string | null {
+  if (!progress) return null;
+  if (progress.state === "empty") return "Программа готовится";
+  if (progress.state === "complete") return "Курс завершён";
+  return `${progress.completed} из ${progress.total} материалов`;
+}
+
 export function flattenMaterials(course: StudentCourse): StudentMaterialSummary[] {
   return course.sections.flatMap((section) => section.materials);
 }
