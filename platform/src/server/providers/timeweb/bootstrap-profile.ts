@@ -1,10 +1,13 @@
 import "server-only";
 
+import { getN8nGatewayManagementSecret } from "@/server/tools/n8n-managed-secret";
+
 export const COURSE_HOSTNAME = "n8n.neurokurs.ru" as const;
 export const COURSE_SERVER_HOSTNAME = "n8n-neurokurs-ru" as const;
 export const COURSE_DNS_ZONE = "neurokurs.ru" as const;
 export const COURSE_DNS_LABEL = "n8n" as const;
 export const COURSE_DNS_TTL_SECONDS = 600 as const;
+export const COURSE_PLATFORM_ORIGIN = "https://neurokurs.ru" as const;
 
 export const STARTER_KIT_BOOTSTRAP_PROFILE = Object.freeze({
   version: "starter-kit-v0.1.2",
@@ -38,6 +41,7 @@ export function buildStarterKitCloudInit(
     throw new Error("BOOTSTRAP_HOSTNAME_NOT_ALLOWED");
   }
   const profile = STARTER_KIT_BOOTSTRAP_PROFILE;
+  const gatewaySecret = getN8nGatewayManagementSecret();
   const script = `#!/bin/bash
 set -Eeuo pipefail
 umask 077
@@ -185,6 +189,25 @@ else
   run_logged docker compose --project-directory "$project_dir" --env-file "$project_dir/.env" up -d --wait --wait-timeout 300
   run_logged "$project_dir/scripts/doctor.sh" --env-file "$project_dir/.env" --local-only
 fi
+phase=configuring_managed_gateway
+write_status "$phase"
+project_dir=/opt/n8n-entrepreneur-starter-kit
+managed_env="$project_dir/.env.platform"
+managed_env_next="$managed_env.next"
+test -r "$project_dir/.env"
+test -r "$project_dir/docker-compose.platform.yml"
+test -r "$project_dir/config/Caddyfile.platform"
+{
+  printf 'PLATFORM_GATE_ORIGIN=%s\\n' ${shellSingleQuoted(COURSE_PLATFORM_ORIGIN)}
+  printf 'N8N_GATE_MANAGEMENT_SECRET=%s\\n' ${shellSingleQuoted(gatewaySecret)}
+} > "$managed_env_next"
+chmod 0600 "$managed_env_next"
+mv -f "$managed_env_next" "$managed_env"
+run_logged docker compose --project-directory "$project_dir" \
+  --env-file "$project_dir/.env" --env-file "$managed_env" \
+  -f "$project_dir/docker-compose.yml" \
+  -f "$project_dir/docker-compose.platform.yml" \
+  up -d --wait --wait-timeout 300
 chmod 0600 "$log_file"
 trim_log
 

@@ -1,6 +1,7 @@
 import { safeEqual } from "@/server/auth/crypto";
 import { getDatabase } from "@/server/db/client";
 import { exchangeN8nGatewayTicket, N8nGatewayError } from "@/server/tools/n8n-gateway";
+import { getN8nGatewayManagementSecret } from "@/server/tools/n8n-managed-secret";
 
 export const runtime = "nodejs";
 
@@ -9,11 +10,9 @@ function forwardedHost(request: Request): string {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const expectedGatewaySecret = process.env.N8N_GATE_MANAGEMENT_SECRET;
+  const expectedGatewaySecret = getN8nGatewayManagementSecret();
   const presentedGatewaySecret = request.headers.get("x-neurokurs-gateway") ?? "";
   if (
-    !expectedGatewaySecret ||
-    expectedGatewaySecret.length < 32 ||
     !safeEqual(expectedGatewaySecret, presentedGatewaySecret)
   ) {
     return Response.json(
@@ -50,7 +49,7 @@ export async function POST(request: Request): Promise<Response> {
     return new Response(null, {
       status: 303,
       headers: {
-        location: "/",
+        location: result.redirectPath,
         "set-cookie": result.cookie,
         "cache-control": "no-store",
         "referrer-policy": "no-referrer",

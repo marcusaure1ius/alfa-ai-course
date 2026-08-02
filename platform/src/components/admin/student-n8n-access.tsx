@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -121,9 +122,9 @@ export function StudentN8nAccessControl({
                 className="mt-2 max-w-60"
               />
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                До назначения пригласите ученика в n8n как Member с тем же
-                email. После этой даты gateway блокирует сохранённый адрес и
-                активную сессию; VPS и billing ученику не передаются.
+                Платформа сама найдёт или пригласит ученика в n8n с тем же
+                email. После выбранной даты вход и активная сессия будут
+                автоматически заблокированы.
               </p>
             </div>
             <Button
@@ -138,13 +139,19 @@ export function StudentN8nAccessControl({
               onClick={() => update(!active)}
             >
               {pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
-              {active ? "Отозвать доступ к n8n" : "Открыть доступ к n8n"}
+              {active ? "Отозвать доступ" : "Выдать доступ"}
             </Button>
           </div>
         ) : (
-          <p className="text-sm leading-6 text-muted-foreground">
-            n8n пока нельзя назначить: основная среда ещё не создана.
-          </p>
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm leading-6 text-muted-foreground">
+              Сначала создайте и настройте основную среду n8n. После этого
+              здесь появится действие «Выдать доступ».
+            </p>
+            <Button asChild variant="outline">
+              <Link href="/admin/tools/n8n">Настроить n8n</Link>
+            </Button>
+          </div>
         )}
       </div>
       {error ? (

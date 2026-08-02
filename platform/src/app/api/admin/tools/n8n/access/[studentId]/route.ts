@@ -25,7 +25,7 @@ function toolAccessError(error: unknown): Response | null {
     ],
     IDENTITY_NOT_READY: [
       409,
-      "Сначала пригласите ученика в n8n как Member с тем же email.",
+      "Не удалось автоматически подготовить аккаунт ученика в n8n. Проверьте management API key и повторите попытку.",
     ],
   } as const;
   const [status, message] = mapping[error.code];

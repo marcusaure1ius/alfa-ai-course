@@ -26,6 +26,7 @@ const identityResolver = async (_origin: string, email: string) => ({
   id: `n8n:${email}`,
   email,
   pending: false,
+  invitePath: null,
 });
 
 let sql: DatabaseSql;

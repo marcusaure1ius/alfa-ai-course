@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+process.env.AUTH_SECRET = "mutation-example-not-a-secret-32-characters";
+
 import {
   createProductionTimewebMutationAdapter,
   TimewebMutationHttpAdapter,

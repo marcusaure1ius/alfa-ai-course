@@ -410,8 +410,9 @@ Environment открывается из конкретного инструме�
 
 `N8N-06` `ready_owner_setup_required` доступен только доверенному admin через
 обязательный gateway. Student не получает прямой URL или owner setup. После
-создания owner и состояния `ready` назначение требует отдельного n8n Member с
-тем же email, проверенного server-to-server через официальный Public API.
+создания owner и состояния `ready` одно действие grant автоматически находит
+или приглашает отдельного n8n Member с тем же email через официальный Public
+API; owner/admin identity и несовпадение email отклоняются.
 
 `N8N-07` До выдачи production-среды ученику сохраняется evidence выбранного основания: собственный instance ученика, коммерческое соглашение n8n, иное письменное разрешение либо явное принятие риска владельцем продукта. Принятие риска хранится и отображается отдельно и не заявляется как разрешение n8n. Наличие технически работающего VPS само по себе не снимает этот gate.
 
@@ -422,7 +423,9 @@ Environment открывается из конкретного инструме�
 user/membership, identity binding, assignment, expiry, license decision,
 global service gate и health. Revoke, expiry, renewal и global off-on блокируют
 сохранённый origin и существующую n8n session. Public health/webhook/form имеют
-явный allowlist; management API требует отдельный server-only secret.
+явный allowlist. Оператор задаёт только scoped management API key; внутренний
+gateway secret выводится из `AUTH_SECRET`, автоматически синхронизируется при
+managed install и никогда не показывается в UI.
 
 ### 7.4. DNS и TLS
 

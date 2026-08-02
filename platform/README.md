@@ -108,16 +108,17 @@ billing не обещается.
 
 Для управляемой среды порядок такой:
 
-1. Запустить root Compose вместе с `docker-compose.platform.yml`, задав
-   `PLATFORM_GATE_ORIGIN` и случайный `N8N_GATE_MANAGEMENT_SECRET` длиной не
-   менее 32 байт.
+1. Установка из Course Platform автоматически включает
+   `docker-compose.platform.yml`, создаёт внутренний gateway secret из
+   `AUTH_SECRET` и сохраняет VPS-конфигурацию с mode `0600`.
 2. Admin открывает среду только через `/api/admin/tools/n8n/launch` и завершает
    owner setup. Прямую ссылку ученику не передавать.
-3. Owner создаёт n8n API key и сохраняет его только в server environment
-   платформы как `N8N_MANAGEMENT_API_KEY`; тот же management secret задаётся как
-   `N8N_GATE_MANAGEMENT_SECRET`.
-4. Owner приглашает ученика в n8n с его email Neurokurs и ролью Member. Только
-   после этого admin назначает доступ в карточке ученика.
+3. Owner один раз создаёт n8n API key со scopes `user:read` и `user:create` и
+   сохраняет его только в server environment платформы как
+   `N8N_MANAGEMENT_API_KEY`.
+4. Admin нажимает «Выдать доступ» в карточке ученика. Платформа сама находит или
+   приглашает Member по точному email. Если n8n не отправил email, принятие
+   приглашения безопасно откроется ученику при первом запуске инструмента.
 5. При revoke/expiry account и учебные данные не удаляются автоматически.
    Окончательное удаление выполняется отдельно в n8n после выбора передачи или
    удаления workflow/credentials.

@@ -20,6 +20,8 @@ import {
   STARTER_KIT_BOOTSTRAP_PROFILE,
 } from "./bootstrap-profile";
 
+process.env.AUTH_SECRET = "bootstrap-example-not-a-secret-32-characters";
+
 const execFileAsync = promisify(execFile);
 
 function extractBootstrapScript(cloudInit: string): string {
@@ -34,8 +36,15 @@ function extractBootstrapScript(cloudInit: string): string {
     .trimEnd();
 }
 
+function skipManagedGatewayInHarness(script: string): string {
+  return script.replace(
+    /phase=configuring_managed_gateway[\s\S]*?up -d --wait --wait-timeout 300\nchmod 0600 "\$log_file"\ntrim_log/,
+    "true",
+  );
+}
+
 describe("starter kit bootstrap profile", () => {
-  it("pins an immutable installer and checksum without embedding secrets", () => {
+  it("pins the installer and automatically configures the managed gateway", () => {
     const cloudInit = buildStarterKitCloudInit();
 
     expect(cloudInit).toContain(
@@ -58,6 +67,13 @@ describe("starter kit bootstrap profile", () => {
     expect(cloudInit).not.toMatch(
       /TIMEWEB_API_TOKEN|N8N_ENCRYPTION_KEY=|POSTGRES_PASSWORD=/,
     );
+    expect(cloudInit).toContain("phase=configuring_managed_gateway");
+    expect(cloudInit).toContain("docker-compose.platform.yml");
+    expect(cloudInit).toContain(
+      "printf 'PLATFORM_GATE_ORIGIN=%s\\n' 'https://neurokurs.ru'",
+    );
+    expect(cloudInit).toContain("N8N_GATE_MANAGEMENT_SECRET=");
+    expect(cloudInit).not.toContain(process.env.AUTH_SECRET!);
   });
 
   it("runs bootstrap as a bounded restartable systemd service", () => {
@@ -149,7 +165,9 @@ describe("starter kit bootstrap profile", () => {
     const installerFixture = join(root, "installer-fixture");
     await mkdir(bin);
 
-    const script = extractBootstrapScript(buildStarterKitCloudInit())
+    const script = skipManagedGatewayInHarness(
+      extractBootstrapScript(buildStarterKitCloudInit()),
+    )
       .replace(
         "state_dir=/var/lib/neurokurs-bootstrap",
         'state_dir="$HARNESS_STATE"',
@@ -249,7 +267,9 @@ exit 2
       { mode: 0o700 },
     );
 
-    const script = extractBootstrapScript(buildStarterKitCloudInit())
+    const script = skipManagedGatewayInHarness(
+      extractBootstrapScript(buildStarterKitCloudInit()),
+    )
       .replace(
         "state_dir=/var/lib/neurokurs-bootstrap",
         'state_dir="$HARNESS_STATE"',

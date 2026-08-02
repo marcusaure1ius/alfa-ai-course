@@ -16,8 +16,10 @@ vi.mock("@/server/tools/n8n-gateway", async (importOriginal) => {
   };
 });
 import { POST } from "./route";
+import { deriveN8nGatewayManagementSecret } from "@/server/tools/n8n-managed-secret";
 
-const secret = "synthetic-gateway-management-secret-32-bytes";
+const authSecret = "exchange-example-not-a-secret-32-characters";
+const secret = deriveN8nGatewayManagementSecret(authSecret);
 
 function request(body: string, headers: Record<string, string> = {}): Request {
   return new Request(
@@ -37,9 +39,10 @@ function request(body: string, headers: Record<string, string> = {}): Request {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("N8N_GATE_MANAGEMENT_SECRET", secret);
+  vi.stubEnv("AUTH_SECRET", authSecret);
   mocks.exchangeN8nGatewayTicket.mockResolvedValue({
     cookie: "__Host-neurokurs_gate=session; Path=/; Secure; HttpOnly",
+    redirectPath: "/signup?token=invite",
   });
 });
 
@@ -62,7 +65,7 @@ describe("POST /api/tool-gateway/n8n/exchange", () => {
       "body-ticket",
       "n8n.example.test",
     );
-    expect(response.headers.get("location")).toBe("/");
+    expect(response.headers.get("location")).toBe("/signup?token=invite");
     expect(response.headers.get("set-cookie")).toContain(
       "__Host-neurokurs_gate=session",
     );

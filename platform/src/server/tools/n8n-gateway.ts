@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { createOpaqueToken, hashOpaqueToken } from "@/server/auth/crypto";
 import type { AuthSession } from "@/server/auth/service";
 import type { DatabaseSql } from "@/server/db/client";
+import { openN8nInvitePath } from "@/server/tools/n8n-invite";
 
 export const N8N_GATE_COOKIE = "__Host-neurokurs_gate";
 const TICKET_TTL_MS = 60_000;
@@ -26,6 +27,7 @@ type GatewayTarget = {
   environmentId: string;
   origin: string;
   assignmentGeneration: string | null;
+  redirectPathCiphertext: string | null;
 };
 
 function httpsOrigin(value: string | null): string | null {
@@ -83,6 +85,7 @@ export async function issueN8nGatewayTicket(
         environmentId: row.environment_id,
         origin,
         assignmentGeneration: null,
+        redirectPathCiphertext: null,
       };
     }
   } else {
@@ -91,10 +94,11 @@ export async function issueN8nGatewayTicket(
         environment_id: string;
         public_url: string | null;
         gateway_generation: string | null;
+        n8n_invite_path_ciphertext: string | null;
       }>
     >`
       SELECT access.environment_id, environment.public_url,
-        access.gateway_generation
+        access.gateway_generation, access.n8n_invite_path_ciphertext
       FROM tool_access AS access
       JOIN users AS student ON student.id = access.user_id
       JOIN course_memberships AS membership
@@ -132,6 +136,7 @@ export async function issueN8nGatewayTicket(
         environmentId: row.environment_id,
         origin,
         assignmentGeneration: row.gateway_generation,
+        redirectPathCiphertext: row.n8n_invite_path_ciphertext,
       };
     }
   }
@@ -141,12 +146,12 @@ export async function issueN8nGatewayTicket(
   await sql`
     INSERT INTO tool_gateway_tickets (
       id, token_hash, environment_id, subject_user_id, subject_role,
-      assignment_generation, expires_at
+      assignment_generation, redirect_path_ciphertext, expires_at
     )
     VALUES (
       ${randomUUID()}, ${hashOpaqueToken(token)}, ${target.environmentId},
       ${actor.userId}, ${actor.role}, ${target.assignmentGeneration},
-      ${new Date(now.getTime() + TICKET_TTL_MS)}
+      ${target.redirectPathCiphertext}, ${new Date(now.getTime() + TICKET_TTL_MS)}
     )
   `;
   return {
@@ -180,7 +185,7 @@ export async function exchangeN8nGatewayTicket(
   token: string,
   forwardedHost: string,
   now = new Date(),
-): Promise<{ cookie: string }> {
+): Promise<{ cookie: string; redirectPath: string }> {
   if (!token || token.length > 200) {
     throw new N8nGatewayError("INVALID_TICKET");
   }
@@ -192,11 +197,13 @@ export async function exchangeN8nGatewayTicket(
         subject_user_id: string;
         subject_role: "admin" | "student";
         assignment_generation: string | null;
+        redirect_path_ciphertext: string | null;
         public_url: string | null;
       }>
     >`
       SELECT ticket.id, ticket.environment_id, ticket.subject_user_id,
         ticket.subject_role, ticket.assignment_generation,
+        ticket.redirect_path_ciphertext,
         environment.public_url
       FROM tool_gateway_tickets AS ticket
       JOIN environments AS environment ON environment.id = ticket.environment_id
@@ -210,8 +217,14 @@ export async function exchangeN8nGatewayTicket(
     if (!row || !origin || new URL(origin).host !== forwardedHost) {
       throw new N8nGatewayError("INVALID_TICKET");
     }
+    const redirectPath = openN8nInvitePath(row.redirect_path_ciphertext);
+    if (row.redirect_path_ciphertext && !redirectPath) {
+      throw new N8nGatewayError("INVALID_TICKET");
+    }
     await transaction`
-      UPDATE tool_gateway_tickets SET consumed_at = ${now} WHERE id = ${row.id}
+      UPDATE tool_gateway_tickets
+      SET consumed_at = ${now}, redirect_path_ciphertext = null
+      WHERE id = ${row.id}
     `;
     const sessionToken = createOpaqueToken();
     await transaction`
@@ -225,8 +238,20 @@ export async function exchangeN8nGatewayTicket(
         ${new Date(now.getTime() + SESSION_TTL_MS)}
       )
     `;
+    if (row.redirect_path_ciphertext && row.subject_role === "student") {
+      await transaction`
+        UPDATE tool_access
+        SET n8n_invite_path_ciphertext = null, updated_at = ${now}
+        WHERE tool_type = 'n8n'
+          AND user_id = ${row.subject_user_id}
+          AND environment_id = ${row.environment_id}
+          AND gateway_generation = ${row.assignment_generation}
+          AND n8n_invite_path_ciphertext = ${row.redirect_path_ciphertext}
+      `;
+    }
     return {
       cookie: `${N8N_GATE_COOKIE}=${sessionToken}; Path=/; Max-Age=${SESSION_TTL_MS / 1000}; HttpOnly; Secure; SameSite=Lax`,
+      redirectPath: redirectPath ?? "/",
     };
   });
 }

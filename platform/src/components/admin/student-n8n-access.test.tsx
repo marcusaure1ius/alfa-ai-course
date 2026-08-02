@@ -58,7 +58,7 @@ describe("StudentN8nAccessControl", () => {
       />,
     );
 
-    const button = screen.getByRole("button", { name: "Открыть доступ к n8n" });
+    const button = screen.getByRole("button", { name: "Выдать доступ" });
     expect((button as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("Доступ к n8n пока закрыт")).toBeTruthy();
     expect(screen.getByText("Нужно подтверждение.")).toBeTruthy();
@@ -79,8 +79,9 @@ describe("StudentN8nAccessControl", () => {
     );
 
     expect(
-      screen.getByText("n8n пока нельзя назначить: основная среда ещё не создана."),
+      screen.getByText(/Сначала создайте и настройте основную среду n8n/),
     ).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Настроить n8n" })).toBeTruthy();
   });
 
   it("оставляет отзыв доступным после удаления license config", () => {
@@ -103,7 +104,7 @@ describe("StudentN8nAccessControl", () => {
       />,
     );
 
-    const button = screen.getByRole("button", { name: "Отозвать доступ к n8n" });
+    const button = screen.getByRole("button", { name: "Отозвать доступ" });
     expect((button as HTMLButtonElement).disabled).toBe(false);
   });
 });

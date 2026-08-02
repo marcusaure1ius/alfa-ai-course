@@ -136,9 +136,14 @@ license decision, общий
 service gate, environment и installation health. Поэтому revoke, expiry и
 global off действуют на сохранённый URL и уже существующую n8n login session.
 Owner setup проходит только через admin ticket. Public webhook/form и health
-остаются отдельными allowlisted маршрутами; management API дополнительно требует
-server-only shared secret. Решение и ограничения Community edition зафиксированы
-в [ADR-0012](../adr/0012-n8n-student-identity-and-revocable-gateway.md).
+остаются отдельными allowlisted маршрутами. Внешняя конфигурация требует только
+scoped `N8N_MANAGEMENT_API_KEY`: grant сам находит или приглашает Member, а
+внутренний Caddy secret выводится из `AUTH_SECRET` и синхронизируется bootstrap.
+Если n8n не отправил invitation email, same-origin invite path хранится только
+в зашифрованном виде и передаётся ученику после gateway exchange. Boundary
+зафиксирован в [ADR-0012](../adr/0012-n8n-student-identity-and-revocable-gateway.md),
+упрощённый configuration/invite flow — в
+[ADR-0013](../adr/0013-one-click-n8n-student-access.md).
 
 ## Установка
 

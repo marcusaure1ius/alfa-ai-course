@@ -32,16 +32,19 @@ The encryption key must never change during update. Losing it makes stored n8n c
 
 ## Управляемый профиль Neurokurs
 
-Только для среды, назначаемой ученикам, добавьте
-`-f docker-compose.platform.yml` и значения из `.env.platform.example`:
+Только для среды, назначаемой ученикам, используется
+`-f docker-compose.platform.yml`. При установке из Course Platform bootstrap
+автоматически создаёт `.env.platform` с mode `0600`:
 
 - `PLATFORM_GATE_ORIGIN` — HTTPS origin Course Platform без path;
-- `N8N_GATE_MANAGEMENT_SECRET` — отдельный случайный secret не короче 32 байт.
+- внутренний `N8N_GATE_MANAGEMENT_SECRET` — HMAC, производный от обязательного
+  `AUTH_SECRET`; оператор его не создаёт и не переносит вручную.
 
-Тот же management secret и owner API key задаются только в server environment
-Course Platform как `N8N_GATE_MANAGEMENT_SECRET` и `N8N_MANAGEMENT_API_KEY`.
-Не добавляйте их в browser-prefixed variables, Git, команды shell history или
-логи. Standalone установка эти значения не использует.
+В server environment Course Platform вручную добавляется только owner API key
+n8n как `N8N_MANAGEMENT_API_KEY` со scopes `user:read` и `user:create`.
+`AUTH_SECRET` уже обязателен для платформенной auth-системы. Не добавляйте эти
+значения в browser-prefixed variables, Git, команды shell history или логи.
+Standalone установка managed-значения не использует.
 
 Проверка resolved managed profile без запуска контейнеров:
 

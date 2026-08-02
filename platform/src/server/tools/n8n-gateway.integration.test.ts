@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { AuthSession } from "@/server/auth/service";
 import { createDatabaseClient, type DatabaseSql } from "@/server/db/client";
 import { runMigrations } from "@/server/db/migrate";
+import { sealN8nInvitePath } from "@/server/tools/n8n-invite";
 
 import {
   authorizeN8nGatewayRequest,
@@ -19,6 +20,7 @@ import { setToolServiceAccess } from "./service-access";
 const databaseUrl =
   process.env.DATABASE_URL ??
   "postgresql://platform:local-example-not-a-secret@127.0.0.1:55432/course_platform";
+process.env.AUTH_SECRET = "gateway-example-not-a-secret-32-characters";
 
 let sql: DatabaseSql;
 let admin: AuthSession;
@@ -192,6 +194,7 @@ describe("n8n gateway enforcement", () => {
       id: "n8n-user-one",
       email,
       pending: false,
+      invitePath: null,
     });
     const licenseGate = {
       ready: true as const,
@@ -360,6 +363,7 @@ describe("n8n gateway enforcement", () => {
         id: "n8n-user-one",
         email,
         pending: false,
+        invitePath: null,
       }),
     );
     await expect(
@@ -406,5 +410,41 @@ describe("n8n gateway enforcement", () => {
     await expect(
       exchangeN8nGatewayTicket(sql, issued.ticket, "n8n.example.test"),
     ).rejects.toMatchObject({ code: "INVALID_TICKET" });
+  });
+
+  it("delivers a pending invite path only after the one-time gateway exchange", async () => {
+    const invitePath = "/signup?token=student-invite-token";
+    await sql`
+      UPDATE tool_access
+      SET n8n_invite_path_ciphertext = ${sealN8nInvitePath(invitePath)}
+      WHERE user_id = ${students[0].userId} AND tool_type = 'n8n'
+    `;
+    const issued = await issueN8nGatewayTicket(sql, students[0]);
+    const stored = await sql<Array<{ redirect_path_ciphertext: string }>>`
+      SELECT redirect_path_ciphertext
+      FROM tool_gateway_tickets
+      WHERE token_hash IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    expect(stored[0]?.redirect_path_ciphertext).not.toContain(
+      "student-invite-token",
+    );
+    await expect(
+      exchangeN8nGatewayTicket(sql, issued.ticket, "n8n.example.test"),
+    ).resolves.toMatchObject({ redirectPath: invitePath });
+    const access = await sql<Array<{ n8n_invite_path_ciphertext: string | null }>>`
+      SELECT n8n_invite_path_ciphertext
+      FROM tool_access
+      WHERE user_id = ${students[0].userId} AND tool_type = 'n8n'
+    `;
+    expect(access[0]?.n8n_invite_path_ciphertext).toBeNull();
+    const consumed = await sql<Array<{ redirect_path_ciphertext: string | null }>>`
+      SELECT redirect_path_ciphertext
+      FROM tool_gateway_tickets
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    expect(consumed[0]?.redirect_path_ciphertext).toBeNull();
   });
 });
