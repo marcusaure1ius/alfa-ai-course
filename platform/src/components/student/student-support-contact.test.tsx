@@ -65,4 +65,37 @@ describe("StudentSupportContact", () => {
     expect(container.querySelector("a")).toBeNull();
     expect(screen.getByText(/канал|Контакт/)).toBeTruthy();
   });
+
+  it.each([
+    "mailto:teacher@example.test%0d%0aSubject:Hello",
+    "mailto:teacher@example.test%0Abcc:attacker@example.test",
+    "mailto:teacher@example.test?subject=Hello",
+    "mailto:teacher@example.test#fragment",
+  ])("rejects unsafe mailto value %s", (href) => {
+    const resolved = resolveStudentSupportContact({
+      courseTitle: "Курс",
+      configuredContact: { label: "Написать преподавателю", href },
+    });
+    expect(resolved.state).toBe("malformed");
+  });
+
+  it("does not promise a future contact in the no-course state", () => {
+    render(<StudentSupportContact courseTitle={null} configuredContact={null} />);
+    expect(screen.getByText(/ответьте в том канале/)).toBeTruthy();
+    expect(screen.queryByText(/контакт.*появится/iu)).toBeNull();
+  });
+
+  it("allows a bounded long contact label to wrap on mobile", () => {
+    const label = "Очень длинное название безопасного канала поддержки преподавателя курса";
+    render(
+      <StudentSupportContact
+        courseTitle="Курс"
+        configuredContact={{ label, href: "https://support.example.test/course" }}
+      />,
+    );
+    const link = screen.getByRole("link", { name: new RegExp(label) });
+    expect(link.className).toContain("max-w-full");
+    expect(link.className).toContain("whitespace-normal");
+    expect(link.className).not.toContain("whitespace-nowrap");
+  });
 });

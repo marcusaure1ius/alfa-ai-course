@@ -15,14 +15,24 @@ export type StudentSupportContactState =
 
 function safeSupportHref(value: string): string | null {
   const href = value.trim();
-  if (!href || href.length > 2048 || href.startsWith("//")) return null;
+  if (
+    !href ||
+    href.length > 2048 ||
+    href.startsWith("//") ||
+    /[\u0000-\u001f\u007f]/u.test(href)
+  ) {
+    return null;
+  }
   try {
     const url = new URL(href);
     if (url.username || url.password) return null;
     if (url.protocol === "https:") return href;
     if (
       url.protocol === "mailto:" &&
-      /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(url.pathname) &&
+      !/%[0-9a-f]{2}/iu.test(url.pathname) &&
+      /^[a-z0-9.!#$&'*+/=_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/iu.test(
+        url.pathname,
+      ) &&
       !url.search &&
       !url.hash
     ) {
@@ -61,7 +71,7 @@ export function StudentSupportContact({
   const contact = resolveStudentSupportContact({ courseTitle, configuredContact });
   const description =
     contact.state === "no_course"
-      ? "Контакт курса появится вместе с доступом. Пока используйте тот канал, по которому получили приглашение в Neurokurs."
+      ? "Если доступ к курсу должен быть открыт, ответьте в том канале, по которому получили приглашение в Neurokurs."
       : contact.state === "configured"
         ? `Канал поддержки курса «${contact.courseTitle}» задан преподавателем.`
         : contact.state === "malformed"
@@ -85,7 +95,10 @@ export function StudentSupportContact({
             {description}
           </p>
           {contact.state === "configured" ? (
-            <Button asChild className="mt-5">
+            <Button
+              asChild
+              className="mt-5 h-auto min-h-12 max-w-full shrink justify-start whitespace-normal break-words px-4 py-3 text-left leading-5 [overflow-wrap:anywhere]"
+            >
               <a href={contact.href} target="_blank" rel="noreferrer">
                 {contact.label}
                 <ExternalLink aria-hidden="true" />
