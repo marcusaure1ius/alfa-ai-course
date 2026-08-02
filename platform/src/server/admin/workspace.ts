@@ -45,7 +45,9 @@ const actionLabels: Record<string, string> = {
   "tool.access.revoked": "Отозван доступ к n8n",
 };
 
-export async function getAdminOverview(sql: DatabaseSql): Promise<AdminOverview> {
+export async function getAdminOverview(
+  sql: DatabaseSql,
+): Promise<AdminOverview> {
   const [counts, activity] = await Promise.all([
     sql<
       Array<{
@@ -238,6 +240,7 @@ export type AdminCourseOption = {
   id: string;
   title: string;
   status: "draft" | "published";
+  publishedMaterialCount?: number;
 };
 
 export type AdminCourseItem = AdminCourseOption & {
@@ -249,9 +252,14 @@ export async function getAdminCourses(
   sql: DatabaseSql,
 ): Promise<AdminCourseItem[]> {
   return sql<AdminCourseItem[]>`
-    SELECT id, slug, title, description, status
-    FROM courses
-    ORDER BY created_at
+    SELECT
+      course.id, course.slug, course.title, course.description, course.status,
+      count(material.id) FILTER (WHERE material.status = 'published')::int
+        AS "publishedMaterialCount"
+    FROM courses AS course
+    LEFT JOIN course_materials AS material ON material.course_id = course.id
+    GROUP BY course.id
+    ORDER BY course.created_at
   `;
 }
 

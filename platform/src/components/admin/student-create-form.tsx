@@ -15,7 +15,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import type { AdminCourseOption } from "@/server/admin/workspace";
 
@@ -25,11 +30,16 @@ async function csrfToken(): Promise<string> {
     credentials: "same-origin",
   });
   const body = (await response.json()) as { csrfToken?: string };
-  if (!body.csrfToken) throw new Error("Не удалось подготовить защищённый запрос.");
+  if (!body.csrfToken)
+    throw new Error("Не удалось подготовить защищённый запрос.");
   return body.csrfToken;
 }
 
-export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] }) {
+export function StudentCreateForm({
+  courses,
+}: {
+  courses: AdminCourseOption[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -43,6 +53,20 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const selectedCourse = courses.find((course) => course.id === courseId);
+  const courseWarning =
+    selectedCourse?.status === "draft"
+      ? {
+          title: "Курс ещё не опубликован.",
+          detail:
+            "Аккаунт создастся, но ученик не увидит программу и материалы, пока вы не опубликуете курс.",
+        }
+      : selectedCourse?.publishedMaterialCount === 0
+        ? {
+            title: "В курсе пока нет опубликованных материалов.",
+            detail:
+              "Аккаунт создастся, но ученик увидит только экран подготовки программы.",
+          }
+        : null;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,9 +75,8 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
       : !/^\S+@\S+\.\S+$/.test(email)
         ? "Проверьте формат email."
         : null;
-    const nextPasswordError = password.length < 12
-      ? "Нужно не меньше 12 символов."
-      : null;
+    const nextPasswordError =
+      password.length < 12 ? "Нужно не меньше 12 символов." : null;
     setEmailError(nextEmailError);
     setPasswordError(nextPasswordError);
     if (nextEmailError || nextPasswordError) {
@@ -74,9 +97,10 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
         },
         body: JSON.stringify({ email, password }),
       });
-      const body = (await response.json().catch(() => null)) as
-        | { studentId?: string; error?: { message?: string } }
-        | null;
+      const body = (await response.json().catch(() => null)) as {
+        studentId?: string;
+        error?: { message?: string };
+      } | null;
       if (!response.ok || !body?.studentId) {
         throw new Error(body?.error?.message ?? "Не удалось создать ученика.");
       }
@@ -103,7 +127,11 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
       router.push(`/admin/students/${body.studentId}`);
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Не удалось создать ученика.");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Не удалось создать ученика.",
+      );
     } finally {
       setPending(false);
     }
@@ -117,10 +145,12 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
           Добавить ученика
         </Button>
       </DialogTrigger>
-      <DialogContent onOpenAutoFocus={(event) => {
-        event.preventDefault();
-        emailRef.current?.focus();
-      }}>
+      <DialogContent
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          emailRef.current?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Добавить ученика</DialogTitle>
           <DialogDescription>
@@ -144,7 +174,9 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
               aria-invalid={Boolean(emailError)}
               aria-describedby={emailError ? "student-email-error" : undefined}
             />
-            {emailError ? <FieldError id="student-email-error">{emailError}</FieldError> : null}
+            {emailError ? (
+              <FieldError id="student-email-error">{emailError}</FieldError>
+            ) : null}
           </Field>
 
           <Field>
@@ -175,16 +207,27 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
                 type="button"
                 className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 onClick={() => setPasswordVisible((value) => !value)}
-                aria-label={passwordVisible ? "Скрыть пароль" : "Показать пароль"}
+                aria-label={
+                  passwordVisible ? "Скрыть пароль" : "Показать пароль"
+                }
                 disabled={pending}
               >
-                {passwordVisible ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+                {passwordVisible ? (
+                  <EyeOff className="size-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="size-4" aria-hidden="true" />
+                )}
               </button>
             </div>
             <FieldDescription id="student-password-help">
-              Минимум 12 символов. Передайте пароль безопасным каналом — повторно он не показывается.
+              Минимум 12 символов. Передайте пароль безопасным каналом —
+              повторно он не показывается.
             </FieldDescription>
-            {passwordError ? <FieldError id="student-password-error">{passwordError}</FieldError> : null}
+            {passwordError ? (
+              <FieldError id="student-password-error">
+                {passwordError}
+              </FieldError>
+            ) : null}
           </Field>
 
           <Field>
@@ -196,24 +239,29 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
               onChange={(event) => setCourseId(event.target.value)}
               disabled={pending || courses.length === 0}
               aria-describedby={
-                selectedCourse?.status === "draft"
-                  ? "student-course-help student-course-draft-warning"
+                courseWarning
+                  ? "student-course-help student-course-warning"
                   : "student-course-help"
               }
             >
               <option value="">Назначить позже</option>
               {courses.map((course) => (
                 <option key={course.id} value={course.id}>
-                  {course.title}{course.status === "draft" ? " — черновик" : ""}
+                  {course.title}
+                  {course.status === "draft"
+                    ? " — черновик"
+                    : course.publishedMaterialCount === 0
+                      ? " — без материалов"
+                      : ""}
                 </option>
               ))}
             </select>
             <FieldDescription id="student-course-help">
               Доступ к инструментам и срок выдаются отдельно в карточке ученика.
             </FieldDescription>
-            {selectedCourse?.status === "draft" ? (
+            {courseWarning ? (
               <div
-                id="student-course-draft-warning"
+                id="student-course-warning"
                 role="status"
                 aria-live="polite"
                 className="flex items-start gap-2.5 rounded-md border bg-muted px-3 py-2.5 text-sm leading-5 text-foreground"
@@ -223,9 +271,8 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
                   aria-hidden="true"
                 />
                 <p>
-                  <span className="font-medium">Курс ещё не опубликован.</span>{" "}
-                  Аккаунт создастся, но ученик не увидит программу и материалы,
-                  пока вы не опубликуете курс.
+                  <span className="font-medium">{courseWarning.title}</span>{" "}
+                  {courseWarning.detail}
                 </p>
               </div>
             ) : null}
@@ -235,10 +282,16 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
 
           <DialogFooter className="pt-1">
             <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={pending}>Отмена</Button>
+              <Button type="button" variant="outline" disabled={pending}>
+                Отмена
+              </Button>
             </DialogClose>
             <Button type="submit" disabled={pending}>
-              {pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
+              {pending ? (
+                <Loader2 className="animate-spin" aria-hidden="true" />
+              ) : (
+                <UserPlus aria-hidden="true" />
+              )}
               {pending ? "Создаём…" : "Создать ученика"}
             </Button>
           </DialogFooter>

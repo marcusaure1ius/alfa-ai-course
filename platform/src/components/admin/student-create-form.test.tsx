@@ -16,8 +16,24 @@ describe("StudentCreateForm", () => {
     render(
       <StudentCreateForm
         courses={[
-          { id: "published", title: "Готовый курс", status: "published" },
-          { id: "draft", title: "Новый курс", status: "draft" },
+          {
+            id: "published",
+            title: "Готовый курс",
+            status: "published",
+            publishedMaterialCount: 3,
+          },
+          {
+            id: "draft",
+            title: "Новый курс",
+            status: "draft",
+            publishedMaterialCount: 0,
+          },
+          {
+            id: "empty",
+            title: "Пустой курс",
+            status: "published",
+            publishedMaterialCount: 0,
+          },
         ]}
       />,
     );
@@ -25,7 +41,9 @@ describe("StudentCreateForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Добавить ученика" }));
 
     const course = screen.getByLabelText("Курс");
-    expect(screen.getByRole("option", { name: "Новый курс — черновик" })).toBeTruthy();
+    expect(
+      screen.getByRole("option", { name: "Новый курс — черновик" }),
+    ).toBeTruthy();
     expect(screen.queryByRole("status")).toBeNull();
 
     fireEvent.change(course, { target: { value: "draft" } });
@@ -34,12 +52,21 @@ describe("StudentCreateForm", () => {
       "Курс ещё не опубликован. Аккаунт создастся, но ученик не увидит программу и материалы, пока вы не опубликуете курс.",
     );
     expect(course.getAttribute("aria-describedby")).toBe(
-      "student-course-help student-course-draft-warning",
+      "student-course-help student-course-warning",
     );
 
     fireEvent.change(course, { target: { value: "published" } });
 
     expect(screen.queryByRole("status")).toBeNull();
     expect(course.getAttribute("aria-describedby")).toBe("student-course-help");
+
+    fireEvent.change(course, { target: { value: "empty" } });
+
+    expect(screen.getByRole("status").textContent).toContain(
+      "В курсе пока нет опубликованных материалов. Аккаунт создастся, но ученик увидит только экран подготовки программы.",
+    );
+    expect(
+      screen.getByRole("option", { name: "Пустой курс — без материалов" }),
+    ).toBeTruthy();
   });
 });
