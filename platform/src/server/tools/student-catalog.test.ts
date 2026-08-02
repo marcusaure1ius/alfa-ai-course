@@ -9,6 +9,7 @@ vi.mock("@/server/tools/student-access", () => ({
 }));
 
 import { getStudentToolCatalog, toStudentToolEntitlement } from "./student-catalog";
+import type { StudentN8nAccess } from "./student-access";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -20,6 +21,7 @@ describe("getStudentToolCatalog", () => {
       tool: "n8n" as const,
       displayName: "n8n" as const,
       state: "service_disabled" as const,
+      canLaunch: false as const,
       launchUrl: null,
       expiresAt: "2026-09-01T00:00:00.000Z",
     };
@@ -47,12 +49,28 @@ describe("getStudentToolCatalog", () => {
     ["attention", "attention"],
     ["expired", "expired"],
   ] as const)("maps n8n %s into generic %s", (state, expected) => {
-    expect(toStudentToolEntitlement({
-      tool: "n8n",
-      displayName: "n8n",
-      state,
-      launchUrl: state === "ready" ? "https://n8n.example.test" : null,
+    const access: StudentN8nAccess =
+      state === "ready"
+        ? {
+            tool: "n8n",
+            displayName: "n8n",
+            state,
+            canLaunch: true,
+            launchUrl: "/api/student/tools/n8n/launch",
+            expiresAt: null,
+          }
+        : {
+            tool: "n8n",
+            displayName: "n8n",
+            state,
+            canLaunch: false,
+            launchUrl: null,
+            expiresAt: null,
+          };
+    expect(toStudentToolEntitlement(access)).toEqual({
+      toolType: "n8n",
+      state: expected,
       expiresAt: null,
-    })).toEqual({ toolType: "n8n", state: expected, expiresAt: null });
+    });
   });
 });

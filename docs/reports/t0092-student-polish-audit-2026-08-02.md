@@ -200,6 +200,33 @@ service-first capability/access модель, а не создавать пар�
 fail-closed скрытие URL в DTO, `noreferrer`, human state copy, native radio
 fieldset, initial error focus и отсутствие скрытой отправки сообщения.
 
+### Реализация T-0098 после T-0102
+
+Перед реализацией экран повторно независимо проверили три субагента: UX/UI
+logic, Impeccable polish и Impeccable accessibility/security. Consensus
+подтвердил исходные P1 и добавил проверку новой boundary T-0102:
+
+- student больше не получает owner setup или внешний launch URL;
+- DTO различает `canLaunch: true` только у `ready` и `canLaunch: false` у всех
+  остальных состояний;
+- disabled-launch заменён state-specific help/refresh, а переходные состояния
+  имеют bounded polling с ручным fallback;
+- неподтверждённые teacher/VPS/course promises удалены, expiry использует
+  семантический `time`;
+- problem flow всегда показывает preview, исключает secret-like free text,
+  поддерживает ручное выделение, clipboard timeout и доступные live/focus
+  состояния;
+- page split начинается только с `xl`, mobile body остаётся 16 px, локальные
+  back/dialog-close действия имеют не менее 44 px.
+
+Authenticated browser evidence выполнена на локальном test-state: 1440, 1024,
+420 и 375 px не имеют горизонтального переполнения, а reflow при 200% проверен
+через эквивалентный CSS viewport 720 px для исходной ширины 1440 px. Диалог
+открывается с фокусом на первом radio, Escape закрывает его с возвратом фокуса
+на trigger, а введённый `Bearer`-like текст исключается из preview. Проверки
+репозитория: 286 unit tests, 82 integration tests, lint, typecheck и production
+build — успешно. Это локальная проверка; VPS и provider не вызывались.
+
 ## Экран 6 — помощь `/student/help`
 
 | Приоритет | Тип | Корень | Находка | План |

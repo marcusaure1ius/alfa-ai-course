@@ -23,9 +23,12 @@ export async function GET(request: Request): Promise<Response> {
     return createN8nGatewayExchangeResponse(ticket);
   } catch (error) {
     if (error instanceof N8nGatewayError) {
-      return Response.json(
-        { error: "Инструмент пока нельзя открыть." },
-        { status: 409, headers: { "cache-control": "no-store" } },
+      return Response.redirect(
+        new URL(
+          "/student/tools/n8n?notice=launch-unavailable",
+          request.url,
+        ),
+        303,
       );
     }
     throw error;

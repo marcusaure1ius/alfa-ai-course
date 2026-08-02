@@ -84,13 +84,28 @@ export type StudentN8nAccessState =
   | "attention"
   | "expired";
 
-export type StudentN8nAccess = {
+export type StudentN8nUnavailableState = Exclude<
+  StudentN8nAccessState,
+  "ready"
+>;
+
+type StudentN8nAccessBase = {
   tool: "n8n";
   displayName: "n8n";
-  state: StudentN8nAccessState;
-  launchUrl: string | null;
   expiresAt: string | null;
 };
+
+export type StudentN8nAccess =
+  | (StudentN8nAccessBase & {
+      state: "ready";
+      canLaunch: true;
+      launchUrl: string;
+    })
+  | (StudentN8nAccessBase & {
+      state: StudentN8nUnavailableState;
+      canLaunch: false;
+      launchUrl: null;
+    });
 
 type StudentAccessRow = {
   status: "active" | "revoked";
@@ -107,9 +122,24 @@ const lockedAccess: StudentN8nAccess = {
   tool: "n8n",
   displayName: "n8n",
   state: "locked",
+  canLaunch: false,
   launchUrl: null,
   expiresAt: null,
 };
+
+function unavailableAccess(
+  state: StudentN8nUnavailableState,
+  expiresAt: string | null,
+): StudentN8nAccess {
+  return {
+    tool: "n8n",
+    displayName: "n8n",
+    state,
+    canLaunch: false,
+    launchUrl: null,
+    expiresAt,
+  };
+}
 
 export async function getStudentN8nAccess(
   sql: DatabaseSql,
@@ -152,13 +182,13 @@ export async function getStudentN8nAccess(
   if (!row || row.status !== "active") return lockedAccess;
   const expiresAt = row.expires_at.toISOString();
   if (row.expires_at.getTime() <= now.getTime()) {
-    return { ...lockedAccess, state: "expired", expiresAt };
+    return unavailableAccess("expired", expiresAt);
   }
   if (!licenseGate.ready) {
-    return { ...lockedAccess, state: "license_blocked", expiresAt };
+    return unavailableAccess("license_blocked", expiresAt);
   }
   if (!row.student_access_enabled) {
-    return { ...lockedAccess, state: "service_disabled", expiresAt };
+    return unavailableAccess("service_disabled", expiresAt);
   }
   const launchUrl = safeHttpsUrl(row.public_url);
   if (
@@ -167,13 +197,13 @@ export async function getStudentN8nAccess(
     row.environment_status === "cleanup_required" ||
     row.health_status === "unhealthy"
   ) {
-    return { ...lockedAccess, state: "attention", expiresAt };
+    return unavailableAccess("attention", expiresAt);
   }
   if (!launchUrl || row.environment_status !== "active") {
-    return { ...lockedAccess, state: "preparing", expiresAt };
+    return unavailableAccess("preparing", expiresAt);
   }
   if (row.installation_status === "ready_owner_setup_required") {
-    return { ...lockedAccess, state: "owner_setup_required", expiresAt };
+    return unavailableAccess("owner_setup_required", expiresAt);
   }
   if (
     row.installation_status === "ready" &&
@@ -184,11 +214,12 @@ export async function getStudentN8nAccess(
       tool: "n8n",
       displayName: "n8n",
       state: "ready",
+      canLaunch: true,
       launchUrl: "/api/student/tools/n8n/launch",
       expiresAt,
     };
   }
-  return { ...lockedAccess, state: "preparing", expiresAt };
+  return unavailableAccess("preparing", expiresAt);
 }
 
 function safeHttpsUrl(value: string | null): string | null {

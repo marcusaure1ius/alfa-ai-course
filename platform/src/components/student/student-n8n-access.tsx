@@ -8,57 +8,76 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { N8nAccessRefresh } from "@/components/student/n8n-access-refresh";
 import { ToolProblemDialog } from "@/components/student/tool-problem-dialog";
-import type { StudentN8nAccess } from "@/server/tools/student-access";
+import { Button } from "@/components/ui/button";
+import type {
+  StudentN8nAccess,
+  StudentN8nAccessState,
+} from "@/server/tools/student-access";
 
-const copy: Record<
-  StudentN8nAccess["state"],
-  { title: string; description: string }
-> = {
+type StateContent = {
+  title: string;
+  description: string;
+  action: "help-access" | "refresh" | "launch" | "help-expired";
+  autoRefresh?: boolean;
+};
+
+const copy: Record<StudentN8nAccessState, StateContent> = {
   locked: {
-    title: "Доступ ещё не подключён",
+    title: "Доступ пока не выдан",
     description:
-      "Когда преподаватель подготовит инструмент и откроет доступ, здесь появится кнопка для входа.",
+      "Сейчас n8n нельзя открыть. В памятке перечислено, что можно проверить со своей стороны.",
+    action: "help-access",
   },
   license_blocked: {
-    title: "Доступ временно закрыт",
+    title: "Выдача доступа не завершена",
     description:
-      "Среда подготовлена, но преподавателю нужно завершить обязательную проверку перед выдачей ссылки.",
+      "Запуск закрыт обязательной проверкой условий доступа. Это состояние нельзя обойти входом по сохранённой ссылке.",
+    action: "help-access",
   },
   service_disabled: {
-    title: "Доступ временно приостановлен",
+    title: "Вход временно закрыт",
     description:
-      "Преподаватель временно закрыл вход для всех учеников. Ваше назначение и срок доступа сохранены — ссылка вернётся после открытия сервиса.",
+      "Общий вход учеников в n8n сейчас выключен. Проверьте состояние повторно позднее.",
+    action: "refresh",
   },
   preparing: {
-    title: "Среда готовится",
+    title: "Среда ещё не готова",
     description:
-      "Доступ уже назначен. Ссылка появится после завершения автоматических проверок.",
+      "Доступ назначен, но обязательные проверки ещё не завершены. Экран проверит состояние несколько раз автоматически.",
+    action: "refresh",
+    autoRefresh: true,
   },
   owner_setup_required: {
-    title: "Завершите первоначальную настройку",
+    title: "Требуется настройка администратором",
     description:
-      "Откройте n8n. Если сервис показывает стартовый экран, создайте owner-аккаунт самостоятельно. Neurokurs не создаёт его скрыто и никогда не просит прислать пароль.",
+      "Первоначальную настройку владельца выполняет только администратор. Не создавайте owner-аккаунт и не передавайте пароль.",
+    action: "refresh",
+    autoRefresh: true,
   },
   ready: {
-    title: "Рабочее пространство готово",
+    title: "n8n готов к работе",
     description:
-      "Откройте n8n и продолжайте практическое задание в отдельной вкладке.",
+      "Безопасный вход откроется в новой вкладке. Доступ проверяется заново при каждом запросе.",
+    action: "launch",
   },
   attention: {
-    title: "Инструмент требует проверки",
+    title: "Среду сейчас нельзя открыть",
     description:
-      "Ссылка временно скрыта. Преподаватель проверит текущую среду. Если она удалена, он создаст новую: удалённые среды не восстанавливаются.",
+      "Проверка состояния не пройдена, поэтому ссылка скрыта. Попробуйте проверить ещё раз или подготовьте сообщение о проблеме.",
+    action: "refresh",
+    autoRefresh: true,
   },
   expired: {
     title: "Срок доступа завершён",
     description:
-      "Попросите преподавателя продлить доступ или получить инструкцию самостоятельного запуска. Перенос VPS и облачного аккаунта не выполняется автоматически.",
+      "Запуск закрыт. В памятке описаны доступные следующие шаги без передачи паролей и ключей.",
+    action: "help-expired",
   },
 };
 
-function StateIcon({ state }: { state: StudentN8nAccess["state"] }) {
+function StateIcon({ state }: { state: StudentN8nAccessState }) {
   const Icon =
     state === "ready"
       ? ExternalLink
@@ -74,58 +93,74 @@ function StateIcon({ state }: { state: StudentN8nAccess["state"] }) {
   return <Icon className="size-5" aria-hidden="true" />;
 }
 
+function PrimaryAction({
+  access,
+  content,
+}: {
+  access: StudentN8nAccess;
+  content: StateContent;
+}) {
+  if (access.canLaunch) {
+    return (
+      <Button asChild>
+        <a href={access.launchUrl} target="_blank" rel="noreferrer">
+          <ExternalLink aria-hidden="true" />
+          Открыть n8n
+        </a>
+      </Button>
+    );
+  }
+  if (content.action === "refresh") {
+    return (
+      <N8nAccessRefresh state={access.state} auto={content.autoRefresh} />
+    );
+  }
+  const expired = content.action === "help-expired";
+  return (
+    <Button asChild>
+      <Link href={expired ? "/student/help#tool-expired" : "/student/help#course-access"}>
+        {expired ? "Что делать дальше" : "Как получить доступ"}
+      </Link>
+    </Button>
+  );
+}
+
 export function StudentN8nAccessCard({
   access,
 }: {
   access: StudentN8nAccess;
 }) {
   const content = copy[access.state];
-  const available = Boolean(access.launchUrl);
+  const formattedExpiry = access.expiresAt
+    ? new Intl.DateTimeFormat("ru-RU", {
+        dateStyle: "long",
+        timeStyle: "short",
+        timeZone: "Europe/Moscow",
+      }).format(new Date(access.expiresAt))
+    : null;
   return (
-    <div className="rounded-xl border bg-card p-6">
+    <div className="rounded-xl border bg-card p-5 sm:p-6">
       <div className="flex items-start gap-4">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted">
           <StateIcon state={access.state} />
         </span>
         <div className="min-w-0">
-          <h2 className="font-display text-xl">{content.title}</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          <h2 className="font-display text-xl leading-tight">{content.title}</h2>
+          <p className="mt-2 text-base leading-7 text-muted-foreground">
             {content.description}
           </p>
-          {access.expiresAt ? (
-            <p className="mt-3 text-xs font-medium text-muted-foreground">
-              Доступ до{" "}
-              {new Intl.DateTimeFormat("ru-RU", {
-                dateStyle: "long",
-                timeZone: "Europe/Moscow",
-              }).format(new Date(access.expiresAt))}
+          {access.expiresAt && formattedExpiry ? (
+            <p className="mt-3 text-sm font-medium text-muted-foreground">
+              {access.state === "expired" ? "Действовал до" : "Доступ до"}{" "}
+              <time dateTime={access.expiresAt}>{formattedExpiry}</time>
             </p>
           ) : null}
         </div>
       </div>
-      <div className="mt-6 flex flex-wrap gap-3">
-      {available ? (
-        <Button asChild>
-          <a href={access.launchUrl ?? "#"} target="_blank" rel="noreferrer">
-            <ExternalLink aria-hidden="true" />
-            Открыть n8n
-          </a>
-        </Button>
-      ) : (
-        <Button disabled>
-          <ExternalLink aria-hidden="true" />
-          Открыть n8n
-        </Button>
-      )}
-      <ToolProblemDialog state={content.title} />
+      <div className="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap">
+        <PrimaryAction access={access} content={content} />
+        <ToolProblemDialog state={content.title} />
       </div>
-      {access.state === "expired" ? (
-        <Button asChild variant="link" className="mt-2 px-0">
-          <Link href="/student/help#tool-expired">
-            Что делать после окончания доступа
-          </Link>
-        </Button>
-      ) : null}
     </div>
   );
 }

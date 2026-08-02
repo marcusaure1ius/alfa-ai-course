@@ -126,10 +126,12 @@ describe("student n8n tool access", () => {
       tool: "n8n",
       displayName: "n8n",
       state: "ready",
+      canLaunch: true,
       launchUrl: "/api/student/tools/n8n/launch",
       expiresAt: expiresAt.toISOString(),
     });
     expect(Object.keys(access).sort()).toEqual([
+      "canLaunch",
       "displayName",
       "expiresAt",
       "launchUrl",
@@ -156,13 +158,21 @@ describe("student n8n tool access", () => {
         new Date("2026-08-02T00:00:00.000Z"),
         licenseGate,
       ),
-    ).resolves.toMatchObject({ state: "expired", launchUrl: null });
+    ).resolves.toMatchObject({
+      state: "expired",
+      canLaunch: false,
+      launchUrl: null,
+    });
     await expect(
       getStudentN8nAccess(sql, studentId, new Date("2026-07-31T13:00:00.000Z"), {
         ready: false,
         reason: "missing",
       }),
-    ).resolves.toMatchObject({ state: "license_blocked", launchUrl: null });
+    ).resolves.toMatchObject({
+      state: "license_blocked",
+      canLaunch: false,
+      launchUrl: null,
+    });
   });
 
   it("обратимо закрывает запуск глобальным gate без изменения назначения", async () => {
@@ -190,6 +200,7 @@ describe("student n8n tool access", () => {
       ),
     ).resolves.toMatchObject({
       state: "service_disabled",
+      canLaunch: false,
       launchUrl: null,
       expiresAt: expiresAt.toISOString(),
     });
@@ -207,6 +218,7 @@ describe("student n8n tool access", () => {
       ),
     ).resolves.toMatchObject({
       state: "ready",
+      canLaunch: true,
       launchUrl: "/api/student/tools/n8n/launch",
       expiresAt: expiresAt.toISOString(),
     });
@@ -249,7 +261,11 @@ describe("student n8n tool access", () => {
     });
     await expect(
       getStudentN8nAccess(sql, studentId, new Date(), licenseGate),
-    ).resolves.toMatchObject({ state: "locked", launchUrl: null });
+    ).resolves.toMatchObject({
+      state: "locked",
+      canLaunch: false,
+      launchUrl: null,
+    });
     await expect(getAdminStudentN8nAccess(sql, studentId)).resolves.toMatchObject({
       status: "revoked",
     });
@@ -303,6 +319,10 @@ describe("student n8n tool access", () => {
         new Date("2026-07-31T12:00:00.000Z"),
         licenseGate,
       ),
-    ).resolves.toMatchObject({ state: "locked", launchUrl: null });
+    ).resolves.toMatchObject({
+      state: "locked",
+      canLaunch: false,
+      launchUrl: null,
+    });
   });
 });

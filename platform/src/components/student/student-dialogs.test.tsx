@@ -18,12 +18,17 @@ beforeEach(() => {
       setItem: (key: string, value: string) => storage.set(key, value),
     },
   });
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: undefined,
+  });
 });
 
 afterEach(() => {
   cleanup();
   storage.clear();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("student dialogs", () => {
@@ -123,9 +128,80 @@ describe("student dialogs", () => {
     expect(writeText).toHaveBeenCalledOnce();
 
     await act(async () => finishCopy());
-    expect(await screen.findByText("Сообщение подготовлено")).toBeTruthy();
+    const success = await screen.findByRole("status");
+    expect(success.textContent).toContain("Сообщение скопировано");
+    expect(document.activeElement).toBe(success);
+    expect(screen.getByLabelText("Предпросмотр сообщения")).toBeTruthy();
+  });
+
+  it("excludes secret-like details from preview and clipboard", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<ToolProblemDialog state="Среда ещё не готова" />);
+    fireEvent.click(screen.getByRole("button", { name: "Сообщить о проблеме" }));
+    fireEvent.click(screen.getByLabelText("Сервис сообщает об ошибке"));
+    fireEvent.change(screen.getByLabelText("Что видно на экране"), {
+      target: { value: "token=sk-abcdefghijklmnopqrstuvwxyz123456" },
+    });
+
+    const preview = screen.getByLabelText(
+      "Предпросмотр сообщения",
+    ) as HTMLTextAreaElement;
+    expect(preview.value).toContain("Подробности не включены");
+    expect(preview.value).not.toContain("sk-abcdefghijklmnopqrstuvwxyz123456");
+    expect(screen.getByRole("alert").textContent).toContain("исключены");
+
+    fireEvent.click(screen.getByRole("button", { name: "Скопировать сообщение" }));
+    await screen.findByRole("status");
+    expect(writeText.mock.calls[0]?.[0]).not.toContain(
+      "sk-abcdefghijklmnopqrstuvwxyz123456",
+    );
+  });
+
+  it("keeps a selectable preview when clipboard is unavailable", async () => {
+    render(<ToolProblemDialog state="Вход временно закрыт" />);
+    fireEvent.click(screen.getByRole("button", { name: "Сообщить о проблеме" }));
+    fireEvent.click(screen.getByLabelText("Другое"));
+    fireEvent.click(screen.getByRole("button", { name: "Скопировать сообщение" }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(
+      /Текст остаётся ниже/i,
+    );
+    const preview = screen.getByLabelText(
+      "Предпросмотр сообщения",
+    ) as HTMLTextAreaElement;
+    fireEvent.click(screen.getByRole("button", { name: "Выделить текст" }));
+    expect(document.activeElement).toBe(preview);
+    expect(preview.selectionEnd).toBe(preview.value.length);
+  });
+
+  it("unlocks and remains closable after a hanging clipboard call", async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn(() => new Promise<void>(() => undefined)) },
+    });
+    render(<ToolProblemDialog state="Среду сейчас нельзя открыть" />);
+    fireEvent.click(screen.getByRole("button", { name: "Сообщить о проблеме" }));
+    fireEvent.click(screen.getByLabelText("Страница не открывается"));
+    fireEvent.click(screen.getByRole("button", { name: "Скопировать сообщение" }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Автокопирование недоступно",
+    );
     expect(
-      screen.getByRole("link", { name: "Открыть памятку" }).getAttribute("href"),
-    ).toBe("/student/help#tool-problem");
+      (screen.getByRole("button", {
+        name: "Скопировать сообщение",
+      }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
