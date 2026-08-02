@@ -2,8 +2,7 @@
 
 import {
   CircleHelp,
-  House,
-  ListTree,
+  LibraryBig,
   Menu,
   Wrench,
 } from "lucide-react";
@@ -27,25 +26,36 @@ import { cn } from "@/lib/utils";
 const navItems: Array<{
   href: string;
   label: string;
-  icon: typeof ListTree;
+  icon: typeof LibraryBig;
   exact?: boolean;
 }> = [
-  { href: "/student/program", label: "Программа", icon: ListTree },
-  { href: "/student", label: "Обзор", icon: House, exact: true },
+  { href: "/student", label: "Мои курсы", icon: LibraryBig },
   { href: "/student/tools", label: "Инструменты", icon: Wrench },
   { href: "/student/help", label: "Помощь", icon: CircleHelp },
 ] as const;
 
 type StudentNavigationProps = {
-  courseTitle: string | null;
-  progressLabel: string | null;
+  courseCount: number;
   email?: string;
   mobile?: boolean;
 };
 
+function courseCountLabel(courseCount: number): string {
+  const mod100 = courseCount % 100;
+  const mod10 = courseCount % 10;
+  const word =
+    mod100 >= 11 && mod100 <= 14
+      ? "курсов"
+      : mod10 === 1
+        ? "курс"
+        : mod10 >= 2 && mod10 <= 4
+          ? "курса"
+          : "курсов";
+  return `${courseCount} ${word}`;
+}
+
 export function StudentNavigation({
-  courseTitle,
-  progressLabel,
+  courseCount,
   email,
   mobile = false,
 }: StudentNavigationProps) {
@@ -57,18 +67,18 @@ export function StudentNavigation({
       className="flex min-h-0 flex-1 flex-col"
     >
       <div className={cn("shrink-0 px-4 pb-6", mobile ? "pt-2" : "pt-7")}>
-        <p className="font-display text-[1rem] leading-5">
-          {courseTitle ?? "Учебное пространство"}
-        </p>
+        <p className="font-display text-[1rem] leading-5">Обучение</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          {progressLabel ?? "Курс появится после выдачи доступа"}
+          {courseCountLabel(courseCount)} в доступе
         </p>
       </div>
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2">
         {navItems.map(({ href, label, icon: Icon, exact }) => {
           const active =
             href === "/student"
-              ? pathname === href || pathname.startsWith("/student/materials/")
+              ? pathname === href ||
+                pathname.startsWith("/student/program") ||
+                pathname.startsWith("/student/materials/")
               : exact
                 ? pathname === href
                 : pathname === href || pathname.startsWith(`${href}/`);

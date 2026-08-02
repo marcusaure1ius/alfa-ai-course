@@ -701,6 +701,42 @@ export async function getStudentWorkspaceCourse(
     : null;
 }
 
+export async function getStudentCourses(
+  sql: DatabaseSql,
+  studentUserId: string,
+): Promise<StudentCourse[]> {
+  const rows = await sql<Array<{ slug: string }>>`
+    SELECT course.slug
+    FROM courses AS course
+    JOIN course_memberships AS membership
+      ON membership.course_id = course.id
+      AND membership.user_id = ${studentUserId}
+      AND membership.status = 'active'
+    WHERE course.status = 'published'
+    ORDER BY membership.granted_at, course.created_at
+  `;
+  const courses = await Promise.all(
+    rows.map(({ slug }) => getStudentCourse(sql, studentUserId, slug)),
+  );
+  return courses.filter((course): course is StudentCourse => course !== null);
+}
+
+export async function getStudentCourseCount(
+  sql: DatabaseSql,
+  studentUserId: string,
+): Promise<number> {
+  const rows = await sql<Array<{ count: number }>>`
+    SELECT count(*)::integer AS count
+    FROM courses AS course
+    JOIN course_memberships AS membership
+      ON membership.course_id = course.id
+      AND membership.user_id = ${studentUserId}
+      AND membership.status = 'active'
+    WHERE course.status = 'published'
+  `;
+  return rows[0]?.count ?? 0;
+}
+
 type StudentMaterialRow = {
   id: string;
   slug: string;

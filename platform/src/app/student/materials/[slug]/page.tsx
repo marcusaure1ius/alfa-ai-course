@@ -46,7 +46,10 @@ export default async function StudentMaterialPage({
     <div className="px-5 py-8 sm:px-8 sm:py-12 xl:px-12">
       <div className="mx-auto max-w-6xl">
         <p className="text-sm text-muted-foreground">
-          <Link href="/student/program" className="hover:text-foreground">
+          <Link
+            href={`/student/program?course=${encodeURIComponent(material.course.slug)}`}
+            className="hover:text-foreground"
+          >
             {material.section.title}
           </Link>
           <span className="px-2" aria-hidden="true">

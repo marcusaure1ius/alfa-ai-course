@@ -94,7 +94,13 @@ describe("AdminSidebar collapsed navigation", () => {
       expect(link.getAttribute("data-slot")).toBe("sidebar-menu-button");
       expect(link.querySelector("svg")).toBeTruthy();
       expect(link.className).not.toContain("group-data-[collapsible=icon]:hidden");
+      expect(link.className).toContain("min-h-11");
+      expect(link.className).toContain("rounded-lg");
+      expect(link.className).toContain("px-3");
     }
+    expect(screen.getByRole("link", { name: "Инструменты" }).className).toContain(
+      "data-[active=true]:bg-foreground",
+    );
     expect(screen.getAllByText("Курсы")).toHaveLength(2);
     expect(screen.getByText("Управление")).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Доступы" })).toBeNull();

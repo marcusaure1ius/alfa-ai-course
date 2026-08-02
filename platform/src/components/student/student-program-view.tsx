@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowRight,
   BookOpenText,
   Check,
@@ -44,9 +45,16 @@ export function StudentProgramView({ course }: StudentProgramViewProps) {
   return (
     <div className="px-5 py-8 sm:px-8 sm:py-10 xl:px-12">
       <div className="mx-auto max-w-6xl">
+        <Link
+          href="/student"
+          className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Все курсы
+        </Link>
         <div className="flex flex-col gap-5 border-b pb-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">Программа</p>
+            <p className="text-sm text-muted-foreground">Программа курса</p>
             <h1 className="font-display mt-2 max-w-4xl break-words text-3xl leading-tight text-balance [overflow-wrap:anywhere] sm:text-4xl">
               {course.title}
             </h1>

@@ -72,6 +72,9 @@ describe("StudentProgramView", () => {
       screen.queryByRole("heading", { name: "Разделы курса" }),
     ).toBeNull();
     expect(container.querySelector('a[href="/student/program"]')).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Все курсы" }).getAttribute("href"),
+    ).toBe("/student");
     expect(container.querySelectorAll("section")).toHaveLength(1);
   });
 

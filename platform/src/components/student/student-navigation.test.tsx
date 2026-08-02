@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 
 import { StudentNavigation } from "./student-navigation";
-import { getStudentProgressLabel } from "@/lib/student-course";
 
 let pathname = "/student";
 
@@ -19,53 +18,43 @@ afterEach(() => {
   pathname = "/student";
 });
 
-function renderNavigation(progressLabel = "1 из 3 материалов") {
-  return render(
-    <StudentNavigation
-      courseTitle="Автоматизация бизнеса"
-      progressLabel={progressLabel}
-    />,
-  );
+function renderNavigation(courseCount = 1) {
+  return render(<StudentNavigation courseCount={courseCount} />);
 }
 
 describe("StudentNavigation", () => {
-  it("keeps the overview reachable and marks it as the current page", () => {
+  it("uses one course destination instead of competing overview and program links", () => {
     renderNavigation();
 
-    const overview = screen.getByRole("link", { name: "Обзор" });
-    expect(overview.getAttribute("href")).toBe("/student");
-    expect(overview.getAttribute("aria-current")).toBe("page");
-    expect(
-      screen.getByRole("link", { name: "Программа" }).getAttribute("aria-current"),
-    ).toBeNull();
+    const courses = screen.getByRole("link", { name: "Мои курсы" });
+    expect(courses.getAttribute("href")).toBe("/student");
+    expect(courses.getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByRole("link", { name: "Обзор" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Программа" })).toBeNull();
   });
 
-  it("uses the overview as the stable parent entry on a material route", () => {
+  it("uses my courses as the stable parent entry on course and material routes", () => {
     pathname = "/student/materials/pervyy-shag";
     renderNavigation();
 
-    const overview = screen.getByRole("link", { name: "Обзор" });
-    expect(overview.getAttribute("href")).toBe("/student");
-    expect(overview.getAttribute("aria-current")).toBe("page");
+    const courses = screen.getByRole("link", { name: "Мои курсы" });
+    expect(courses.getAttribute("aria-current")).toBe("page");
+
+    cleanup();
+    pathname = "/student/program";
+    renderNavigation();
+    expect(
+      screen.getByRole("link", { name: "Мои курсы" }).getAttribute(
+        "aria-current",
+      ),
+    ).toBe("page");
   });
 
-  it("keeps an assigned empty course truthful across layout and navigation", () => {
-    const emptyLabel = getStudentProgressLabel({
-      state: "empty",
-      completed: 0,
-      total: 0,
-      percent: 0,
-      current: null,
-      previous: null,
-      next: null,
-    });
+  it("shows the course count without an out-of-context material progress", () => {
+    renderNavigation(3);
 
-    renderNavigation(emptyLabel ?? undefined);
-
-    expect(screen.getByText("Программа готовится")).toBeTruthy();
-    expect(
-      screen.queryByText("Курс появится после выдачи доступа"),
-    ).toBeNull();
+    expect(screen.getByText("3 курса в доступе")).toBeTruthy();
+    expect(screen.queryByText(/материал/)).toBeNull();
   });
 
   it("marks a section route without creating two active destinations", () => {

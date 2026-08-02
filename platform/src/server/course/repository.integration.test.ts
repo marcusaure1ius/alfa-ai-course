@@ -12,6 +12,8 @@ import {
   deleteCourse,
   deleteSection,
   getStudentCourse,
+  getStudentCourseCount,
+  getStudentCourses,
   getStudentMaterial,
   getStudentWorkspaceCourse,
   reorderCourseSections,
@@ -130,6 +132,28 @@ describe("course content repository", () => {
       description: "",
       sections: [],
     });
+  });
+
+  it("returns every accessible published course for the student catalog", async () => {
+    for (const [slug, title] of [
+      ["first-course", "Первый курс"],
+      ["second-course", "Второй курс"],
+    ] as const) {
+      const courseId = await createCourse(sql, admin, { slug, title });
+      await setCoursePublication(sql, admin, courseId, "published");
+      await setStudentCourseAccess(sql, admin, {
+        courseId,
+        studentUserId: studentId,
+        granted: true,
+      });
+    }
+
+    const courses = await getStudentCourses(sql, studentId);
+    expect(courses.map((course) => course.slug)).toEqual([
+      "first-course",
+      "second-course",
+    ]);
+    await expect(getStudentCourseCount(sql, studentId)).resolves.toBe(2);
   });
 
   it("keeps a published section hidden while its course is a draft", async () => {

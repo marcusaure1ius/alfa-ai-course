@@ -10,18 +10,16 @@ import { StudentProfileMenu } from "@/components/student/student-profile-menu";
 
 type StudentShellProps = {
   email: string;
-  courseTitle: string | null;
-  progressLabel: string | null;
+  courseCount: number;
   children: ReactNode;
 };
 
 export function StudentShell({
   email,
-  courseTitle,
-  progressLabel,
+  courseCount,
   children,
 }: StudentShellProps) {
-  const navigation = { courseTitle, progressLabel };
+  const navigation = { courseCount };
   return (
     <div className="min-h-svh bg-background">
       <header className="sticky top-0 z-40 h-16 border-b bg-card/95 backdrop-blur">
