@@ -8,7 +8,7 @@ vi.mock("@/server/tools/student-access", () => ({
   getStudentN8nAccess: mocks.getStudentN8nAccess,
 }));
 
-import { getStudentToolCatalog } from "./student-catalog";
+import { getStudentToolCatalog, toStudentToolEntitlement } from "./student-catalog";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -33,8 +33,26 @@ describe("getStudentToolCatalog", () => {
     expect(catalog[0]?.entitlement).toEqual({
       toolType: "n8n",
       state: "service_disabled",
-      launchUrl: null,
       expiresAt: "2026-09-01T00:00:00.000Z",
     });
+  });
+
+  it.each([
+    ["locked", "locked"],
+    ["license_blocked", "attention"],
+    ["service_disabled", "service_disabled"],
+    ["preparing", "preparing"],
+    ["owner_setup_required", "preparing"],
+    ["ready", "available"],
+    ["attention", "attention"],
+    ["expired", "expired"],
+  ] as const)("maps n8n %s into generic %s", (state, expected) => {
+    expect(toStudentToolEntitlement({
+      tool: "n8n",
+      displayName: "n8n",
+      state,
+      launchUrl: state === "ready" ? "https://n8n.example.test" : null,
+      expiresAt: null,
+    })).toEqual({ toolType: "n8n", state: expected, expiresAt: null });
   });
 });

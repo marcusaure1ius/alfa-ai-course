@@ -18,8 +18,7 @@ const automation: StudentToolCatalogItem = {
   capabilities: { environment: "required", studentAccess: true, studentLaunch: true },
   entitlement: {
     toolType: "automation",
-    state: "ready",
-    launchUrl: "https://automation.example.test",
+    state: "available",
     expiresAt: "2026-09-01T00:00:00.000Z",
   },
 };
@@ -33,7 +32,6 @@ const notebook: StudentToolCatalogItem = {
   entitlement: {
     toolType: "notebook",
     state: "locked",
-    launchUrl: null,
     expiresAt: null,
   },
 };
@@ -70,7 +68,6 @@ describe("StudentToolCatalog", () => {
           entitlement: {
             ...automation.entitlement,
             state: "service_disabled",
-            launchUrl: null,
           },
         }]}
       />,
@@ -80,6 +77,41 @@ describe("StudentToolCatalog", () => {
     expect(screen.getByText(/назначение и срок доступа сохранены/i)).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Открыть инструмент/ })).toBeNull();
     expect(screen.getByRole("link", { name: `Подробнее: ${automation.name}` })).toBeTruthy();
+  });
+
+  it.each([
+    ["locked", "Доступ не подключён", "Подробнее"],
+    ["service_disabled", "Сервис временно закрыт", "Подробнее"],
+    ["preparing", "Сервис готовится", "Подробнее"],
+    ["available", "Можно работать", "Открыть инструмент"],
+    ["attention", "Доступ временно недоступен", "Что делать дальше"],
+    ["expired", "Срок доступа завершён", "Что делать дальше"],
+  ] as const)("renders honest %s state with its icon and action", (state, title, action) => {
+    const { container } = render(
+      <StudentToolCatalog
+        tools={[{
+          ...automation,
+          entitlement: { ...automation.entitlement, state },
+        }]}
+      />,
+    );
+    expect(screen.getByText(title)).toBeTruthy();
+    expect(screen.getByRole("link", { name: `${action}: ${automation.name}` })).toBeTruthy();
+    expect(container.querySelector(`[data-state-icon="${state}"]`)).toBeTruthy();
+  });
+
+  it("does not offer launch for an available environmentless non-launch service", () => {
+    render(
+      <StudentToolCatalog
+        tools={[{
+          ...notebook,
+          entitlement: { ...notebook.entitlement, state: "available" },
+        }]}
+      />,
+    );
+    expect(screen.getByText("Можно работать")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Открыть инструмент/ })).toBeNull();
+    expect(screen.getByRole("link", { name: `Подробнее: ${notebook.name}` })).toBeTruthy();
   });
 
   it("has no automatic accessibility violations across mixed states", async () => {

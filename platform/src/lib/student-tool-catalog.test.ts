@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { ToolDefinition } from "@/lib/tool-catalog";
 
-import { composeStudentToolCatalog } from "./student-tool-catalog";
+import {
+  composeStudentToolCatalog,
+  resolveStudentToolAction,
+  type StudentToolAccessState,
+} from "./student-tool-catalog";
 
 const definitions: ToolDefinition[] = [
   {
@@ -32,7 +36,7 @@ describe("composeStudentToolCatalog", () => {
 
   it("keeps environment capability without inventing environment fields", () => {
     const catalog = composeStudentToolCatalog(definitions, [
-      { toolType: "notebook", state: "ready", launchUrl: null, expiresAt: null },
+      { toolType: "notebook", state: "available", expiresAt: null },
     ]);
 
     expect(catalog[0]).toMatchObject({
@@ -43,7 +47,7 @@ describe("composeStudentToolCatalog", () => {
     expect(catalog[1]).toMatchObject({
       id: "notebook",
       capabilities: { environment: "none" },
-      entitlement: { state: "ready", launchUrl: null },
+      entitlement: { state: "available" },
     });
     expect(catalog[1]).not.toHaveProperty("environments");
     expect(catalog[1]?.entitlement).not.toHaveProperty("environmentId");
@@ -54,7 +58,6 @@ describe("composeStudentToolCatalog", () => {
       {
         toolType: "automation",
         state: "service_disabled",
-        launchUrl: null,
         expiresAt: "2026-09-01T00:00:00.000Z",
       },
     ]);
@@ -62,8 +65,57 @@ describe("composeStudentToolCatalog", () => {
     expect(tool?.entitlement).toEqual({
       toolType: "automation",
       state: "service_disabled",
-      launchUrl: null,
       expiresAt: "2026-09-01T00:00:00.000Z",
     });
   });
+
+  it("omits definitions that do not expose student access", () => {
+    const hidden: ToolDefinition = {
+      ...definitions[0]!,
+      id: "admin-only",
+      capabilities: {
+        ...definitions[0]!.capabilities,
+        studentAccess: false,
+      },
+    };
+    expect(
+      composeStudentToolCatalog([hidden, ...definitions], []).map(
+        (tool) => tool.id,
+      ),
+    ).toEqual(["automation", "notebook"]);
+  });
+
+  it.each([
+    ["locked", true, "details"],
+    ["service_disabled", true, "details"],
+    ["preparing", true, "details"],
+    ["available", true, "launch"],
+    ["available", false, "details"],
+    ["attention", true, "recovery"],
+    ["expired", true, "recovery"],
+  ] as const)(
+    "resolves %s with studentLaunch=%s to %s",
+    (state, studentLaunch, expected) => {
+      const [tool] = composeStudentToolCatalog(
+        [
+          {
+            ...definitions[0]!,
+            capabilities: {
+              ...definitions[0]!.capabilities,
+              studentLaunch,
+            },
+          },
+        ],
+        [
+          {
+            toolType: "automation",
+            state: state as StudentToolAccessState,
+            expiresAt: null,
+          },
+        ],
+      );
+
+      expect(tool && resolveStudentToolAction(tool)).toBe(expected);
+    },
+  );
 });

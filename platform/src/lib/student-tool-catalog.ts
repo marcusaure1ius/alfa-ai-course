@@ -1,10 +1,16 @@
 import type { ToolDefinition } from "@/lib/tool-catalog";
-import type { StudentN8nAccessState } from "@/server/tools/student-access";
+
+export type StudentToolAccessState =
+  | "locked"
+  | "service_disabled"
+  | "preparing"
+  | "available"
+  | "attention"
+  | "expired";
 
 export type StudentToolEntitlement = {
   toolType: string;
-  state: StudentN8nAccessState;
-  launchUrl: string | null;
+  state: StudentToolAccessState;
   expiresAt: string | null;
 };
 
@@ -15,10 +21,31 @@ export type StudentToolCatalogItem = Pick<
   entitlement: StudentToolEntitlement;
 };
 
+export type StudentToolAction = "details" | "launch" | "recovery";
+
+export function resolveStudentToolAction(
+  tool: StudentToolCatalogItem,
+): StudentToolAction {
+  if (
+    tool.entitlement.state === "attention" ||
+    tool.entitlement.state === "expired"
+  ) {
+    return "recovery";
+  }
+
+  if (
+    tool.entitlement.state === "available" &&
+    tool.capabilities.studentLaunch
+  ) {
+    return "launch";
+  }
+
+  return "details";
+}
+
 const lockedEntitlement = (toolType: string): StudentToolEntitlement => ({
   toolType,
   state: "locked",
-  launchUrl: null,
   expiresAt: null,
 });
 
@@ -26,14 +53,17 @@ export function composeStudentToolCatalog(
   definitions: readonly ToolDefinition[],
   entitlements: readonly StudentToolEntitlement[],
 ): StudentToolCatalogItem[] {
-  return definitions.map((definition) => ({
-    id: definition.id,
-    name: definition.name,
-    description: definition.description,
-    studentHref: definition.studentHref,
-    capabilities: definition.capabilities,
-    entitlement:
-      entitlements.find((candidate) => candidate.toolType === definition.id) ??
-      lockedEntitlement(definition.id),
-  }));
+  return definitions
+    .filter((definition) => definition.capabilities.studentAccess)
+    .map((definition) => ({
+      id: definition.id,
+      name: definition.name,
+      description: definition.description,
+      studentHref: definition.studentHref,
+      capabilities: definition.capabilities,
+      entitlement:
+        entitlements.find(
+          (candidate) => candidate.toolType === definition.id,
+        ) ?? lockedEntitlement(definition.id),
+    }));
 }
