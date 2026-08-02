@@ -22,7 +22,11 @@ export class N8nGatewayError extends Error {
   }
 }
 
-type GatewayTarget = { environmentId: string; origin: string };
+type GatewayTarget = {
+  environmentId: string;
+  origin: string;
+  assignmentGeneration: string | null;
+};
 
 function httpsOrigin(value: string | null): string | null {
   if (!value) return null;
@@ -41,7 +45,7 @@ export async function issueN8nGatewayTicket(
   actor: AuthSession,
   environmentId?: string,
   now = new Date(),
-): Promise<{ exchangeUrl: string }> {
+): Promise<{ exchangeUrl: string; ticket: string }> {
   if (
     environmentId &&
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
@@ -74,12 +78,23 @@ export async function issueN8nGatewayTicket(
     `;
     const row = rows[0];
     const origin = httpsOrigin(row?.public_url ?? null);
-    if (row && origin) target = { environmentId: row.environment_id, origin };
+    if (row && origin) {
+      target = {
+        environmentId: row.environment_id,
+        origin,
+        assignmentGeneration: null,
+      };
+    }
   } else {
     const rows = await sql<
-      Array<{ environment_id: string; public_url: string | null }>
+      Array<{
+        environment_id: string;
+        public_url: string | null;
+        gateway_generation: string | null;
+      }>
     >`
-      SELECT access.environment_id, environment.public_url
+      SELECT access.environment_id, environment.public_url,
+        access.gateway_generation
       FROM tool_access AS access
       JOIN users AS student ON student.id = access.user_id
       JOIN course_memberships AS membership
@@ -101,6 +116,7 @@ export async function issueN8nGatewayTicket(
         AND access.status = 'active'
         AND access.expires_at > ${now}
         AND access.n8n_identity_id IS NOT NULL
+        AND access.gateway_generation IS NOT NULL
         AND student.status = 'active'
         AND student.role_id = 'student'
         AND coalesce(setting.student_access_enabled, true)
@@ -111,23 +127,52 @@ export async function issueN8nGatewayTicket(
     `;
     const row = rows[0];
     const origin = httpsOrigin(row?.public_url ?? null);
-    if (row && origin) target = { environmentId: row.environment_id, origin };
+    if (row && origin && row.gateway_generation) {
+      target = {
+        environmentId: row.environment_id,
+        origin,
+        assignmentGeneration: row.gateway_generation,
+      };
+    }
   }
 
   if (!target) throw new N8nGatewayError("NOT_READY");
   const token = createOpaqueToken();
   await sql`
     INSERT INTO tool_gateway_tickets (
-      id, token_hash, environment_id, subject_user_id, subject_role, expires_at
+      id, token_hash, environment_id, subject_user_id, subject_role,
+      assignment_generation, expires_at
     )
     VALUES (
       ${randomUUID()}, ${hashOpaqueToken(token)}, ${target.environmentId},
-      ${actor.userId}, ${actor.role}, ${new Date(now.getTime() + TICKET_TTL_MS)}
+      ${actor.userId}, ${actor.role}, ${target.assignmentGeneration},
+      ${new Date(now.getTime() + TICKET_TTL_MS)}
     )
   `;
   return {
-    exchangeUrl: `${target.origin}/__neurokurs/exchange?ticket=${encodeURIComponent(token)}`,
+    exchangeUrl: `${target.origin}/__neurokurs/exchange`,
+    ticket: token,
   };
+}
+
+export function createN8nGatewayExchangeResponse(input: {
+  exchangeUrl: string;
+  ticket: string;
+}): Response {
+  const nonce = randomUUID();
+  const action = input.exchangeUrl.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
+  const ticket = input.ticket.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
+  const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Безопасный вход</title></head><body><form id="gateway" method="post" action="${action}"><input type="hidden" name="ticket" value="${ticket}"><button type="submit">Продолжить в n8n</button></form><script nonce="${nonce}">document.getElementById("gateway").submit()</script></body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "referrer-policy": "no-referrer",
+      "x-content-type-options": "nosniff",
+      "content-security-policy": `default-src 'none'; base-uri 'none'; form-action ${new URL(input.exchangeUrl).origin}; script-src 'nonce-${nonce}'`,
+    },
+  });
 }
 
 export async function exchangeN8nGatewayTicket(
@@ -146,11 +191,13 @@ export async function exchangeN8nGatewayTicket(
         environment_id: string;
         subject_user_id: string;
         subject_role: "admin" | "student";
+        assignment_generation: string | null;
         public_url: string | null;
       }>
     >`
       SELECT ticket.id, ticket.environment_id, ticket.subject_user_id,
-        ticket.subject_role, environment.public_url
+        ticket.subject_role, ticket.assignment_generation,
+        environment.public_url
       FROM tool_gateway_tickets AS ticket
       JOIN environments AS environment ON environment.id = ticket.environment_id
       WHERE ticket.token_hash = ${hashOpaqueToken(token)}
@@ -169,10 +216,12 @@ export async function exchangeN8nGatewayTicket(
     const sessionToken = createOpaqueToken();
     await transaction`
       INSERT INTO tool_gateway_sessions (
-        id, token_hash, environment_id, subject_user_id, subject_role, expires_at
+        id, token_hash, environment_id, subject_user_id, subject_role,
+        assignment_generation, expires_at
       ) VALUES (
         ${randomUUID()}, ${hashOpaqueToken(sessionToken)}, ${row.environment_id},
         ${row.subject_user_id}, ${row.subject_role},
+        ${row.assignment_generation},
         ${new Date(now.getTime() + SESSION_TTL_MS)}
       )
     `;
@@ -190,6 +239,15 @@ export async function authorizeN8nGatewayRequest(
   studentLicenseGateReady = false,
 ): Promise<boolean> {
   if (!token || token.length > 200) return false;
+  if (!studentLicenseGateReady) {
+    await sql`
+      UPDATE tool_gateway_sessions
+      SET revoked_at = ${now}
+      WHERE token_hash = ${hashOpaqueToken(token)}
+        AND subject_role = 'student'
+        AND revoked_at IS NULL
+    `;
+  }
   const rows = await sql<Array<{ session_id: string }>>`
     SELECT gateway.id AS session_id
     FROM tool_gateway_sessions AS gateway
@@ -211,6 +269,7 @@ export async function authorizeN8nGatewayRequest(
       AND access.tool_type = 'n8n'
       AND access.user_id = gateway.subject_user_id
       AND access.environment_id = gateway.environment_id
+      AND access.gateway_generation = gateway.assignment_generation
     LEFT JOIN tool_service_settings AS setting ON setting.tool_type = 'n8n'
     WHERE gateway.token_hash = ${hashOpaqueToken(token)}
       AND gateway.revoked_at IS NULL
@@ -226,6 +285,7 @@ export async function authorizeN8nGatewayRequest(
         (
           gateway.subject_role = 'student'
           AND ${studentLicenseGateReady}
+          AND gateway.assignment_generation IS NOT NULL
           AND subject.role_id = 'student'
           AND access.status = 'active'
           AND access.expires_at > ${now}

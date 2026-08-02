@@ -1,6 +1,10 @@
 import { requireSession } from "@/server/auth/access";
 import { getDatabase } from "@/server/db/client";
-import { issueN8nGatewayTicket, N8nGatewayError } from "@/server/tools/n8n-gateway";
+import {
+  createN8nGatewayExchangeResponse,
+  issueN8nGatewayTicket,
+  N8nGatewayError,
+} from "@/server/tools/n8n-gateway";
 import { getN8nStudentAccessLicenseGate } from "@/server/tools/student-access";
 
 export const runtime = "nodejs";
@@ -16,7 +20,7 @@ export async function GET(request: Request): Promise<Response> {
   }
   try {
     const ticket = await issueN8nGatewayTicket(getDatabase(), access.session);
-    return Response.redirect(ticket.exchangeUrl, 303);
+    return createN8nGatewayExchangeResponse(ticket);
   } catch (error) {
     if (error instanceof N8nGatewayError) {
       return Response.json(

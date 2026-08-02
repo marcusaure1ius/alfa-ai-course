@@ -8,11 +8,13 @@ import { runMigrations } from "@/server/db/migrate";
 
 import {
   authorizeN8nGatewayRequest,
+  createN8nGatewayExchangeResponse,
   exchangeN8nGatewayTicket,
   issueN8nGatewayTicket,
   N8N_GATE_COOKIE,
 } from "./n8n-gateway";
 import { setStudentN8nAccess } from "./student-access";
+import { setToolServiceAccess } from "./service-access";
 
 const databaseUrl =
   process.env.DATABASE_URL ??
@@ -33,10 +35,9 @@ function gatewayToken(cookie: string): string {
 
 async function exchange(actor: AuthSession, now: Date): Promise<string> {
   const issued = await issueN8nGatewayTicket(sql, actor, undefined, now);
-  const token = new URL(issued.exchangeUrl).searchParams.get("ticket") ?? "";
   const result = await exchangeN8nGatewayTicket(
     sql,
-    token,
+    issued.ticket,
     "n8n.example.test",
     new Date(now.getTime() + 1_000),
   );
@@ -106,17 +107,19 @@ beforeEach(async () => {
     INSERT INTO tool_access (
       tool_type, user_id, environment_id, status, expires_at,
       license_evidence_mode, license_evidence_reference, granted_by_user_id,
-      n8n_identity_id, n8n_identity_email
+      n8n_identity_id, n8n_identity_email, gateway_generation
     ) VALUES
       (
         'n8n', ${studentIds[0]}, ${environmentId}, 'active',
         now() + interval '30 days', 'product_owner_risk_acceptance',
-        'gateway-test', ${adminId}, 'n8n-user-one', 'gateway-one@example.test'
+        'gateway-test', ${adminId}, 'n8n-user-one', 'gateway-one@example.test',
+        ${randomUUID()}
       ),
       (
         'n8n', ${studentIds[1]}, ${environmentId}, 'active',
         now() + interval '30 days', 'product_owner_risk_acceptance',
-        'gateway-test', ${adminId}, 'n8n-user-two', 'gateway-two@example.test'
+        'gateway-test', ${adminId}, 'n8n-user-two', 'gateway-two@example.test',
+        ${randomUUID()}
       )
   `;
   const session = (userId: string, email: string, role: "admin" | "student") => ({
@@ -163,7 +166,7 @@ describe("n8n gateway enforcement", () => {
     ]);
   });
 
-  it("blocks a saved session after revoke, expiry, global off, or user deletion", async () => {
+  it("blocks a saved session after revoke, expiry, or user deletion", async () => {
     const now = new Date();
     const token = await exchange(students[0], now);
     await sql`UPDATE tool_access SET status = 'revoked', revoked_at = now(), revoked_by_user_id = ${admin.userId} WHERE user_id = ${students[0].userId}`;
@@ -177,19 +180,138 @@ describe("n8n gateway enforcement", () => {
     ).resolves.toBe(false);
 
     await sql`UPDATE tool_access SET expires_at = ${new Date(now.getTime() + 60_000)} WHERE user_id = ${students[0].userId}`;
-    await sql`UPDATE tool_service_settings SET student_access_enabled = false WHERE tool_type = 'n8n'`;
-    await expect(
-      authorizeN8nGatewayRequest(sql, token, "n8n.example.test", now, true),
-    ).resolves.toBe(false);
-    await sql`UPDATE tool_service_settings SET student_access_enabled = true WHERE tool_type = 'n8n'`;
-    await expect(
-      authorizeN8nGatewayRequest(sql, token, "n8n.example.test", now, true),
-    ).resolves.toBe(true);
-
     await sql`UPDATE users SET status = 'blocked' WHERE id = ${students[0].userId}`;
     await expect(
       authorizeN8nGatewayRequest(sql, token, "n8n.example.test", now, true),
     ).resolves.toBe(false);
+  });
+
+  it("does not revive a session when expired access is renewed", async () => {
+    const now = new Date();
+    const identityResolver = async (_origin: string, email: string) => ({
+      id: "n8n-user-one",
+      email,
+      pending: false,
+    });
+    const licenseGate = {
+      ready: true as const,
+      mode: "product_owner_risk_acceptance" as const,
+      evidenceReference: "gateway-test",
+    };
+    await setStudentN8nAccess(
+      sql,
+      admin,
+      {
+        studentUserId: students[0].userId,
+        environmentId,
+        granted: true,
+        expiresAt: new Date(now.getTime() + 60_000),
+      },
+      {},
+      now,
+      licenseGate,
+      identityResolver,
+    );
+    const historicalToken = await exchange(students[0], now);
+    const afterExpiry = new Date(now.getTime() + 61_000);
+    await expect(
+      authorizeN8nGatewayRequest(
+        sql,
+        historicalToken,
+        "n8n.example.test",
+        afterExpiry,
+        true,
+      ),
+    ).resolves.toBe(false);
+
+    await setStudentN8nAccess(
+      sql,
+      admin,
+      {
+        studentUserId: students[0].userId,
+        environmentId,
+        granted: true,
+        expiresAt: new Date(afterExpiry.getTime() + 60_000),
+      },
+      {},
+      afterExpiry,
+      licenseGate,
+      identityResolver,
+    );
+    await expect(
+      authorizeN8nGatewayRequest(
+        sql,
+        historicalToken,
+        "n8n.example.test",
+        afterExpiry,
+        true,
+      ),
+    ).resolves.toBe(false);
+    const currentToken = await exchange(students[0], afterExpiry);
+    await expect(
+      authorizeN8nGatewayRequest(
+        sql,
+        currentToken,
+        "n8n.example.test",
+        afterExpiry,
+        true,
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it("does not revive a session when the license gate is turned off and on", async () => {
+    const now = new Date();
+    const historicalToken = await exchange(students[0], now);
+    await expect(
+      authorizeN8nGatewayRequest(
+        sql,
+        historicalToken,
+        "n8n.example.test",
+        now,
+        false,
+      ),
+    ).resolves.toBe(false);
+    await expect(
+      authorizeN8nGatewayRequest(
+        sql,
+        historicalToken,
+        "n8n.example.test",
+        now,
+        true,
+      ),
+    ).resolves.toBe(false);
+
+    const serviceToken = await exchange(students[0], now);
+    await setToolServiceAccess(sql, admin, { toolType: "n8n", enabled: false });
+    await expect(
+      authorizeN8nGatewayRequest(
+        sql,
+        serviceToken,
+        "n8n.example.test",
+        now,
+        true,
+      ),
+    ).resolves.toBe(false);
+    await setToolServiceAccess(sql, admin, { toolType: "n8n", enabled: true });
+    await expect(
+      authorizeN8nGatewayRequest(
+        sql,
+        serviceToken,
+        "n8n.example.test",
+        now,
+        true,
+      ),
+    ).resolves.toBe(false);
+    const currentToken = await exchange(students[0], now);
+    await expect(
+      authorizeN8nGatewayRequest(
+        sql,
+        currentToken,
+        "n8n.example.test",
+        now,
+        true,
+      ),
+    ).resolves.toBe(true);
   });
 
   it("allows trusted admin owner setup but never issues that surface to students", async () => {
@@ -269,15 +391,20 @@ describe("n8n gateway enforcement", () => {
 
   it("consumes tickets once and fails closed for an unknown host", async () => {
     const issued = await issueN8nGatewayTicket(sql, students[0]);
-    const token = new URL(issued.exchangeUrl).searchParams.get("ticket") ?? "";
+    expect(new URL(issued.exchangeUrl).search).toBe("");
+    const response = createN8nGatewayExchangeResponse(issued);
+    expect(response.headers.get("content-security-policy")).toContain(
+      "form-action https://n8n.example.test",
+    );
+    await expect(response.text()).resolves.toContain('method="post"');
     await expect(
-      exchangeN8nGatewayTicket(sql, token, "wrong.example.test"),
+      exchangeN8nGatewayTicket(sql, issued.ticket, "wrong.example.test"),
     ).rejects.toMatchObject({ code: "INVALID_TICKET" });
     await expect(
-      exchangeN8nGatewayTicket(sql, token, "n8n.example.test"),
+      exchangeN8nGatewayTicket(sql, issued.ticket, "n8n.example.test"),
     ).resolves.toHaveProperty("cookie");
     await expect(
-      exchangeN8nGatewayTicket(sql, token, "n8n.example.test"),
+      exchangeN8nGatewayTicket(sql, issued.ticket, "n8n.example.test"),
     ).rejects.toMatchObject({ code: "INVALID_TICKET" });
   });
 });

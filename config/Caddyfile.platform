@@ -21,8 +21,14 @@
 	}
 
 	handle /__neurokurs/exchange {
+		request_body {
+			max_size 1KB
+		}
+		uri query -ticket
 		rewrite * /api/tool-gateway/n8n/exchange
-		reverse_proxy {$PLATFORM_GATE_ORIGIN}
+		reverse_proxy {$PLATFORM_GATE_ORIGIN} {
+			header_up X-Neurokurs-Gateway {$N8N_GATE_MANAGEMENT_SECRET}
+		}
 	}
 
 	handle {
@@ -53,6 +59,7 @@
 				request>headers>Cookie delete
 				request>headers>X-N8N-API-KEY delete
 				request>headers>X-Neurokurs-Management delete
+				request>headers>X-Neurokurs-Gateway delete
 			}
 		}
 	}

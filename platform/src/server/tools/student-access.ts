@@ -375,18 +375,20 @@ export async function setStudentN8nAccess(
   if (identity.email !== ready.student_email) {
     throw new StudentToolAccessError("IDENTITY_NOT_READY");
   }
+  const gatewayGeneration = randomUUID();
   await sql.begin(async (transaction) => {
     await transaction`
       INSERT INTO tool_access (
         tool_type, user_id, environment_id, status, expires_at,
         license_evidence_mode, license_evidence_reference,
         granted_by_user_id, revoked_by_user_id, revoked_at,
-        n8n_identity_id, n8n_identity_email
+        n8n_identity_id, n8n_identity_email, gateway_generation
       )
       VALUES (
         'n8n', ${input.studentUserId}, ${input.environmentId}, 'active',
         ${input.expiresAt}, ${licenseGate.mode}, ${licenseGate.evidenceReference},
-        ${actor.userId}, null, null, ${identity.id}, ${identity.email}
+        ${actor.userId}, null, null, ${identity.id}, ${identity.email},
+        ${gatewayGeneration}
       )
       ON CONFLICT (tool_type, user_id) DO UPDATE SET
         environment_id = EXCLUDED.environment_id,
@@ -396,6 +398,7 @@ export async function setStudentN8nAccess(
         license_evidence_reference = EXCLUDED.license_evidence_reference,
         n8n_identity_id = EXCLUDED.n8n_identity_id,
         n8n_identity_email = EXCLUDED.n8n_identity_email,
+        gateway_generation = EXCLUDED.gateway_generation,
         granted_by_user_id = EXCLUDED.granted_by_user_id,
         granted_at = now(), revoked_by_user_id = null, revoked_at = null,
         updated_at = now()

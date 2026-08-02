@@ -416,9 +416,11 @@ Environment открывается из конкретного инструме�
 `N8N-07` До выдачи production-среды ученику сохраняется evidence выбранного основания: собственный instance ученика, коммерческое соглашение n8n, иное письменное разрешение либо явное принятие риска владельцем продукта. Принятие риска хранится и отображается отдельно и не заявляется как разрешение n8n. Наличие технически работающего VPS само по себе не снимает этот gate.
 
 `N8N-08` Управляемая среда запускается с platform Caddy profile. Editor/API
-запросы требуют короткоживущую gateway session и на каждом запросе повторно
-проверяют active user/membership, identity binding, assignment, expiry, license
-decision, global service gate и health. Revoke, expiry и global off блокируют
+одноразовый launch ticket передаётся только в POST body, без URL. Editor/API
+запросы требуют короткоживущую gateway session, привязанную к неизменяемому
+поколению назначения, и на каждом запросе повторно проверяют active
+user/membership, identity binding, assignment, expiry, license decision,
+global service gate и health. Revoke, expiry, renewal и global off-on блокируют
 сохранённый origin и существующую n8n session. Public health/webhook/form имеют
 явный allowlist; management API требует отдельный server-only secret.
 

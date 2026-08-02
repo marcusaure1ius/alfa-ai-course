@@ -52,6 +52,10 @@ grep -Fq 'header X-Neurokurs-Management {$N8N_GATE_MANAGEMENT_SECRET}' "$ROOT/co
   || fail "Management API bypass is not secret-bound"
 grep -Fq 'request>headers>Cookie delete' "$ROOT/config/Caddyfile.platform" \
   || fail "Gateway cookies are not redacted from access logs"
+grep -Fq 'uri query -ticket' "$ROOT/config/Caddyfile.platform" \
+  || fail "Legacy ticket query data is not stripped before upstream"
+grep -Fq 'header_up X-Neurokurs-Gateway {$N8N_GATE_MANAGEMENT_SECRET}' "$ROOT/config/Caddyfile.platform" \
+  || fail "Ticket exchange is not bound to the managed Caddy profile"
 ok "platform Caddy contract gates editor/API and redacts credentials"
 
 printf '1..%d\n' "$COUNT"

@@ -1,6 +1,6 @@
 # ADR-0012: Индивидуальная n8n identity и отзыв через обязательный gateway
 
-Дата: 2026-08-02  
+Дата: 2026-08-02
 Статус: accepted
 
 ## Контекст
@@ -37,12 +37,16 @@ n8n-сессию. Кроме того, состояние `ready_owner_setup_req
    invite token или session cookie. Уникальные индексы запрещают совместную
    identity двум назначениям одной среды.
 4. Launch возвращает не origin n8n, а same-origin endpoint Neurokurs. Он выдаёт
-   одноразовый 60-секундный ticket. Caddy обменивает ticket на host-only
+   одноразовый 60-секундный ticket. Ticket передаётся POST form body, поэтому
+   не попадает в URL и стандартные access logs. Exchange принимает запрос
+   только с server-only secret управляемого Caddy. Caddy обменивает ticket на
+   host-only
    `Secure; HttpOnly; SameSite=Lax` gateway cookie.
 5. Каждый editor/API request проходит Caddy `forward_auth`. Authorizer заново
-   проверяет user, course membership, identity binding, assignment, expiry,
-   global service gate, environment и installation health. Отзыв и global off
-   дополнительно инвалидируют сохранённые gateway sessions.
+   проверяет user, course membership, identity binding, неизменяемое поколение
+   назначения, expiry,
+   license gate, global service gate, environment и installation health. Отказ
+   license gate, revoke и global off инвалидируют сохранённые gateway sessions.
 6. Без gateway доступны только health и публичные webhook/form endpoints.
    Management API требует одновременно owner API key и отдельный
    `X-Neurokurs-Management` secret, который Caddy удаляет перед n8n.

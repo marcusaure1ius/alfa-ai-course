@@ -125,12 +125,14 @@ Standalone starter kit продолжает использовать обычн�
 которую Neurokurs выдаёт ученикам, обязана запускаться с
 `docker-compose.platform.yml`: `config/Caddyfile.platform` становится
 единственной фактической границей editor/API. Прямой URL никогда не входит в
-student DTO. Same-origin launch выдаёт одноразовый ticket, после обмена Caddy
+student DTO. Same-origin launch выдаёт одноразовый ticket только в POST form
+body, без token в URL и стандартных access logs. После обмена Caddy
 проверяет host-only gateway cookie через platform `forward_auth` на каждом
 запросе.
 
 Authorizer fail-closed объединяет active student, course membership,
-индивидуальный n8n Member binding, assignment, expiry, license decision, общий
+индивидуальный n8n Member binding, точное поколение assignment, expiry,
+license decision, общий
 service gate, environment и installation health. Поэтому revoke, expiry и
 global off действуют на сохранённый URL и уже существующую n8n login session.
 Owner setup проходит только через admin ticket. Public webhook/form и health
