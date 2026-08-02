@@ -82,11 +82,12 @@ beforeEach(async () => {
   await sql`
     INSERT INTO software_installations (
       id, environment_id, profile_name, profile_version, software_version,
-      status, health_status, installed_at, last_checked_at
+      status, health_status, installed_at, last_checked_at,
+      managed_gateway_verified_at
     )
     VALUES (
       ${randomUUID()}, ${environmentId}, 'starter-kit', 'test-v1', '2.29.10',
-      'ready', 'healthy', now(), now()
+      'ready', 'healthy', now(), now(), now()
     )
   `;
   admin = {
@@ -139,6 +140,37 @@ describe("student n8n tool access", () => {
       "state",
       "tool",
     ]);
+  });
+
+  it("не показывает запуск до подтверждения managed gateway", async () => {
+    const expiresAt = new Date("2026-08-30T23:59:59.000Z");
+    await setStudentN8nAccess(
+      sql,
+      admin,
+      { studentUserId: studentId, environmentId, granted: true, expiresAt },
+      {},
+      new Date("2026-07-31T12:00:00.000Z"),
+      licenseGate,
+      identityResolver,
+    );
+    await sql`
+      UPDATE software_installations
+      SET managed_gateway_verified_at = NULL
+      WHERE environment_id = ${environmentId}
+    `;
+
+    await expect(
+      getStudentN8nAccess(
+        sql,
+        studentId,
+        new Date("2026-07-31T13:00:00.000Z"),
+        licenseGate,
+      ),
+    ).resolves.toMatchObject({
+      state: "preparing",
+      canLaunch: false,
+      launchUrl: null,
+    });
   });
 
   it("скрывает URL после срока или при закрытом license gate", async () => {

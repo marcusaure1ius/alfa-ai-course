@@ -35,6 +35,7 @@ export async function GET(request: Request): Promise<Response> {
       updated_at: Date;
       public_url: string | null;
       installation_status: string | null;
+      managed_gateway_verified: boolean;
       current_operation: {
         id: string;
         kind: string;
@@ -65,6 +66,13 @@ export async function GET(request: Request): Promise<Response> {
           AND software_installations.profile_name = 'starter-kit'
         LIMIT 1
       ) AS installation_status,
+      EXISTS (
+        SELECT 1
+        FROM software_installations
+        WHERE software_installations.environment_id = environments.id
+          AND software_installations.profile_name = 'starter-kit'
+          AND software_installations.managed_gateway_verified_at IS NOT NULL
+      ) AS managed_gateway_verified,
       (
         SELECT jsonb_build_object(
           'id', operations.id,
@@ -156,6 +164,8 @@ export async function GET(request: Request): Promise<Response> {
         publicUrl: row.status === "deleted" ? null : row.public_url,
         installationStatus:
           row.status === "deleted" ? "deleted" : row.installation_status,
+        managedGatewayVerified:
+          row.status === "deleted" ? false : row.managed_gateway_verified,
         currentOperation: row.current_operation,
         publicIp: row.public_ip,
         monthlyRoubles: row.monthly_roubles,

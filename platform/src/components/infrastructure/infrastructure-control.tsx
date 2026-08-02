@@ -45,6 +45,7 @@ type Environment = {
   updatedAt: string;
   publicUrl: string | null;
   installationStatus: string | null;
+  managedGatewayVerified: boolean;
   currentOperation: {
     id: string;
     kind: string;
@@ -1036,9 +1037,15 @@ export function InfrastructureControl({ toolType = "n8n" }: { toolType?: string 
                       {operationStepLabel(environment.currentOperation)}
                     </p>
                   ) : environment.installationStatus ===
-                    "ready_owner_setup_required" ? (
+                      "ready_owner_setup_required" &&
+                    environment.managedGatewayVerified ? (
                     <p className="mt-2 text-sm text-status-ready">
                       n8n готов — требуется создать владельца.
+                    </p>
+                  ) : environment.installationStatus ===
+                    "ready_owner_setup_required" ? (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Безопасный вход в n8n ещё настраивается.
                     </p>
                   ) : environment.status === "active" ? (
                     <p className="mt-2 text-sm text-muted-foreground">
@@ -1062,7 +1069,7 @@ export function InfrastructureControl({ toolType = "n8n" }: { toolType?: string 
                   ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {environment.publicUrl ? (
+                  {environment.publicUrl && environment.managedGatewayVerified ? (
                     <Button asChild variant="outline" size="sm" className="min-h-11">
                       <a
                         href={`/api/admin/tools/n8n/launch?environmentId=${encodeURIComponent(environment.id)}`}

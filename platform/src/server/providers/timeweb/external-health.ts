@@ -135,7 +135,7 @@ export class ExternalEnvironmentVerifier {
   }
 
   async verifyN8nHealth(): Promise<void> {
-    const request = async (pathname: string) => {
+    const request = async (pathname: string, init?: RequestInit) => {
       try {
         return await this.dependencies.fetchImpl(
           `https://${COURSE_HOSTNAME}${pathname}`,
@@ -143,6 +143,7 @@ export class ExternalEnvironmentVerifier {
             cache: "no-store",
             redirect: "error",
             signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+            ...init,
           },
         );
       } catch {
@@ -160,39 +161,27 @@ export class ExternalEnvironmentVerifier {
       );
     }
     const editor = await request("/");
-    if (editor.status !== 200) {
+    if (editor.status !== 401) {
       throw new ExternalHealthError(
-        "EDITOR_NOT_READY",
-        "n8n editor ещё не вернул 200.",
-      );
-    }
-    const settings = await request("/rest/settings");
-    if (settings.status !== 200) {
-      throw new ExternalHealthError(
-        "OWNER_SETUP_NOT_VERIFIED",
-        "n8n settings ещё не доступны для owner-state проверки.",
-      );
-    }
-    const payload = await settings.json().catch(() => null);
-    const ownerSetUp =
-      payload && typeof payload === "object" && !Array.isArray(payload)
-        ? (
-            (payload as { data?: { userManagement?: {
-              showSetupOnFirstLoad?: unknown;
-            } } }).data?.userManagement
-          )?.showSetupOnFirstLoad
-        : undefined;
-    if (ownerSetUp === false) {
-      throw new ExternalHealthError(
-        "OWNER_BYPASS_DETECTED",
-        "n8n owner уже создан автоматически; environment отклонён.",
+        "GATEWAY_NOT_ENFORCED",
+        "n8n editor доступен без подтверждённой gateway-сессии.",
         false,
       );
     }
-    if (ownerSetUp !== true) {
+
+    const exchange = await request("/__neurokurs/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: "ticket=managed-gateway-readiness-probe",
+    });
+    if (
+      exchange.status !== 401 ||
+      !exchange.headers.get("content-type")?.startsWith("application/json") ||
+      !exchange.headers.get("cache-control")?.includes("no-store")
+    ) {
       throw new ExternalHealthError(
-        "OWNER_SETUP_NOT_VERIFIED",
-        "n8n не вернул однозначный owner setup state.",
+        "MANAGED_GATEWAY_NOT_READY",
+        "Managed gateway не подтвердил безопасный маршрут обмена.",
       );
     }
   }

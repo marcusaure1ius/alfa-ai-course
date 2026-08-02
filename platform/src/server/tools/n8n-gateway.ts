@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 import { createOpaqueToken, hashOpaqueToken } from "@/server/auth/crypto";
 import type { AuthSession } from "@/server/auth/service";
 import type { DatabaseSql } from "@/server/db/client";
+import { COURSE_HOSTNAME } from "@/server/providers/timeweb/bootstrap-profile";
+import { createExternalEnvironmentVerifier } from "@/server/providers/timeweb/external-health";
 import { openN8nInvitePath } from "@/server/tools/n8n-invite";
 
 export const N8N_GATE_COOKIE = "__Host-neurokurs_gate";
@@ -41,6 +43,62 @@ function httpsOrigin(value: string | null): string | null {
   }
 }
 
+export async function verifyManagedN8nGatewayForEnvironment(
+  sql: DatabaseSql,
+  environmentId: string,
+  verifier: Pick<ReturnType<typeof createExternalEnvironmentVerifier>, "verifyN8nHealth"> =
+    createExternalEnvironmentVerifier(),
+): Promise<boolean> {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+      environmentId,
+    )
+  ) {
+    return false;
+  }
+  const rows = await sql<
+    Array<{
+      installation_id: string;
+      public_url: string | null;
+      managed_gateway_verified_at: Date | null;
+    }>
+  >`
+    SELECT installation.id AS installation_id, environment.public_url,
+      installation.managed_gateway_verified_at
+    FROM environments AS environment
+    JOIN LATERAL (
+      SELECT id, managed_gateway_verified_at
+      FROM software_installations
+      WHERE environment_id = environment.id AND profile_name = 'starter-kit'
+      ORDER BY updated_at DESC, id DESC
+      LIMIT 1
+    ) AS installation ON true
+    WHERE environment.id = ${environmentId}
+      AND environment.tool_type = 'n8n'
+      AND environment.status = 'active'
+  `;
+  const row = rows[0];
+  if (!row) return false;
+  if (row.managed_gateway_verified_at) return true;
+  if (httpsOrigin(row.public_url) !== `https://${COURSE_HOSTNAME}`) return false;
+  try {
+    await verifier.verifyN8nHealth();
+  } catch {
+    return false;
+  }
+  const updated = await sql<Array<{ id: string }>>`
+    UPDATE software_installations
+    SET managed_gateway_verified_at = now(), last_checked_at = now(),
+      updated_at = now()
+    WHERE id = ${row.installation_id}
+      AND managed_gateway_verified_at IS NULL
+      AND status IN ('ready_owner_setup_required', 'ready')
+      AND health_status = 'healthy'
+    RETURNING id
+  `;
+  return Boolean(updated[0]);
+}
+
 export async function issueN8nGatewayTicket(
   sql: DatabaseSql,
   actor: AuthSession,
@@ -63,7 +121,7 @@ export async function issueN8nGatewayTicket(
       SELECT environment.id AS environment_id, environment.public_url
       FROM environments AS environment
       JOIN LATERAL (
-        SELECT status, health_status
+        SELECT status, health_status, managed_gateway_verified_at
         FROM software_installations
         WHERE environment_id = environment.id AND profile_name = 'starter-kit'
         ORDER BY updated_at DESC, id DESC
@@ -74,6 +132,7 @@ export async function issueN8nGatewayTicket(
         AND (${environmentId ?? null}::uuid IS NULL OR environment.id = ${environmentId ?? null})
         AND installation.status IN ('ready_owner_setup_required', 'ready')
         AND installation.health_status = 'healthy'
+        AND installation.managed_gateway_verified_at IS NOT NULL
       ORDER BY environment.created_at DESC, environment.id DESC
       LIMIT 1
     `;
@@ -105,7 +164,7 @@ export async function issueN8nGatewayTicket(
         AND environment.tool_type = 'n8n'
         AND environment.status = 'active'
       JOIN LATERAL (
-        SELECT status, health_status
+        SELECT status, health_status, managed_gateway_verified_at
         FROM software_installations
         WHERE environment_id = environment.id AND profile_name = 'starter-kit'
         ORDER BY updated_at DESC, id DESC
@@ -123,6 +182,7 @@ export async function issueN8nGatewayTicket(
         AND coalesce(setting.student_access_enabled, true)
         AND installation.status = 'ready'
         AND installation.health_status = 'healthy'
+        AND installation.managed_gateway_verified_at IS NOT NULL
       ORDER BY access.updated_at DESC, access.environment_id DESC
       LIMIT 1
     `;
@@ -313,7 +373,7 @@ export async function authorizeN8nGatewayRequest(
       AND environment.status = 'active'
       AND regexp_replace(environment.public_url, '/+$', '') = ${`https://${forwardedHost}`}
     JOIN LATERAL (
-      SELECT status, health_status
+      SELECT status, health_status, managed_gateway_verified_at
       FROM software_installations
       WHERE environment_id = environment.id AND profile_name = 'starter-kit'
       ORDER BY updated_at DESC, id DESC
@@ -335,6 +395,7 @@ export async function authorizeN8nGatewayRequest(
           AND subject.role_id = 'admin'
           AND installation.status IN ('ready_owner_setup_required', 'ready')
           AND installation.health_status = 'healthy'
+          AND installation.managed_gateway_verified_at IS NOT NULL
         )
         OR
         (
@@ -348,6 +409,7 @@ export async function authorizeN8nGatewayRequest(
           AND coalesce(setting.student_access_enabled, true)
           AND installation.status = 'ready'
           AND installation.health_status = 'healthy'
+          AND installation.managed_gateway_verified_at IS NOT NULL
           AND EXISTS (
             SELECT 1 FROM course_memberships
             WHERE user_id = subject.id AND status = 'active'

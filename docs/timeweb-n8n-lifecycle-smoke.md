@@ -14,11 +14,11 @@ project/deployment, Timeweb project, SSH key или n8n owner.
 
 Production profile неизменяемо фиксирует:
 
-- starter-kit release `v0.1.0`;
+- starter-kit release `v0.1.2`;
 - installer
-  `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.0/install.sh`;
+  `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.2/install.sh`;
 - SHA-256 installer
-  `1757ab3011c84a0defd30d4fee8bb666a2e9138767cd450cd637b4fbad02e6f6`;
+  `4e11476fee81429511d4d9824ee13f4b733a40864813c21d2c2456b36ddf9e76`;
 - n8n `2.29.10`;
 - Ubuntu 24.04 LTS x86_64;
 - timezone `Europe/Moscow`.

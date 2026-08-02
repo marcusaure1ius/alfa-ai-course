@@ -133,7 +133,11 @@ body, без token в URL и стандартных access logs. После об
 Authorizer fail-closed объединяет active student, course membership,
 индивидуальный n8n Member binding, точное поколение assignment, expiry,
 license decision, общий
-service gate, environment и installation health. Поэтому revoke, expiry и
+service gate, environment, installation health и доказанную внешним probe
+отметку `managed_gateway_verified_at`. Probe требует открытый health endpoint,
+закрытый без cookie editor и достижимый через Caddy exchange-маршрут. Поэтому
+статус обычного standalone n8n не может считаться готовностью managed gateway,
+а revoke, expiry и
 global off действуют на сохранённый URL и уже существующую n8n login session.
 Owner setup проходит только через admin ticket. Public webhook/form и health
 остаются отдельными allowlisted маршрутами. Внешняя конфигурация требует только

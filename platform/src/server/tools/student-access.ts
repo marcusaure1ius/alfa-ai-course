@@ -115,6 +115,7 @@ type StudentAccessRow = {
   public_url: string | null;
   installation_status: string | null;
   health_status: string | null;
+  managed_gateway_verified_at: Date | null;
   student_access_enabled: boolean;
   n8n_identity_id: string | null;
 };
@@ -155,6 +156,7 @@ export async function getStudentN8nAccess(
       environment.public_url,
       installation.status AS installation_status,
       installation.health_status,
+      installation.managed_gateway_verified_at,
       coalesce(setting.student_access_enabled, true) AS student_access_enabled,
       access.n8n_identity_id
     FROM tool_access AS access
@@ -164,7 +166,7 @@ export async function getStudentN8nAccess(
       AND student.status = 'active'
     JOIN environments AS environment ON environment.id = access.environment_id
     LEFT JOIN LATERAL (
-      SELECT status, health_status
+      SELECT status, health_status, managed_gateway_verified_at
       FROM software_installations
       WHERE environment_id = environment.id AND profile_name = 'starter-kit'
       ORDER BY updated_at DESC, id DESC
@@ -209,6 +211,7 @@ export async function getStudentN8nAccess(
   if (
     row.installation_status === "ready" &&
     row.health_status === "healthy" &&
+    row.managed_gateway_verified_at &&
     row.n8n_identity_id
   ) {
     return {

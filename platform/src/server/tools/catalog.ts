@@ -78,6 +78,7 @@ export type ToolEnvironmentDetail = {
   name: string;
   status: string;
   publicUrl: string | null;
+  managedGatewayVerified: boolean;
   updatedAt: string;
   provider: string | null;
   region: string | null;
@@ -131,13 +132,20 @@ export async function getToolEnvironmentDetail(
       zone_id: string | null;
       preset_id: string | null;
       image_id: string | null;
+      managed_gateway_verified: boolean;
     }>
   >`
     SELECT
       environment.id, environment.name, environment.status,
       environment.public_url, environment.updated_at,
       profile.provider, profile.region_id, profile.zone_id,
-      profile.preset_id, profile.image_id
+      profile.preset_id, profile.image_id,
+      EXISTS (
+        SELECT 1 FROM software_installations AS installation
+        WHERE installation.environment_id = environment.id
+          AND installation.profile_name = 'starter-kit'
+          AND installation.managed_gateway_verified_at IS NOT NULL
+      ) AS managed_gateway_verified
     FROM environments AS environment
     LEFT JOIN infrastructure_profiles AS profile
       ON profile.id = environment.profile_id
@@ -192,6 +200,7 @@ export async function getToolEnvironmentDetail(
     name: environment.name,
     status: environment.status,
     publicUrl: environment.public_url,
+    managedGatewayVerified: environment.managed_gateway_verified,
     updatedAt: environment.updated_at.toISOString(),
     provider: environment.provider,
     region: environment.region_id,

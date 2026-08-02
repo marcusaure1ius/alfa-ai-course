@@ -83,7 +83,7 @@ export default async function EnvironmentDetailPage({
             </span>
           </div>
         </div>
-        {environment.publicUrl ? (
+        {environment.publicUrl && environment.managedGatewayVerified ? (
           <Button asChild>
             <a
               href={`/api/admin/tools/n8n/launch?environmentId=${encodeURIComponent(environment.id)}`}
@@ -94,6 +94,11 @@ export default async function EnvironmentDetailPage({
               <ExternalLink aria-hidden="true" />
             </a>
           </Button>
+        ) : environment.publicUrl ? (
+          <p className="max-w-xs text-sm text-muted-foreground" role="status">
+            Безопасный вход ещё настраивается. Ссылка появится после проверки
+            шлюза.
+          </p>
         ) : null}
       </div>
 

@@ -55,6 +55,11 @@ docker compose --env-file .env \
 
 Gateway не является подтверждённым на VPS только по `config --quiet`: отдельно
 нужны deployment evidence, TLS, saved-URL revoke и active-session проверки.
+Course Platform записывает `managed_gateway_verified_at` только после внешнего
+fail-closed probe: health endpoint возвращает `200`, editor без gateway cookie
+возвращает `401`, а POST с заведомо недействительным ticket доходит через Caddy
+до Course Platform и возвращает JSON `401` с `cache-control: no-store`. Пока
+этой отметки нет, admin/student launch ticket не выдаётся.
 
 `EXECUTIONS_DATA_MAX_AGE=168` and `EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000` are privacy-minded training defaults. Reduce them for sensitive/high-volume workflows after understanding the diagnostic tradeoff.
 

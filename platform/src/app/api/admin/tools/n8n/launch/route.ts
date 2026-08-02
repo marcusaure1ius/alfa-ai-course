@@ -4,6 +4,7 @@ import {
   createN8nGatewayExchangeResponse,
   issueN8nGatewayTicket,
   N8nGatewayError,
+  verifyManagedN8nGatewayForEnvironment,
 } from "@/server/tools/n8n-gateway";
 
 export const runtime = "nodejs";
@@ -13,8 +14,12 @@ export async function GET(request: Request): Promise<Response> {
   if (!access.ok) return access.response;
   const environmentId = new URL(request.url).searchParams.get("environmentId") ?? undefined;
   try {
+    const sql = getDatabase();
+    if (environmentId) {
+      await verifyManagedN8nGatewayForEnvironment(sql, environmentId);
+    }
     const ticket = await issueN8nGatewayTicket(
-      getDatabase(),
+      sql,
       access.session,
       environmentId,
     );

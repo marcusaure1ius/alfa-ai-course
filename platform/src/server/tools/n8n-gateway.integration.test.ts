@@ -14,6 +14,7 @@ import {
   exchangeN8nGatewayTicket,
   issueN8nGatewayTicket,
   N8N_GATE_COOKIE,
+  verifyManagedN8nGatewayForEnvironment,
 } from "./n8n-gateway";
 import { setStudentN8nAccess } from "./student-access";
 import { setToolServiceAccess } from "./service-access";
@@ -96,10 +97,10 @@ beforeEach(async () => {
   await sql`
     INSERT INTO software_installations (
       id, environment_id, profile_name, profile_version, software_version,
-      status, health_status
+      status, health_status, managed_gateway_verified_at
     ) VALUES (
       ${randomUUID()}, ${environmentId}, 'starter-kit', 'test', '2.29.10',
-      'ready', 'healthy'
+      'ready', 'healthy', now()
     )
   `;
   await sql`
@@ -333,6 +334,59 @@ describe("n8n gateway enforcement", () => {
         false,
       ),
     ).resolves.toBe(true);
+  });
+
+  it("fails closed when managed gateway readiness was never verified", async () => {
+    await sql`
+      UPDATE software_installations
+      SET managed_gateway_verified_at = NULL
+      WHERE environment_id = ${environmentId}
+    `;
+    await expect(issueN8nGatewayTicket(sql, admin, environmentId)).rejects.toMatchObject({
+      code: "NOT_READY",
+    });
+    await expect(issueN8nGatewayTicket(sql, students[0])).rejects.toMatchObject({
+      code: "NOT_READY",
+    });
+  });
+
+  it("records a recovered gateway only after the live managed probe succeeds", async () => {
+    await sql`
+      UPDATE environments
+      SET public_url = 'https://n8n.neurokurs.ru'
+      WHERE id = ${environmentId}
+    `;
+    await sql`
+      UPDATE software_installations
+      SET managed_gateway_verified_at = NULL
+      WHERE environment_id = ${environmentId}
+    `;
+    await expect(sql<Array<{
+      public_url: string;
+      status: string;
+      health_status: string;
+    }>>`
+      SELECT environment.public_url, installation.status,
+        installation.health_status
+      FROM environments AS environment
+      JOIN software_installations AS installation
+        ON installation.environment_id = environment.id
+      WHERE environment.id = ${environmentId}
+    `).resolves.toEqual([{
+      public_url: "https://n8n.neurokurs.ru",
+      status: "ready",
+      health_status: "healthy",
+    }]);
+    await expect(
+      verifyManagedN8nGatewayForEnvironment(sql, environmentId, {
+        verifyN8nHealth: async () => undefined,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      issueN8nGatewayTicket(sql, admin, environmentId),
+    ).resolves.toMatchObject({
+      exchangeUrl: "https://n8n.neurokurs.ru/__neurokurs/exchange",
+    });
   });
 
   it("keeps one deterministic assignment and never revives its historical session", async () => {
