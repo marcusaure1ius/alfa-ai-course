@@ -28,7 +28,6 @@ function request(body: string, headers: Record<string, string> = {}): Request {
       method: "POST",
       headers: {
         "content-type": "application/x-www-form-urlencoded",
-        "x-forwarded-host": "n8n.example.test",
         "x-neurokurs-gateway": secret,
         ...headers,
       },
@@ -63,7 +62,7 @@ describe("POST /api/tool-gateway/n8n/exchange", () => {
     expect(mocks.exchangeN8nGatewayTicket).toHaveBeenCalledWith(
       { database: true },
       "body-ticket",
-      "n8n.example.test",
+      "n8n.neurokurs.ru",
     );
     expect(response.headers.get("location")).toBe("/signup?token=invite");
     expect(response.headers.get("set-cookie")).toContain(

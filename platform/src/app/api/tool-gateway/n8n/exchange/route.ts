@@ -1,13 +1,10 @@
 import { safeEqual } from "@/server/auth/crypto";
 import { getDatabase } from "@/server/db/client";
+import { COURSE_HOSTNAME } from "@/server/providers/timeweb/bootstrap-profile";
 import { exchangeN8nGatewayTicket, N8nGatewayError } from "@/server/tools/n8n-gateway";
 import { getN8nGatewayManagementSecret } from "@/server/tools/n8n-managed-secret";
 
 export const runtime = "nodejs";
-
-function forwardedHost(request: Request): string {
-  return request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ?? "";
-}
 
 export async function POST(request: Request): Promise<Response> {
   const expectedGatewaySecret = getN8nGatewayManagementSecret();
@@ -44,7 +41,7 @@ export async function POST(request: Request): Promise<Response> {
     const result = await exchangeN8nGatewayTicket(
       getDatabase(),
       ticket,
-      forwardedHost(request),
+      COURSE_HOSTNAME,
     );
     return new Response(null, {
       status: 303,

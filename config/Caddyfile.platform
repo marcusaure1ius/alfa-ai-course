@@ -34,6 +34,7 @@
 	handle {
 		forward_auth {$PLATFORM_GATE_ORIGIN} {
 			uri /api/tool-gateway/n8n/authorize
+			header_up X-Neurokurs-Gateway {$N8N_GATE_MANAGEMENT_SECRET}
 		}
 		reverse_proxy n8n:5678 {
 			health_uri /healthz

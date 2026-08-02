@@ -143,6 +143,9 @@ Owner setup проходит только через admin ticket. Public webhoo
 остаются отдельными allowlisted маршрутами. Внешняя конфигурация требует только
 scoped `N8N_MANAGEMENT_API_KEY`: grant сам находит или приглашает Member, а
 внутренний Caddy secret выводится из `AUTH_SECRET` и синхронизируется bootstrap.
+Тем же secret Caddy аутентифицирует и exchange, и каждый forward-auth запрос;
+Course Platform использует закреплённый профильный hostname вместо переписываемых
+CDN-заголовков `X-Forwarded-Host`.
 Если n8n не отправил invitation email, same-origin invite path хранится только
 в зашифрованном виде в назначении, не копируется в launch tickets, атомарно
 удаляется первым gateway exchange или revoke и очищается после expiry ежедневным

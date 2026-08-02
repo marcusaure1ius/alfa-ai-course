@@ -61,6 +61,12 @@ fail-closed probe: health endpoint возвращает `200`, editor без gat
 до Course Platform и возвращает JSON `401` с `cache-control: no-store`. Пока
 этой отметки нет, admin/student launch ticket не выдаётся.
 
+Оба внутренних маршрута Course Platform (`exchange` и `authorize`) принимают
+контекст только от managed Caddy после constant-time проверки производного
+gateway secret. Целевой host закреплён профилем как `n8n.neurokurs.ru` и не
+берётся из `X-Forwarded-Host`, который CDN может переписать. Прямой внешний
+вызов authorizer без внутреннего заголовка получает `403`.
+
 `EXECUTIONS_DATA_MAX_AGE=168` and `EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000` are privacy-minded training defaults. Reduce them for sensitive/high-volume workflows after understanding the diagnostic tradeoff.
 
 The Compose environment always keeps `EXECUTIONS_DATA_PRUNE=true`. Overrides change the age/count bounds, not the fact that pruning is enabled. See [security baseline](security.md) for examples and the evidence boundary.
