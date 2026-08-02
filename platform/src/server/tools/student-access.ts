@@ -7,6 +7,10 @@ import type {
   DatabaseSql,
   DatabaseTransactionSql,
 } from "@/server/db/client";
+import {
+  resolveN8nMemberIdentity,
+  type N8nIdentityResolver,
+} from "@/server/tools/n8n-identity";
 
 export type N8nLicenseEvidenceMode =
   | "written_permission"
@@ -96,6 +100,7 @@ type StudentAccessRow = {
   installation_status: string | null;
   health_status: string | null;
   student_access_enabled: boolean;
+  n8n_identity_id: string | null;
 };
 
 const lockedAccess: StudentN8nAccess = {
@@ -119,18 +124,28 @@ export async function getStudentN8nAccess(
       environment.public_url,
       installation.status AS installation_status,
       installation.health_status,
-      coalesce(setting.student_access_enabled, true) AS student_access_enabled
+      coalesce(setting.student_access_enabled, true) AS student_access_enabled,
+      access.n8n_identity_id
     FROM tool_access AS access
+    JOIN users AS student
+      ON student.id = access.user_id
+      AND student.role_id = 'student'
+      AND student.status = 'active'
     JOIN environments AS environment ON environment.id = access.environment_id
     LEFT JOIN LATERAL (
       SELECT status, health_status
       FROM software_installations
       WHERE environment_id = environment.id AND profile_name = 'starter-kit'
-      ORDER BY updated_at DESC
+      ORDER BY updated_at DESC, id DESC
       LIMIT 1
     ) AS installation ON true
     LEFT JOIN tool_service_settings AS setting ON setting.tool_type = 'n8n'
     WHERE access.tool_type = 'n8n' AND access.user_id = ${studentUserId}
+      AND EXISTS (
+        SELECT 1 FROM course_memberships
+        WHERE user_id = student.id AND status = 'active'
+      )
+    ORDER BY access.updated_at DESC, access.environment_id DESC
     LIMIT 1
   `;
   const row = rows[0];
@@ -158,23 +173,18 @@ export async function getStudentN8nAccess(
     return { ...lockedAccess, state: "preparing", expiresAt };
   }
   if (row.installation_status === "ready_owner_setup_required") {
-    return {
-      tool: "n8n",
-      displayName: "n8n",
-      state: "owner_setup_required",
-      launchUrl,
-      expiresAt,
-    };
+    return { ...lockedAccess, state: "owner_setup_required", expiresAt };
   }
   if (
     row.installation_status === "ready" &&
-    row.health_status === "healthy"
+    row.health_status === "healthy" &&
+    row.n8n_identity_id
   ) {
     return {
       tool: "n8n",
       displayName: "n8n",
       state: "ready",
-      launchUrl,
+      launchUrl: "/api/student/tools/n8n/launch",
       expiresAt,
     };
   }
@@ -246,9 +256,7 @@ export async function getAdminStudentN8nAccess(
         environmentName: row.environment_name,
         environmentReady:
           row.environment_status === "active" &&
-          ["ready_owner_setup_required", "ready"].includes(
-            row.installation_status ?? "",
-          ),
+          row.installation_status === "ready",
         status: row.access_status,
         expiresAt: row.expires_at?.toISOString() ?? null,
       }
@@ -262,7 +270,8 @@ export class StudentToolAccessError extends Error {
       | "NOT_FOUND"
       | "INVALID_EXPIRY"
       | "LICENSE_GATE"
-      | "ENVIRONMENT_NOT_READY",
+      | "ENVIRONMENT_NOT_READY"
+      | "IDENTITY_NOT_READY",
   ) {
     super(code);
   }
@@ -280,6 +289,7 @@ export async function setStudentN8nAccess(
   context: { requestId?: string } = {},
   now = new Date(),
   licenseGate = getN8nStudentAccessLicenseGate(),
+  identityResolver: N8nIdentityResolver = resolveN8nMemberIdentity,
 ): Promise<void> {
   if (actor.role !== "admin") throw new StudentToolAccessError("FORBIDDEN");
   if (!input.granted) {
@@ -301,6 +311,13 @@ export async function setStudentN8nAccess(
           AND user_id = ${input.studentUserId}
           AND environment_id = ${input.environmentId}
       `;
+      await transaction`
+        UPDATE tool_gateway_sessions
+        SET revoked_at = now()
+        WHERE subject_user_id = ${input.studentUserId}
+          AND environment_id = ${input.environmentId}
+          AND revoked_at IS NULL
+      `;
       await appendToolAccessAudit(
         transaction,
         actor,
@@ -319,41 +336,57 @@ export async function setStudentN8nAccess(
   ) {
     throw new StudentToolAccessError("INVALID_EXPIRY");
   }
+  const readiness = await sql<
+    Array<{ public_url: string; student_email: string }>
+  >`
+    SELECT environment.public_url, student.email AS student_email
+    FROM users AS student
+    JOIN course_memberships AS membership
+      ON membership.user_id = student.id AND membership.status = 'active'
+    JOIN environments AS environment
+      ON environment.id = ${input.environmentId}
+      AND environment.tool_type = 'n8n'
+      AND environment.status = 'active'
+      AND environment.public_url ~ '^https://'
+    JOIN LATERAL (
+      SELECT status, health_status
+      FROM software_installations
+      WHERE environment_id = environment.id AND profile_name = 'starter-kit'
+      ORDER BY updated_at DESC, id DESC
+      LIMIT 1
+    ) AS installation
+      ON installation.status = 'ready' AND installation.health_status = 'healthy'
+    WHERE student.id = ${input.studentUserId}
+      AND student.role_id = 'student'
+      AND student.status = 'active'
+    LIMIT 1
+  `;
+  const ready = readiness[0];
+  const instanceOrigin = safeHttpsUrl(ready?.public_url ?? null);
+  if (!ready || !instanceOrigin) {
+    throw new StudentToolAccessError("ENVIRONMENT_NOT_READY");
+  }
+  let identity;
+  try {
+    identity = await identityResolver(instanceOrigin, ready.student_email);
+  } catch {
+    throw new StudentToolAccessError("IDENTITY_NOT_READY");
+  }
+  if (identity.email !== ready.student_email) {
+    throw new StudentToolAccessError("IDENTITY_NOT_READY");
+  }
   await sql.begin(async (transaction) => {
-    const rows = await transaction<{ ready: boolean }[]>`
-      SELECT EXISTS (
-        SELECT 1
-        FROM users AS student
-        JOIN course_memberships AS membership
-          ON membership.user_id = student.id AND membership.status = 'active'
-        JOIN environments AS environment
-          ON environment.id = ${input.environmentId}
-          AND environment.tool_type = 'n8n'
-          AND environment.status = 'active'
-          AND environment.public_url ~ '^https://'
-        JOIN software_installations AS installation
-          ON installation.environment_id = environment.id
-          AND installation.profile_name = 'starter-kit'
-          AND installation.status IN ('ready_owner_setup_required', 'ready')
-          AND installation.health_status = 'healthy'
-        WHERE student.id = ${input.studentUserId}
-          AND student.role_id = 'student'
-          AND student.status = 'active'
-      ) AS ready
-    `;
-    if (!rows[0]?.ready) {
-      throw new StudentToolAccessError("ENVIRONMENT_NOT_READY");
-    }
     await transaction`
       INSERT INTO tool_access (
         tool_type, user_id, environment_id, status, expires_at,
         license_evidence_mode, license_evidence_reference,
-        granted_by_user_id, revoked_by_user_id, revoked_at
+        granted_by_user_id, revoked_by_user_id, revoked_at,
+        n8n_identity_id, n8n_identity_email
       )
       VALUES (
         'n8n', ${input.studentUserId}, ${input.environmentId}, 'active',
         ${input.expiresAt}, ${licenseGate.mode}, ${licenseGate.evidenceReference},
-        ${actor.userId}, null, null
+        ${actor.userId}, null, null, ${identity.id}, ${identity.email}
       )
       ON CONFLICT (tool_type, user_id) DO UPDATE SET
         environment_id = EXCLUDED.environment_id,
@@ -361,6 +394,8 @@ export async function setStudentN8nAccess(
         expires_at = EXCLUDED.expires_at,
         license_evidence_mode = EXCLUDED.license_evidence_mode,
         license_evidence_reference = EXCLUDED.license_evidence_reference,
+        n8n_identity_id = EXCLUDED.n8n_identity_id,
+        n8n_identity_email = EXCLUDED.n8n_identity_email,
         granted_by_user_id = EXCLUDED.granted_by_user_id,
         granted_at = now(), revoked_by_user_id = null, revoked_at = null,
         updated_at = now()

@@ -12,6 +12,8 @@
 | `docker-compose.yml` | n8n, PostgreSQL and Caddy services, networks, volumes and health checks |
 | `.env.example` | documented variables without credential values |
 | `config/Caddyfile` | HTTPS termination, reverse proxy, active upstream health and response headers |
+| `docker-compose.platform.yml` | explicit managed-Neurokurs override; never enabled for standalone installs by accident |
+| `config/Caddyfile.platform` | revocable student/editor gateway with public endpoint allowlist |
 | `tests/fixtures/compose.env` | known fake values for static Compose validation only |
 
 Do not deploy `tests/fixtures/compose.env`. It is intentionally public, contains no usable secrets and uses the reserved `.test` domain.
@@ -27,6 +29,29 @@ Copy `.env.example` to `.env` and set:
 - `N8N_ENCRYPTION_KEY`: independently generated persistent random secret.
 
 The encryption key must never change during update. Losing it makes stored n8n credentials unreadable. `.env` must have mode `0600`, remain outside Git and be included in protected backup material.
+
+## Управляемый профиль Neurokurs
+
+Только для среды, назначаемой ученикам, добавьте
+`-f docker-compose.platform.yml` и значения из `.env.platform.example`:
+
+- `PLATFORM_GATE_ORIGIN` — HTTPS origin Course Platform без path;
+- `N8N_GATE_MANAGEMENT_SECRET` — отдельный случайный secret не короче 32 байт.
+
+Тот же management secret и owner API key задаются только в server environment
+Course Platform как `N8N_GATE_MANAGEMENT_SECRET` и `N8N_MANAGEMENT_API_KEY`.
+Не добавляйте их в browser-prefixed variables, Git, команды shell history или
+логи. Standalone установка эти значения не использует.
+
+Проверка resolved managed profile без запуска контейнеров:
+
+```bash
+docker compose --env-file .env \
+  -f docker-compose.yml -f docker-compose.platform.yml config --quiet
+```
+
+Gateway не является подтверждённым на VPS только по `config --quiet`: отдельно
+нужны deployment evidence, TLS, saved-URL revoke и active-session проверки.
 
 `EXECUTIONS_DATA_MAX_AGE=168` and `EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000` are privacy-minded training defaults. Reduce them for sensitive/high-volume workflows after understanding the diagnostic tradeoff.
 

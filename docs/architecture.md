@@ -119,6 +119,25 @@ Implementation в `T-0005` переносит следующие решения 
 
 Caddy выбран для базового профиля из-за небольшой конфигурационной поверхности и автоматического HTTPS. Выбор не отменяет обязательную проверку актуальной официальной документации, требований ACME, forwarded headers и pinned release в research-задаче.
 
+## Управляемый student-доступ к n8n
+
+Standalone starter kit продолжает использовать обычный reverse proxy. Среда,
+которую Neurokurs выдаёт ученикам, обязана запускаться с
+`docker-compose.platform.yml`: `config/Caddyfile.platform` становится
+единственной фактической границей editor/API. Прямой URL никогда не входит в
+student DTO. Same-origin launch выдаёт одноразовый ticket, после обмена Caddy
+проверяет host-only gateway cookie через platform `forward_auth` на каждом
+запросе.
+
+Authorizer fail-closed объединяет active student, course membership,
+индивидуальный n8n Member binding, assignment, expiry, license decision, общий
+service gate, environment и installation health. Поэтому revoke, expiry и
+global off действуют на сохранённый URL и уже существующую n8n login session.
+Owner setup проходит только через admin ticket. Public webhook/form и health
+остаются отдельными allowlisted маршрутами; management API дополнительно требует
+server-only shared secret. Решение и ограничения Community edition зафиксированы
+в [ADR-0012](../adr/0012-n8n-student-identity-and-revocable-gateway.md).
+
 ## Установка
 
 Публичный автономный `install.sh` — пользовательская точка входа. Он содержит versioned `git archive` и точный SHA-256, проверяет payload, разворачивает его в `/opt/n8n-entrepreneur-starter-kit` и вызывает внутренний `scripts/install.sh`. Артефакт собирается только из exact Git commit через `scripts/build-one-command-installer.sh`.

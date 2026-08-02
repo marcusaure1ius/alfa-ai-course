@@ -34,4 +34,24 @@ jq -e '
 ' "$tmp/compose.json" >/dev/null || fail "Pinned platform/private network assertions failed"
 ok "platform and private database/n8n topology are pinned"
 
+PLATFORM_GATE_ORIGIN=https://course.example.test \
+N8N_GATE_MANAGEMENT_SECRET=synthetic-gateway-management-secret-32-bytes \
+  docker compose --project-directory "$ROOT" --env-file "$ENV_FILE" \
+    -f "$ROOT/docker-compose.yml" -f "$ROOT/docker-compose.platform.yml" \
+    config --format json > "$tmp/platform-compose.json"
+jq -e '
+  .services.caddy.environment.PLATFORM_GATE_ORIGIN == "https://course.example.test" and
+  .services.caddy.environment.N8N_GATE_MANAGEMENT_SECRET == "synthetic-gateway-management-secret-32-bytes" and
+  any(.services.caddy.volumes[]; .target == "/etc/caddy/Caddyfile" and (.source | endswith("/config/Caddyfile.platform")))
+' "$tmp/platform-compose.json" >/dev/null || fail "Managed gateway override is incomplete"
+ok "managed profile replaces Caddy with the fail-closed gateway configuration"
+
+grep -Fq 'forward_auth {$PLATFORM_GATE_ORIGIN}' "$ROOT/config/Caddyfile.platform" \
+  || fail "Student editor gateway is not enforced"
+grep -Fq 'header X-Neurokurs-Management {$N8N_GATE_MANAGEMENT_SECRET}' "$ROOT/config/Caddyfile.platform" \
+  || fail "Management API bypass is not secret-bound"
+grep -Fq 'request>headers>Cookie delete' "$ROOT/config/Caddyfile.platform" \
+  || fail "Gateway cookies are not redacted from access logs"
+ok "platform Caddy contract gates editor/API and redacts credentials"
+
 printf '1..%d\n' "$COUNT"

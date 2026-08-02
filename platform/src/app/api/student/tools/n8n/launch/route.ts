@@ -1,0 +1,29 @@
+import { requireSession } from "@/server/auth/access";
+import { getDatabase } from "@/server/db/client";
+import { issueN8nGatewayTicket, N8nGatewayError } from "@/server/tools/n8n-gateway";
+import { getN8nStudentAccessLicenseGate } from "@/server/tools/student-access";
+
+export const runtime = "nodejs";
+
+export async function GET(request: Request): Promise<Response> {
+  const access = await requireSession(request);
+  if (!access.ok) return access.response;
+  if (access.session.role !== "student" || !getN8nStudentAccessLicenseGate().ready) {
+    return Response.json(
+      { error: "Доступ к инструменту закрыт." },
+      { status: 403, headers: { "cache-control": "no-store" } },
+    );
+  }
+  try {
+    const ticket = await issueN8nGatewayTicket(getDatabase(), access.session);
+    return Response.redirect(ticket.exchangeUrl, 303);
+  } catch (error) {
+    if (error instanceof N8nGatewayError) {
+      return Response.json(
+        { error: "Инструмент пока нельзя открыть." },
+        { status: 409, headers: { "cache-control": "no-store" } },
+      );
+    }
+    throw error;
+  }
+}

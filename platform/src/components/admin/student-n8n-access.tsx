@@ -121,8 +121,9 @@ export function StudentN8nAccessControl({
                 className="mt-2 max-w-60"
               />
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                После этой даты ссылка исчезнет. Продление выполняется новой
-                выдачей доступа; VPS и billing автоматически не передаются.
+                До назначения пригласите ученика в n8n как Member с тем же
+                email. После этой даты gateway блокирует сохранённый адрес и
+                активную сессию; VPS и billing ученику не передаются.
               </p>
             </div>
             <Button

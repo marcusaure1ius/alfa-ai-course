@@ -59,6 +59,17 @@ export async function setToolServiceAccess(
           updated_by_user_id = ${actor.userId}, updated_at = now()
         WHERE tool_type = ${input.toolType}
       `;
+      if (!input.enabled) {
+        await transaction`
+          UPDATE tool_gateway_sessions AS gateway
+          SET revoked_at = now()
+          FROM environments AS environment
+          WHERE gateway.environment_id = environment.id
+            AND environment.tool_type = ${input.toolType}
+            AND gateway.subject_role = 'student'
+            AND gateway.revoked_at IS NULL
+        `;
+      }
     }
     const affectedAssignments = assignments[0]?.count ?? 0;
     await transaction`

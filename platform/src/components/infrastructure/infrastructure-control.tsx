@@ -1064,7 +1064,11 @@ export function InfrastructureControl({ toolType = "n8n" }: { toolType?: string 
                 <div className="flex flex-wrap gap-2">
                   {environment.publicUrl ? (
                     <Button asChild variant="outline" size="sm" className="min-h-11">
-                      <a href={environment.publicUrl} target="_blank" rel="noreferrer">
+                      <a
+                        href={`/api/admin/tools/n8n/launch?environmentId=${encodeURIComponent(environment.id)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         Открыть n8n
                         <ExternalLink aria-hidden="true" />
                       </a>

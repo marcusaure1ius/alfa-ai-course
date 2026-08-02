@@ -85,7 +85,11 @@ export default async function EnvironmentDetailPage({
         </div>
         {environment.publicUrl ? (
           <Button asChild>
-            <a href={environment.publicUrl} target="_blank" rel="noreferrer">
+            <a
+              href={`/api/admin/tools/n8n/launch?environmentId=${encodeURIComponent(environment.id)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
               Открыть среду
               <ExternalLink aria-hidden="true" />
             </a>

@@ -11,6 +11,8 @@
 | Container privileges | У всех сервисов `no-new-privileges`; `privileged`, `cap_add`, devices и Docker socket отсутствуют | privilege assertion |
 | Secrets | `.env` игнорируется Git, создаётся с mode `0600`; workflow exports и fixtures не содержат credentials/tokens | tracked-artifact и workflow catalog checks |
 | n8n privacy | env/file access из workflow ограничен, diagnostics и personalization выключены, secure cookie включён | environment assertion |
+| n8n student gateway | editor/API закрыты Caddy `forward_auth`; ticket одноразовый, cookie host-only/HttpOnly/Secure; revoke/expiry/global off проверяются на каждом запросе | gateway integration tests + managed Compose contract |
+| n8n identities | owner setup только admin; назначение требует отдельного Member с совпадающим email; API key/shared management secret только server-side | identity resolver tests + unique DB constraints |
 | TLS | Production URL всегда `https`; TLS verification не отключается; Caddy — единственная публичная точка | resolved configuration assertion |
 | Execution data | Pruning всегда включён; default age `168` часов и max count `10000` | resolved configuration assertion |
 

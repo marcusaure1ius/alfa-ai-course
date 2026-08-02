@@ -1,0 +1,59 @@
+{
+	admin 127.0.0.1:2019
+}
+
+{$N8N_HOST} {
+	encode zstd gzip
+
+	@public_endpoints path /healthz /healthz/readiness /webhook/* /webhook-test/* /form/* /form-test/*
+	handle @public_endpoints {
+		reverse_proxy n8n:5678
+	}
+
+	@management {
+		path /api/v1/*
+		header X-Neurokurs-Management {$N8N_GATE_MANAGEMENT_SECRET}
+	}
+	handle @management {
+		reverse_proxy n8n:5678 {
+			header_up -X-Neurokurs-Management
+		}
+	}
+
+	handle /__neurokurs/exchange {
+		rewrite * /api/tool-gateway/n8n/exchange
+		reverse_proxy {$PLATFORM_GATE_ORIGIN}
+	}
+
+	handle {
+		forward_auth {$PLATFORM_GATE_ORIGIN} {
+			uri /api/tool-gateway/n8n/authorize
+		}
+		reverse_proxy n8n:5678 {
+			health_uri /healthz
+			health_interval 30s
+			health_timeout 5s
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		format filter {
+			wrap console
+			fields {
+				request>uri query replace ticket REDACTED
+				request>headers>Cookie delete
+				request>headers>X-N8N-API-KEY delete
+				request>headers>X-Neurokurs-Management delete
+			}
+		}
+	}
+}

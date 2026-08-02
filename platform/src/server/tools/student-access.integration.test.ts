@@ -22,6 +22,12 @@ const licenseGate = {
   evidenceReference: "owner-decision:T-0058:2026-07-31",
 };
 
+const identityResolver = async (_origin: string, email: string) => ({
+  id: `n8n:${email}`,
+  email,
+  pending: false,
+});
+
 let sql: DatabaseSql;
 let admin: AuthSession;
 let studentId: string;
@@ -79,7 +85,7 @@ beforeEach(async () => {
     )
     VALUES (
       ${randomUUID()}, ${environmentId}, 'starter-kit', 'test-v1', '2.29.10',
-      'ready_owner_setup_required', 'healthy', now(), now()
+      'ready', 'healthy', now(), now()
     )
   `;
   admin = {
@@ -107,6 +113,7 @@ describe("student n8n tool access", () => {
       {},
       new Date("2026-07-31T12:00:00.000Z"),
       licenseGate,
+      identityResolver,
     );
 
     const access = await getStudentN8nAccess(
@@ -118,8 +125,8 @@ describe("student n8n tool access", () => {
     expect(access).toEqual({
       tool: "n8n",
       displayName: "n8n",
-      state: "owner_setup_required",
-      launchUrl: "https://n8n.example.test",
+      state: "ready",
+      launchUrl: "/api/student/tools/n8n/launch",
       expiresAt: expiresAt.toISOString(),
     });
     expect(Object.keys(access).sort()).toEqual([
@@ -140,6 +147,7 @@ describe("student n8n tool access", () => {
       {},
       new Date("2026-07-31T12:00:00.000Z"),
       licenseGate,
+      identityResolver,
     );
     await expect(
       getStudentN8nAccess(
@@ -166,6 +174,7 @@ describe("student n8n tool access", () => {
       {},
       new Date("2026-07-31T12:00:00.000Z"),
       licenseGate,
+      identityResolver,
     );
     await sql`
       INSERT INTO tool_service_settings (tool_type, student_access_enabled)
@@ -197,8 +206,8 @@ describe("student n8n tool access", () => {
         licenseGate,
       ),
     ).resolves.toMatchObject({
-      state: "owner_setup_required",
-      launchUrl: "https://n8n.example.test",
+      state: "ready",
+      launchUrl: "/api/student/tools/n8n/launch",
       expiresAt: expiresAt.toISOString(),
     });
     await expect(
@@ -219,6 +228,7 @@ describe("student n8n tool access", () => {
       {},
       new Date("2026-07-31T12:00:00.000Z"),
       licenseGate,
+      identityResolver,
     );
     const stored = await sql<
       Array<{ license_evidence_mode: string; license_evidence_reference: string }>
@@ -259,7 +269,40 @@ describe("student n8n tool access", () => {
         {},
         new Date("2026-07-31T12:00:00.000Z"),
         { ready: false, reason: "missing" },
+        identityResolver,
       ),
     ).rejects.toMatchObject({ code: "LICENSE_GATE" });
+  });
+
+  it("не отдаёт owner setup ученику и не назначает доступ до trusted admin setup", async () => {
+    await sql`
+      UPDATE software_installations
+      SET status = 'ready_owner_setup_required'
+      WHERE environment_id = ${environmentId}
+    `;
+    await expect(
+      setStudentN8nAccess(
+        sql,
+        admin,
+        {
+          studentUserId: studentId,
+          environmentId,
+          granted: true,
+          expiresAt: new Date("2026-08-30T23:59:59.000Z"),
+        },
+        {},
+        new Date("2026-07-31T12:00:00.000Z"),
+        licenseGate,
+        identityResolver,
+      ),
+    ).rejects.toMatchObject({ code: "ENVIRONMENT_NOT_READY" });
+    await expect(
+      getStudentN8nAccess(
+        sql,
+        studentId,
+        new Date("2026-07-31T12:00:00.000Z"),
+        licenseGate,
+      ),
+    ).resolves.toMatchObject({ state: "locked", launchUrl: null });
   });
 });

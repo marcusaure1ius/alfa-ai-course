@@ -21,7 +21,11 @@ function toolAccessError(error: unknown): Response | null {
     ],
     ENVIRONMENT_NOT_READY: [
       409,
-      "Среда инструмента или доступ к курсам ещё не готовы.",
+      "Сначала доверенный администратор должен завершить owner setup n8n.",
+    ],
+    IDENTITY_NOT_READY: [
+      409,
+      "Сначала пригласите ученика в n8n как Member с тем же email.",
     ],
   } as const;
   const [status, message] = mapping[error.code];
