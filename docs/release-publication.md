@@ -8,7 +8,7 @@
 
 - repository: `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit`;
 - stable installer: `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh`;
-- immutable v0.1.2 installer: `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.2/install.sh`;
+- immutable v0.1.3 installer: `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.3/install.sh`;
 - checksum: соседний asset `install.sh.sha256` в том же versioned release.
 
 Public download, checksum и verify-only подтверждаются release evidence. Fresh-VPS domainless run и novice trial остаются честно не выполненными external gates.
