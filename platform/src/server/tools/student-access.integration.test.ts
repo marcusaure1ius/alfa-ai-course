@@ -157,6 +157,59 @@ describe("student n8n tool access", () => {
     ).resolves.toMatchObject({ state: "license_blocked", launchUrl: null });
   });
 
+  it("обратимо закрывает запуск глобальным gate без изменения назначения", async () => {
+    const expiresAt = new Date("2026-08-30T23:59:59.000Z");
+    await setStudentN8nAccess(
+      sql,
+      admin,
+      { studentUserId: studentId, environmentId, granted: true, expiresAt },
+      {},
+      new Date("2026-07-31T12:00:00.000Z"),
+      licenseGate,
+    );
+    await sql`
+      INSERT INTO tool_service_settings (tool_type, student_access_enabled)
+      VALUES ('n8n', false)
+      ON CONFLICT (tool_type) DO UPDATE SET student_access_enabled = false
+    `;
+    await expect(
+      getStudentN8nAccess(
+        sql,
+        studentId,
+        new Date("2026-07-31T13:00:00.000Z"),
+        licenseGate,
+      ),
+    ).resolves.toMatchObject({
+      state: "service_disabled",
+      launchUrl: null,
+      expiresAt: expiresAt.toISOString(),
+    });
+    await sql`
+      UPDATE tool_service_settings
+      SET student_access_enabled = true
+      WHERE tool_type = 'n8n'
+    `;
+    await expect(
+      getStudentN8nAccess(
+        sql,
+        studentId,
+        new Date("2026-07-31T13:00:00.000Z"),
+        licenseGate,
+      ),
+    ).resolves.toMatchObject({
+      state: "owner_setup_required",
+      launchUrl: "https://n8n.example.test",
+      expiresAt: expiresAt.toISOString(),
+    });
+    await expect(
+      sql<Array<{ status: string; environment_id: string }>>`
+        SELECT status, environment_id
+        FROM tool_access
+        WHERE tool_type = 'n8n' AND user_id = ${studentId}
+      `,
+    ).resolves.toEqual([{ status: "active", environment_id: environmentId }]);
+  });
+
   it("сохраняет evidence snapshot и позволяет немедленный отзыв", async () => {
     const expiresAt = new Date("2026-08-30T23:59:59.000Z");
     await setStudentN8nAccess(

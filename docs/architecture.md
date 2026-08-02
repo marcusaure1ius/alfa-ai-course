@@ -22,6 +22,17 @@ Tool не равен VPS: n8n — первый тип учебного инст�
 одна из возможных реализаций его environment. Новые инструменты могут не
 требовать собственного VPS и не должны наследовать provider DTO в публичный UI.
 
+Каталог инструментов задаётся server-side definition с явными capabilities:
+`environment = required | optional | none`, наличием student access и launch.
+Каждая запись `environments` хранит `tool_type`; detail-query сверяет и тип, и
+идентификатор среды. Ограничение одной незавершённой/активной среды применяется
+по `tool_type`, поэтому n8n не блокирует другой тип инструмента. Для сервиса без
+среды `tool_access.environment_id` остаётся `null`, а фиктивный VPS не создаётся.
+Общий `tool_service_settings.student_access_enabled` — обратимый операционный
+gate: он немедленно скрывает launch у всех учеников, но не удаляет назначения,
+сроки доступа или environment. Каждое переключение защищено admin RBAC и CSRF и
+фиксируется в append-only audit.
+
 Platform использует Neon Postgres через Vercel Marketplace и provider-neutral registry server-only cloud adapters; первый adapter реализован для Timeweb. Root installer/runtime сохраняет прежний контракт и проверяется независимо. Application runtime получает pooled `DATABASE_URL`; локальная разработка использует отдельный PostgreSQL 17 container с синтетическими credentials и fake provider mode.
 
 ```mermaid

@@ -73,6 +73,7 @@ export function getN8nAccessDateDefaults(now = new Date()): {
 export type StudentN8nAccessState =
   | "locked"
   | "license_blocked"
+  | "service_disabled"
   | "preparing"
   | "owner_setup_required"
   | "ready"
@@ -94,6 +95,7 @@ type StudentAccessRow = {
   public_url: string | null;
   installation_status: string | null;
   health_status: string | null;
+  student_access_enabled: boolean;
 };
 
 const lockedAccess: StudentN8nAccess = {
@@ -116,7 +118,8 @@ export async function getStudentN8nAccess(
       environment.status AS environment_status,
       environment.public_url,
       installation.status AS installation_status,
-      installation.health_status
+      installation.health_status,
+      coalesce(setting.student_access_enabled, true) AS student_access_enabled
     FROM tool_access AS access
     JOIN environments AS environment ON environment.id = access.environment_id
     LEFT JOIN LATERAL (
@@ -126,6 +129,7 @@ export async function getStudentN8nAccess(
       ORDER BY updated_at DESC
       LIMIT 1
     ) AS installation ON true
+    LEFT JOIN tool_service_settings AS setting ON setting.tool_type = 'n8n'
     WHERE access.tool_type = 'n8n' AND access.user_id = ${studentUserId}
     LIMIT 1
   `;
@@ -137,6 +141,9 @@ export async function getStudentN8nAccess(
   }
   if (!licenseGate.ready) {
     return { ...lockedAccess, state: "license_blocked", expiresAt };
+  }
+  if (!row.student_access_enabled) {
+    return { ...lockedAccess, state: "service_disabled", expiresAt };
   }
   const launchUrl = safeHttpsUrl(row.public_url);
   if (
@@ -227,7 +234,8 @@ export async function getAdminStudentN8nAccess(
       ON access.environment_id = environment.id
       AND access.tool_type = 'n8n'
       AND access.user_id = ${studentUserId}
-    WHERE environment.status <> 'deleted'
+    WHERE environment.tool_type = 'n8n'
+      AND environment.status <> 'deleted'
     ORDER BY environment.created_at DESC
     LIMIT 1
   `;
@@ -320,6 +328,7 @@ export async function setStudentN8nAccess(
           ON membership.user_id = student.id AND membership.status = 'active'
         JOIN environments AS environment
           ON environment.id = ${input.environmentId}
+          AND environment.tool_type = 'n8n'
           AND environment.status = 'active'
           AND environment.public_url ~ '^https://'
         JOIN software_installations AS installation

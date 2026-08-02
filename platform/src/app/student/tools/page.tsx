@@ -9,6 +9,7 @@ import { getStudentN8nAccess } from "@/server/tools/student-access";
 const accessLabel = {
   locked: "Доступ ещё не назначен",
   license_blocked: "Доступ временно закрыт",
+  service_disabled: "Доступ временно приостановлен",
   preparing: "Среда готовится",
   owner_setup_required: "Нужно завершить первоначальную настройку",
   ready: "Готов к работе",

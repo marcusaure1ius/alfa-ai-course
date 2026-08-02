@@ -57,7 +57,7 @@ export default async function EnvironmentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const environment = await getToolEnvironmentDetail(getDatabase(), id);
+  const environment = await getToolEnvironmentDetail(getDatabase(), "n8n", id);
   if (!environment) notFound();
   const monthlyRoubles = environment.resources.reduce(
     (total, resource) => total + resource.monthlyRoubles,

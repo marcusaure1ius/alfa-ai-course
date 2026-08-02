@@ -5,11 +5,11 @@ import {
   CircleDot,
   ExternalLink,
   Plus,
-  Users,
-  Wrench,
+  ServerCog,
 } from "lucide-react";
 import Link from "next/link";
 
+import { ToolAccessGate } from "@/components/admin/tool-access-gate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getDatabase } from "@/server/db/client";
@@ -46,251 +46,140 @@ function pluralize(count: number, one: string, few: string, many: string) {
 
 export default async function AdminToolsPage() {
   const tools = await getToolCatalog(getDatabase());
-  const environments = tools.flatMap((tool) =>
-    tool.environments.map((environment) => ({ tool, environment })),
-  );
-  const activeCount = environments.filter(
-    ({ environment }) => environment.status === "active",
-  ).length;
-  const attentionCount = environments.filter(({ environment }) =>
-    attentionStatuses.has(environment.status),
-  ).length;
-  const accessCount = environments.reduce(
-    (total, { environment }) => total + environment.accessCount,
-    0,
+  const attention = tools.flatMap((tool) =>
+    tool.environments
+      .filter((environment) => attentionStatuses.has(environment.status))
+      .map((environment) => ({ tool, environment })),
   );
 
   return (
-    <main className="page-container">
-      <div className="flex flex-wrap items-end justify-between gap-5 border-b pb-6">
-        <div>
-          <h1 className="font-display text-page-title">Учебные инструменты</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Экземпляры, к которым имеют доступ ученики и команда курса.
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/admin/tools/n8n">
-            <Plus aria-hidden="true" />
-            Создать экземпляр
-          </Link>
-        </Button>
-      </div>
+    <div className="page-container">
+      <header className="border-b pb-6">
+        <p className="text-sm text-muted-foreground">Настройки обучения</p>
+        <h1 className="font-display mt-2 text-page-title">Учебные инструменты</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+          Настраивайте каждый сервис отдельно: среду, состояние и общий доступ учеников.
+        </p>
+      </header>
 
-      <dl className="grid border-b sm:grid-cols-3">
-        <div className="border-b py-5 sm:border-b-0 sm:border-r sm:pr-6">
-          <dt className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">
-            Экземпляры
-          </dt>
-          <dd className="font-display mt-1 text-2xl">{environments.length}</dd>
-        </div>
-        <div className="border-b py-5 sm:border-b-0 sm:border-r sm:px-6">
-          <dt className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">
-            Работают
-          </dt>
-          <dd className="font-display mt-1 text-2xl">{activeCount}</dd>
-        </div>
-        <div className="py-5 sm:pl-6">
-          <dt className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">
-            Активные доступы
-          </dt>
-          <dd className="font-display mt-1 text-2xl">{accessCount}</dd>
-        </div>
-      </dl>
-
-      {attentionCount > 0 ? (
-        <section
-          className="mt-6 flex flex-col gap-4 rounded-lg border border-brand/25 bg-brand-soft px-4 py-4 sm:flex-row sm:items-center"
-          aria-labelledby="tools-attention-title"
-        >
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-card text-brand">
-            <AlertTriangle className="size-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 id="tools-attention-title" className="text-sm font-semibold">
-              {attentionCount}{" "}
-              {pluralize(
-                attentionCount,
-                "экземпляр требует",
-                "экземпляра требуют",
-                "экземпляров требуют",
-              )}{" "}
-              действия
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Проверьте текущий экземпляр. Если он удалён, создайте новый:
-              удалённые среды не восстанавливаются.
-            </p>
+      {attention.length > 0 ? (
+        <section className="mt-6 rounded-xl border border-brand/25 bg-brand-soft p-5" aria-labelledby="tools-attention-title">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
+            <div className="min-w-0">
+              <h2 id="tools-attention-title" className="font-semibold">
+                {attention.length} {pluralize(attention.length, "среда требует", "среды требуют", "сред требуют")} проверки
+              </h2>
+              <ul className="mt-3 space-y-2 text-sm">
+                {attention.map(({ tool, environment }) => (
+                  <li key={environment.id}>
+                    <Link className="font-medium underline underline-offset-4" href={`/admin/tools/${tool.id}/instances/${environment.id}`}>
+                      {tool.name}: {environment.name}
+                    </Link>
+                    <span className="text-muted-foreground"> — {statusLabels[environment.status]}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/admin/tools/n8n">Проверить</Link>
-          </Button>
         </section>
       ) : null}
 
-      <section className="mt-8" aria-labelledby="instances-title">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 id="instances-title" className="font-display text-xl">
-              Экземпляры
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Статус, доступ учеников и последнее обновление.
-            </p>
-          </div>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/admin/access">
-              <Users aria-hidden="true" />
-              Управлять доступами
-            </Link>
-          </Button>
+      <section className="mt-8" aria-labelledby="services-title">
+        <div>
+          <h2 id="services-title" className="font-display text-xl">Сервисы</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Каталог доступных учебных сервисов и их фактическое состояние.</p>
         </div>
 
-        {environments.length > 0 ? (
-          <div className="mt-4 overflow-hidden rounded-xl border bg-card">
-            <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(9rem,0.7fr)_minmax(9rem,0.7fr)_minmax(9rem,0.8fr)_auto] gap-4 border-b bg-muted/35 px-5 py-3 text-xs font-medium uppercase tracking-[0.05em] text-muted-foreground lg:grid">
-              <span>Экземпляр</span>
-              <span>Доступ</span>
-              <span>Состояние</span>
-              <span>Обновление</span>
-              <span className="sr-only">Действия</span>
-            </div>
-            {environments.map(({ tool, environment }, index) => (
-              <article
-                key={environment.id}
-                className={
-                  "grid gap-4 px-5 py-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(9rem,0.7fr)_minmax(9rem,0.7fr)_minmax(9rem,0.8fr)_auto] lg:items-center lg:py-4 " +
-                  (index > 0 ? "border-t" : "")
-                }
-              >
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
-                    <Box className="size-4" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-semibold">
-                      {environment.name}
-                    </h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {tool.name} · {tool.description}
-                    </p>
+        <div className="mt-4 grid gap-5">
+          {tools.map((tool) => {
+            const hasEnvironment = tool.environments.length > 0;
+            return (
+              <article key={tool.id} className="overflow-hidden rounded-xl border bg-card">
+                <div className="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex min-w-0 items-start gap-4">
+                    <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-foreground text-background">
+                      <Box className="size-5" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="font-display text-2xl">{tool.name}</h3>
+                      <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{tool.description}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Badge variant={tool.studentAccessEnabled ? "success" : "destructive"}>
+                          {tool.studentAccessEnabled ? "Доступ открыт" : "Доступ приостановлен"}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {tool.activeAccessCount} {pluralize(tool.activeAccessCount, "активное назначение", "активных назначения", "активных назначений")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <Button asChild size="sm" className="min-h-11">
+                      <Link href={tool.setupHref}>
+                        {hasEnvironment ? <ServerCog aria-hidden="true" /> : <Plus aria-hidden="true" />}
+                        {hasEnvironment ? "Настроить" : "Настроить сервис"}
+                      </Link>
+                    </Button>
+                    {tool.capabilities.studentAccess ? (
+                      <ToolAccessGate
+                        toolType={tool.id}
+                        displayName={tool.name}
+                        enabled={tool.studentAccessEnabled}
+                        activeAccessCount={tool.activeAccessCount}
+                      />
+                    ) : null}
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-3 text-sm lg:block">
-                  <span className="text-xs text-muted-foreground lg:hidden">
-                    Доступ
-                  </span>
-                  <span>
-                    {environment.accessCount}{" "}
-                    {pluralize(
-                      environment.accessCount,
-                      "ученик",
-                      "ученика",
-                      "учеников",
-                    )}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3 lg:block">
-                  <span className="text-xs text-muted-foreground lg:hidden">
-                    Состояние
-                  </span>
-                  <Badge
-                    variant={
-                      environment.status === "active"
-                        ? "success"
-                        : attentionStatuses.has(environment.status)
-                          ? "destructive"
-                          : "outline"
-                    }
-                  >
-                    <CircleDot aria-hidden="true" />
-                    {statusLabels[environment.status] ?? "Обновляется"}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between gap-3 text-sm lg:block">
-                  <span className="text-xs text-muted-foreground lg:hidden">
-                    Обновление
-                  </span>
-                  <time dateTime={environment.updatedAt}>
-                    {formatUpdatedAt(environment.updatedAt)}
-                  </time>
-                </div>
-                <div className="flex flex-wrap gap-2 lg:justify-end">
-                  {environment.publicUrl ? (
-                    <Button asChild variant="ghost" size="sm">
-                      <a
-                        href={environment.publicUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Открыть
-                        <ExternalLink aria-hidden="true" />
-                      </a>
-                    </Button>
-                  ) : null}
-                  <Button asChild variant="outline" size="sm">
-                    <Link
-                      href={`/admin/tools/${tool.id}/instances/${environment.id}`}
-                    >
-                      Детали
-                      <ArrowRight aria-hidden="true" />
-                    </Link>
-                  </Button>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-4 rounded-xl border bg-card px-6 py-10">
-            <Wrench className="size-6 text-muted-foreground" aria-hidden="true" />
-            <h3 className="font-display mt-5 text-xl">
-              Экземпляров пока нет
-            </h3>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-              Настройте первый n8n. До подтверждённого завершения операции
-              ученикам не будет показана рабочая ссылка.
-            </p>
-            <Button asChild className="mt-5">
-              <Link href="/admin/tools/n8n">Перейти к настройке n8n</Link>
-            </Button>
-          </div>
-        )}
-      </section>
 
-      <section className="mt-10 border-t pt-6" aria-labelledby="catalog-title">
-        <h2 id="catalog-title" className="font-display text-xl">
-          Сервисы
-        </h2>
-        <div className="mt-4 grid gap-3">
-          {tools.map((tool) => (
-            <Link
-              key={tool.id}
-              href={tool.setupHref}
-              className="flex min-h-16 items-center gap-4 rounded-xl border bg-card px-5 py-4 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35"
-            >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
-                <Box className="size-4" aria-hidden="true" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold">{tool.name}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  {tool.description}
-                </span>
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {tool.environments.length}{" "}
-                {pluralize(
-                  tool.environments.length,
-                  "экземпляр",
-                  "экземпляра",
-                  "экземпляров",
+                {tool.capabilities.environment === "none" ? (
+                  <div className="border-t bg-muted/25 px-5 py-4 text-sm text-muted-foreground sm:px-6">
+                    Для этого сервиса не нужна отдельная серверная среда.
+                  </div>
+                ) : hasEnvironment ? (
+                  <div className="border-t">
+                    {tool.environments.map((environment) => (
+                      <div key={environment.id} className="grid gap-4 px-5 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-center">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="truncate text-sm font-semibold">{environment.name}</h4>
+                            <Badge variant={environment.status === "active" ? "success" : attentionStatuses.has(environment.status) ? "destructive" : "outline"}>
+                              <CircleDot aria-hidden="true" />
+                              {statusLabels[environment.status] ?? "Состояние обновляется"}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Обновлено {formatUpdatedAt(environment.updatedAt)} · {environment.accessCount} {pluralize(environment.accessCount, "ученик", "ученика", "учеников")}
+                          </p>
+                        </div>
+                        {environment.publicUrl ? (
+                          <Button asChild variant="ghost" size="sm" className="min-h-11">
+                            <a href={environment.publicUrl} target="_blank" rel="noreferrer">
+                              Открыть <ExternalLink aria-hidden="true" />
+                            </a>
+                          </Button>
+                        ) : <span />}
+                        <Button asChild variant="outline" size="sm" className="min-h-11">
+                          <Link href={`/admin/tools/${tool.id}/instances/${environment.id}`}>
+                            Детали <ArrowRight aria-hidden="true" />
+                          </Link>
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="border-t bg-muted/25 px-5 py-5 sm:px-6">
+                    <p className="text-sm font-medium">Среда ещё не создана</p>
+                    <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                      Перейдите к настройке {tool.name}. Ученики не увидят рабочую ссылку, пока среда не будет готова.
+                    </p>
+                  </div>
                 )}
-              </span>
-              <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />
-            </Link>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </section>
-    </main>
+    </div>
   );
 }
