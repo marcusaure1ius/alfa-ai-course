@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { axe } from "vitest-axe";
 
@@ -150,13 +150,16 @@ describe("StudentProgramView", () => {
       screen.getByText("Материалы этого раздела ещё не опубликованы."),
     ).toBeTruthy();
     expect(
-      screen.getByRole("link", { name: "1. Раздел готовится" }).getAttribute(
-        "href",
-      ),
-    ).toBe("#section-empty");
+      screen.getByRole("heading", { name: "Раздел готовится" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("navigation", {
+        name: "Быстрый переход по разделам",
+      }),
+    ).toBeNull();
   });
 
-  it("provides section anchors and a direct next action for 30+ materials", () => {
+  it("shows sections once and keeps a direct next action for 30+ materials", () => {
     const sections: StudentCourse["sections"] = Array.from(
       { length: 4 },
       (_, sectionIndex) => ({
@@ -173,10 +176,12 @@ describe("StudentProgramView", () => {
     );
     render(<StudentProgramView course={course(sections)} />);
 
-    const quickNavigation = screen.getByRole("navigation", {
-      name: "Быстрый переход по разделам",
-    });
-    expect(within(quickNavigation).getAllByRole("link")).toHaveLength(4);
+    expect(
+      screen.queryByRole("navigation", {
+        name: "Быстрый переход по разделам",
+      }),
+    ).toBeNull();
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(4);
     expect(
       screen.getByRole("link", { name: "Открыть материал" }).getAttribute("href"),
     ).toBe("/student/materials/s0-m0");

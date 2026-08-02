@@ -7,7 +7,6 @@ import {
   ChevronDown,
   Circle,
   Clock3,
-  ListTree,
   Play,
 } from "lucide-react";
 import Link from "next/link";
@@ -144,29 +143,6 @@ export function StudentProgramView({ course }: StudentProgramViewProps) {
                 </div>
               </section>
             )}
-
-            <nav
-              className="mt-8 border-y py-4"
-              aria-label="Быстрый переход по разделам"
-            >
-              <div className="flex items-center gap-3">
-                <span className="hidden shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground sm:flex">
-                  <ListTree className="size-4" aria-hidden="true" />
-                  К разделу
-                </span>
-                <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
-                  {course.sections.map((section, sectionIndex) => (
-                    <a
-                      key={section.id}
-                      href={`#section-${section.slug}`}
-                      className="inline-flex min-h-11 shrink-0 items-center rounded-lg border bg-card px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                    >
-                      {sectionIndex + 1}. {section.title}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </nav>
 
             <section className="mt-8" aria-labelledby="program-sections-title">
               <div className="flex items-end justify-between gap-4">
