@@ -49,6 +49,7 @@ describe("GET /api/cron/reconcile", () => {
       claimed: 2,
       started: 1,
       released: 1,
+      clearedN8nInvites: 3,
     });
     const response = await GET(
       new Request("https://course.example.test/api/cron/reconcile", {
@@ -63,6 +64,7 @@ describe("GET /api/cron/reconcile", () => {
       claimed: 2,
       started: 1,
       released: 1,
+      clearedN8nInvites: 3,
     });
     expect(JSON.stringify(body)).not.toMatch(
       /operationId|workflow_run_id|token|secret|error_message/i,

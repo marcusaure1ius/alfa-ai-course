@@ -34,9 +34,12 @@ Member внутри n8n и затем назначить инструмент в
 4. Если n8n отправил invitation email, дополнительного шага администратора нет.
    Если SMTP не настроен, возвращённый `/signup?token=…` проверяется на exact
    same-origin/path, шифруется AES-256-GCM ключом, производным от `AUTH_SECRET`,
-   и сохраняется только server-side до первого успешного exchange. Первый
-   student launch устанавливает revocable gateway cookie, удаляет сохранённую
-   копию и перенаправляет ученика на принятие приглашения.
+   и сохраняется в единственной server-side записи назначения до первого
+   успешного exchange. Gateway tickets содержат только ссылку на поколение
+   назначения и не копируют invite ciphertext. Первый student launch атомарно
+   забирает и удаляет сохранённую копию, устанавливает revocable gateway cookie
+   и перенаправляет ученика на принятие приглашения. Revoke удаляет копию сразу,
+   expiry — ближайшим ежедневным reconciliation.
 5. В `tool_access` по-прежнему нет пароля, n8n API key или session cookie.
    Invite path не попадает в DTO, audit или logs. Gateway assignment generation,
    expiry, revoke, service gate и unique identity constraints ADR-0012 остаются

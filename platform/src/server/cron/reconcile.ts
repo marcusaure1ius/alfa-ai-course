@@ -11,6 +11,7 @@ import {
 import { createEnvironmentWorkflow } from "../../workflows/infrastructure/create";
 import { deleteEnvironmentWorkflow } from "../../workflows/infrastructure/delete";
 import { installEnvironmentWorkflow } from "../../workflows/infrastructure/install";
+import { cleanupExpiredN8nInvites } from "../tools/n8n-gateway";
 
 export const CRON_RECONCILIATION_VERSION = "cron-reconcile-v1" as const;
 
@@ -19,10 +20,12 @@ export type CronReconciliationResult = Readonly<{
   claimed: number;
   started: number;
   released: number;
+  clearedN8nInvites: number;
 }>;
 
 export async function reconcileOrphanedFakeWorkflows(): Promise<CronReconciliationResult> {
   const sql = getDatabase();
+  const clearedN8nInvites = await cleanupExpiredN8nInvites(sql);
   const candidates = await claimOrphanedWorkflowOperations(sql, 10);
   let started = 0;
   let released = 0;
@@ -61,5 +64,6 @@ export async function reconcileOrphanedFakeWorkflows(): Promise<CronReconciliati
     claimed: candidates.length,
     started,
     released,
+    clearedN8nInvites,
   };
 }

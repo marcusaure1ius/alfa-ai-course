@@ -338,10 +338,19 @@ export async function setStudentN8nAccess(
       await transaction`
         UPDATE tool_access
         SET status = 'revoked', revoked_by_user_id = ${actor.userId},
-          revoked_at = now(), updated_at = now()
+          revoked_at = now(), n8n_invite_path_ciphertext = null,
+          updated_at = now()
         WHERE tool_type = 'n8n'
           AND user_id = ${input.studentUserId}
           AND environment_id = ${input.environmentId}
+      `;
+      await transaction`
+        UPDATE tool_gateway_tickets
+        SET consumed_at = coalesce(consumed_at, now())
+        WHERE subject_role = 'student'
+          AND subject_user_id = ${input.studentUserId}
+          AND environment_id = ${input.environmentId}
+          AND consumed_at IS NULL
       `;
       await transaction`
         UPDATE tool_gateway_sessions

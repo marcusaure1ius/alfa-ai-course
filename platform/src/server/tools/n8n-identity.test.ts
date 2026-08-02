@@ -122,4 +122,32 @@ describe("resolveN8nMemberIdentity", () => {
       resolveN8nMemberIdentity("https://n8n.example.test", "student@example.test"),
     ).rejects.toMatchObject({ code: "IDENTITY_NOT_MEMBER" });
   });
+
+  it("fails closed when an invite response contains a non-string error", async () => {
+    configure();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce(new Response(null, { status: 404 }))
+        .mockResolvedValueOnce(
+          Response.json(
+            [
+              {
+                user: {
+                  id: "n8n-user-3",
+                  email: "student@example.test",
+                  role: "global:member",
+                  emailSent: true,
+                },
+                error: { code: "AMBIGUOUS_PROVIDER_RESULT" },
+              },
+            ],
+            { status: 201 },
+          ),
+        ),
+    );
+    await expect(
+      resolveN8nMemberIdentity("https://n8n.example.test", "student@example.test"),
+    ).rejects.toMatchObject({ code: "PROVIDER_UNAVAILABLE" });
+  });
 });

@@ -140,7 +140,9 @@ Owner setup проходит только через admin ticket. Public webhoo
 scoped `N8N_MANAGEMENT_API_KEY`: grant сам находит или приглашает Member, а
 внутренний Caddy secret выводится из `AUTH_SECRET` и синхронизируется bootstrap.
 Если n8n не отправил invitation email, same-origin invite path хранится только
-в зашифрованном виде и передаётся ученику после gateway exchange. Boundary
+в зашифрованном виде в назначении, не копируется в launch tickets, атомарно
+удаляется первым gateway exchange или revoke и очищается после expiry ежедневным
+reconciliation. Boundary
 зафиксирован в [ADR-0012](../adr/0012-n8n-student-identity-and-revocable-gateway.md),
 упрощённый configuration/invite flow — в
 [ADR-0013](../adr/0013-one-click-n8n-student-access.md).

@@ -9,6 +9,7 @@ import { sealN8nInvitePath } from "@/server/tools/n8n-invite";
 
 import {
   authorizeN8nGatewayRequest,
+  cleanupExpiredN8nInvites,
   createN8nGatewayExchangeResponse,
   exchangeN8nGatewayTicket,
   issueN8nGatewayTicket,
@@ -412,7 +413,7 @@ describe("n8n gateway enforcement", () => {
     ).rejects.toMatchObject({ code: "INVALID_TICKET" });
   });
 
-  it("delivers a pending invite path only after the one-time gateway exchange", async () => {
+  it("delivers a pending invite path once across parallel gateway tickets", async () => {
     const invitePath = "/signup?token=student-invite-token";
     await sql`
       UPDATE tool_access
@@ -420,31 +421,58 @@ describe("n8n gateway enforcement", () => {
       WHERE user_id = ${students[0].userId} AND tool_type = 'n8n'
     `;
     const issued = await issueN8nGatewayTicket(sql, students[0]);
-    const stored = await sql<Array<{ redirect_path_ciphertext: string }>>`
-      SELECT redirect_path_ciphertext
-      FROM tool_gateway_tickets
-      WHERE token_hash IS NOT NULL
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-    expect(stored[0]?.redirect_path_ciphertext).not.toContain(
-      "student-invite-token",
-    );
+    const sibling = await issueN8nGatewayTicket(sql, students[0]);
     await expect(
       exchangeN8nGatewayTicket(sql, issued.ticket, "n8n.example.test"),
     ).resolves.toMatchObject({ redirectPath: invitePath });
+    await expect(
+      exchangeN8nGatewayTicket(sql, sibling.ticket, "n8n.example.test"),
+    ).resolves.toMatchObject({ redirectPath: "/" });
     const access = await sql<Array<{ n8n_invite_path_ciphertext: string | null }>>`
       SELECT n8n_invite_path_ciphertext
       FROM tool_access
       WHERE user_id = ${students[0].userId} AND tool_type = 'n8n'
     `;
     expect(access[0]?.n8n_invite_path_ciphertext).toBeNull();
-    const consumed = await sql<Array<{ redirect_path_ciphertext: string | null }>>`
-      SELECT redirect_path_ciphertext
-      FROM tool_gateway_tickets
-      ORDER BY created_at DESC
-      LIMIT 1
+  });
+
+  it("invalidates pending tickets and invitation data on revoke", async () => {
+    await sql`
+      UPDATE tool_access
+      SET n8n_invite_path_ciphertext = ${sealN8nInvitePath(
+        "/signup?token=revoke-invite-token",
+      )}
+      WHERE user_id = ${students[0].userId} AND tool_type = 'n8n'
     `;
-    expect(consumed[0]?.redirect_path_ciphertext).toBeNull();
+    const issued = await issueN8nGatewayTicket(sql, students[0]);
+    await setStudentN8nAccess(sql, admin, {
+      studentUserId: students[0].userId,
+      environmentId,
+      granted: false,
+      expiresAt: null,
+    });
+    await expect(
+      exchangeN8nGatewayTicket(sql, issued.ticket, "n8n.example.test"),
+    ).rejects.toMatchObject({ code: "INVALID_TICKET" });
+    await expect(
+      sql<Array<{ n8n_invite_path_ciphertext: string | null }>>`
+        SELECT n8n_invite_path_ciphertext FROM tool_access
+        WHERE user_id = ${students[0].userId} AND tool_type = 'n8n'
+      `,
+    ).resolves.toEqual([{ n8n_invite_path_ciphertext: null }]);
+  });
+
+  it("purges unused invitation data when access expires", async () => {
+    const now = new Date("2026-08-02T12:00:00.000Z");
+    await sql`
+      UPDATE tool_access
+      SET expires_at = ${new Date(now.getTime() - 1)},
+        n8n_invite_path_ciphertext = ${sealN8nInvitePath(
+          "/signup?token=expired-invite-token",
+        )}
+      WHERE user_id = ${students[0].userId} AND tool_type = 'n8n'
+    `;
+    await expect(cleanupExpiredN8nInvites(sql, now)).resolves.toBe(1);
+    await expect(cleanupExpiredN8nInvites(sql, now)).resolves.toBe(0);
   });
 });
