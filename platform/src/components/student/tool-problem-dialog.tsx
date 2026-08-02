@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Clipboard, Loader2, MessageCircleWarning } from "lucide-react";
+import Link from "next/link";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -84,7 +85,12 @@ export function ToolProblemDialog({ state }: { state: string }) {
                 Текст скопирован. Передайте его преподавателю привычным каналом — пароли и инфраструктурные данные в сообщение не включены.
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter><DialogClose asChild><Button type="button">Готово</Button></DialogClose></DialogFooter>
+            <DialogFooter>
+              <Button asChild variant="outline">
+                <Link href="/student/help#tool-problem">Открыть памятку</Link>
+              </Button>
+              <DialogClose asChild><Button type="button">Готово</Button></DialogClose>
+            </DialogFooter>
           </>
         ) : (
           <form onSubmit={prepare} className="grid gap-5" noValidate>
@@ -92,7 +98,14 @@ export function ToolProblemDialog({ state }: { state: string }) {
               <DialogTitle>Что случилось с n8n?</DialogTitle>
               <DialogDescription>
                 Подготовим безопасное сообщение без логинов, паролей, ключей и
-                технических секретов.
+                технических секретов. Пошаговая диагностика доступна в{" "}
+                <Link
+                  href="/student/help#tool-problem"
+                  className="font-medium text-foreground underline underline-offset-4"
+                >
+                  памятке помощи
+                </Link>
+                .
               </DialogDescription>
             </DialogHeader>
             <fieldset className="grid gap-2" aria-describedby={error ? "tool-problem-error" : undefined}>

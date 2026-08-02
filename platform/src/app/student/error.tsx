@@ -49,7 +49,7 @@ export default function StudentError({
             {pending ? "Повторяем…" : "Повторить"}
           </Button>
           <Button asChild variant="outline">
-            <Link href="/student/help">Открыть помощь</Link>
+            <Link href="/student/help#student-error">Открыть помощь</Link>
           </Button>
         </div>
       </div>

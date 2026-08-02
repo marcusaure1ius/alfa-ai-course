@@ -116,7 +116,9 @@ export function StudentN8nAccessCard({
       </div>
       {access.state === "expired" ? (
         <Button asChild variant="link" className="mt-2 px-0">
-          <Link href="/student/help">Что делать после окончания доступа</Link>
+          <Link href="/student/help#tool-expired">
+            Что делать после окончания доступа
+          </Link>
         </Button>
       ) : null}
     </div>

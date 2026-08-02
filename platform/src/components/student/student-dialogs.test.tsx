@@ -105,6 +105,9 @@ describe("student dialogs", () => {
 
     render(<ToolProblemDialog state="Нужна проверка" />);
     fireEvent.click(screen.getByRole("button", { name: "Сообщить о проблеме" }));
+    expect(
+      screen.getByRole("link", { name: "памятке помощи" }).getAttribute("href"),
+    ).toBe("/student/help#tool-problem");
     fireEvent.click(screen.getByLabelText("Страница не открывается"));
     fireEvent.click(screen.getByRole("button", { name: "Скопировать сообщение" }));
 
@@ -121,5 +124,8 @@ describe("student dialogs", () => {
 
     await act(async () => finishCopy());
     expect(await screen.findByText("Сообщение подготовлено")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Открыть памятку" }).getAttribute("href"),
+    ).toBe("/student/help#tool-problem");
   });
 });

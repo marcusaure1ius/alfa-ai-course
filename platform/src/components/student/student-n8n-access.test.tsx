@@ -68,7 +68,7 @@ describe("StudentN8nAccessCard", () => {
       screen
         .getByRole("link", { name: /после окончания доступа/i })
         .getAttribute("href"),
-    ).toBe("/student/help");
+    ).toBe("/student/help#tool-expired");
   });
 
   it("не обещает восстановление удалённой среды", () => {
