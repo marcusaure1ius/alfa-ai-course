@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff, Loader2, UserPlus } from "lucide-react";
+import { Eye, EyeOff, Loader2, TriangleAlert, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -42,6 +42,7 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
+  const selectedCourse = courses.find((course) => course.id === courseId);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -194,6 +195,11 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
               value={courseId}
               onChange={(event) => setCourseId(event.target.value)}
               disabled={pending || courses.length === 0}
+              aria-describedby={
+                selectedCourse?.status === "draft"
+                  ? "student-course-help student-course-draft-warning"
+                  : "student-course-help"
+              }
             >
               <option value="">Назначить позже</option>
               {courses.map((course) => (
@@ -202,9 +208,27 @@ export function StudentCreateForm({ courses }: { courses: AdminCourseOption[] })
                 </option>
               ))}
             </select>
-            <FieldDescription>
+            <FieldDescription id="student-course-help">
               Доступ к инструментам и срок выдаются отдельно в карточке ученика.
             </FieldDescription>
+            {selectedCourse?.status === "draft" ? (
+              <div
+                id="student-course-draft-warning"
+                role="status"
+                aria-live="polite"
+                className="flex items-start gap-2.5 rounded-md border bg-muted px-3 py-2.5 text-sm leading-5 text-foreground"
+              >
+                <TriangleAlert
+                  className="mt-0.5 size-4 shrink-0 text-brand"
+                  aria-hidden="true"
+                />
+                <p>
+                  <span className="font-medium">Курс ещё не опубликован.</span>{" "}
+                  Аккаунт создастся, но ученик не увидит программу и материалы,
+                  пока вы не опубликуете курс.
+                </p>
+              </div>
+            ) : null}
           </Field>
 
           {error ? <FieldError aria-live="polite">{error}</FieldError> : null}
