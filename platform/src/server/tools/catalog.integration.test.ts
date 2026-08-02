@@ -5,7 +5,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createDatabaseClient, type DatabaseSql } from "@/server/db/client";
 import { runMigrations } from "@/server/db/migrate";
 
-import { getToolCatalog, getToolEnvironmentDetail } from "./catalog";
+import {
+  environmentBelongsToTool,
+  getToolCatalog,
+  getToolEnvironmentDetail,
+} from "./catalog";
 
 const databaseUrl =
   process.env.DATABASE_URL ??
@@ -96,6 +100,12 @@ describe("tool environment detail", () => {
     await expect(
       getToolEnvironmentDetail(sql, "notebook", environmentId),
     ).resolves.toBeNull();
+    await expect(
+      environmentBelongsToTool(sql, "notebook", environmentId),
+    ).resolves.toBe(false);
+    await expect(
+      environmentBelongsToTool(sql, "n8n", environmentId),
+    ).resolves.toBe(true);
   });
 
   it("applies the live-environment limit per tool type instead of globally", async () => {

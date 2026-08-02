@@ -29,6 +29,18 @@ describe("composeToolCatalog", () => {
           studentLaunch: false,
         },
       },
+      {
+        id: "sandbox",
+        name: "Sandbox",
+        description: "Optional environment",
+        setupHref: "/admin/tools/sandbox",
+        studentHref: "/student/tools/sandbox",
+        capabilities: {
+          environment: "optional",
+          studentAccess: true,
+          studentLaunch: true,
+        },
+      },
     ];
     const catalog = composeToolCatalog(definitions, [
       {
@@ -43,11 +55,13 @@ describe("composeToolCatalog", () => {
     ], [
       { toolType: "n8n", studentAccessEnabled: false, activeAccessCount: 3 },
       { toolType: "notebook", studentAccessEnabled: true, activeAccessCount: 2 },
+      { toolType: "sandbox", studentAccessEnabled: true, activeAccessCount: 0 },
     ]);
 
     expect(catalog.map((tool) => [tool.id, tool.environments.length])).toEqual([
       ["n8n", 1],
       ["notebook", 0],
+      ["sandbox", 0],
     ]);
     expect(catalog[0]).toMatchObject({
       studentAccessEnabled: false,
@@ -58,6 +72,9 @@ describe("composeToolCatalog", () => {
       studentAccessEnabled: true,
       activeAccessCount: 2,
       capabilities: { environment: "none" },
+    });
+    expect(catalog[2]).toMatchObject({
+      capabilities: { environment: "optional" },
     });
   });
 });

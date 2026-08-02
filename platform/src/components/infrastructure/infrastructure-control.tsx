@@ -129,10 +129,12 @@ function operationStepLabel(operation: Environment["currentOperation"]): string 
 
 function InstallEnvironment({
   environment,
+  toolType,
   resume = false,
   onAccepted,
 }: {
   environment: Environment;
+  toolType: string;
   resume?: boolean;
   onAccepted(): void;
 }) {
@@ -173,6 +175,7 @@ function InstallEnvironment({
             "x-csrf-token": csrf,
           },
           body: JSON.stringify({
+            toolType,
             confirmationName,
             confirmedLoss,
             idempotencyKey: `install-${environment.id}-${crypto.randomUUID()}`,
@@ -290,9 +293,11 @@ function InstallEnvironment({
 
 function DeleteEnvironment({
   environment,
+  toolType,
   onAccepted,
 }: {
   environment: Environment;
+  toolType: string;
   onAccepted(): void;
 }) {
   const [confirmationName, setConfirmationName] = useState("");
@@ -332,6 +337,7 @@ function DeleteEnvironment({
             "x-csrf-token": csrf,
           },
           body: JSON.stringify({
+            toolType,
             confirmationName,
             confirmedLoss,
             idempotencyKey: `delete-${environment.id}-${crypto.randomUUID()}`,
@@ -453,7 +459,7 @@ function DeleteEnvironment({
   );
 }
 
-export function InfrastructureControl() {
+export function InfrastructureControl({ toolType = "n8n" }: { toolType?: string }) {
   const [preview, setPreview] = useState<CloudProvisioningPreview | null>(null);
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selection, setSelection] = useState<TimewebDeploySelection | null>(null);
@@ -490,7 +496,7 @@ export function InfrastructureControl() {
             credentials: "same-origin",
           },
         ),
-        fetch("/api/admin/infrastructure/environments", {
+        fetch(`/api/admin/infrastructure/environments?toolType=${encodeURIComponent(toolType)}`, {
           cache: "no-store",
           credentials: "same-origin",
         }),
@@ -511,7 +517,7 @@ export function InfrastructureControl() {
     } finally {
       setLoaded(true);
     }
-  }, [selection]);
+  }, [selection, toolType]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(), selection ? 180 : 0);
@@ -571,6 +577,7 @@ export function InfrastructureControl() {
           "x-csrf-token": csrf,
         },
         body: JSON.stringify({
+          toolType,
           name: name.trim(),
           idempotencyKey,
           deployment: selection,
@@ -1070,6 +1077,7 @@ export function InfrastructureControl() {
                     environment.currentOperation.canResume) ? (
                     <InstallEnvironment
                       environment={environment}
+                      toolType={toolType}
                       resume={environment.currentOperation?.canResume ?? false}
                       onAccepted={() => void refresh()}
                     />
@@ -1081,6 +1089,7 @@ export function InfrastructureControl() {
                     environment.currentOperation.canResume) ? (
                     <DeleteEnvironment
                       environment={environment}
+                      toolType={toolType}
                       onAccepted={() => void refresh()}
                     />
                   ) : null}

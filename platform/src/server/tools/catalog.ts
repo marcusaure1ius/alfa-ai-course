@@ -100,6 +100,20 @@ export type ToolEnvironmentDetail = {
   }>;
 };
 
+export async function environmentBelongsToTool(
+  sql: DatabaseSql,
+  toolType: string,
+  environmentId: string,
+): Promise<boolean> {
+  const rows = await sql<Array<{ present: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1 FROM environments
+      WHERE id = ${environmentId} AND tool_type = ${toolType}
+    ) AS present
+  `;
+  return rows[0]?.present ?? false;
+}
+
 export async function getToolEnvironmentDetail(
   sql: DatabaseSql,
   toolType: string,

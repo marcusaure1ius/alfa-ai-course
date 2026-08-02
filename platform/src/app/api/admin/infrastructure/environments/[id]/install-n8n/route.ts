@@ -3,6 +3,7 @@ import { start } from "@workflow/core/runtime";
 import { requireFreshAdmin } from "@/server/auth/access";
 import { verifyCsrfRequest } from "@/server/auth/csrf";
 import { getDatabase } from "@/server/db/client";
+import { environmentBelongsToTool } from "@/server/tools/catalog";
 import {
   fakeScenario,
   hasOnlyInputKeys,
@@ -39,11 +40,13 @@ export async function POST(
     !body ||
     !hasOnlyInputKeys(body, [
       "confirmationName",
+      "toolType",
       "confirmedLoss",
       "idempotencyKey",
       "simulation",
     ]) ||
     typeof body.confirmationName !== "string" ||
+    body.toolType !== "n8n" ||
     body.confirmedLoss !== true ||
     typeof body.idempotencyKey !== "string" ||
     body.idempotencyKey.length < 16 ||
@@ -59,6 +62,9 @@ export async function POST(
   const scenario = fakeScenario(body.simulation);
   try {
     const sql = getDatabase();
+    if (!(await environmentBelongsToTool(sql, "n8n", id))) {
+      return operationError(409, "TOOL_ENVIRONMENT_MISMATCH", "Среда n8n не найдена.");
+    }
     const target = await getInstallTarget(sql, id);
     if (!target) {
       return operationError(
