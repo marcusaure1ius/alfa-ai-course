@@ -224,8 +224,11 @@ Authenticated browser evidence выполнена на локальном test-s
 через эквивалентный CSS viewport 720 px для исходной ширины 1440 px. Диалог
 открывается с фокусом на первом radio, Escape закрывает его с возвратом фокуса
 на trigger, а введённый `Bearer`-like текст исключается из preview. Проверки
-репозитория: 286 unit tests, 82 integration tests, lint, typecheck и production
-build — успешно. Это локальная проверка; VPS и provider не вызывались.
+репозитория: 289 unit tests, 82 integration tests, lint, typecheck и production
+build — успешно. После независимого review polling исправлен: hidden/offline не
+расходуют бюджет из трёх фактически начатых запросов, восстановление видимости
+или сети возобновляет цикл, а unmount прерывает активный запрос. Это локальная
+проверка; VPS и provider не вызывались.
 
 ## Экран 6 — помощь `/student/help`
 

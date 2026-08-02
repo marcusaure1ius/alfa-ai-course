@@ -28,7 +28,7 @@ export function N8nAccessRefresh({
   const activeRequest = useRef<AbortController | null>(null);
 
   const check = useCallback(
-    async (announce = true) => {
+    async (announce = true): Promise<boolean> => {
       if (pendingRef.current || document.visibilityState === "hidden" || !navigator.onLine) {
         if (announce) {
           setStatus(
@@ -37,7 +37,7 @@ export function N8nAccessRefresh({
               : "Проверка продолжится, когда вкладка снова станет активной.",
           );
         }
-        return;
+        return false;
       }
       const controller = new AbortController();
       activeRequest.current?.abort();
@@ -57,26 +57,29 @@ export function N8nAccessRefresh({
         });
         if (!response.ok) throw new Error("request_failed");
         const payload = (await response.json()) as AccessPayload;
-        if (!mounted.current) return;
-        const nextState = payload.tool?.state;
-        if (nextState && nextState !== state) {
-          setStatus("Состояние изменилось. Обновляем экран…");
-          router.refresh();
-        } else if (announce) {
-          setStatus("Проверили: состояние пока не изменилось.");
+        if (mounted.current) {
+          const nextState = payload.tool?.state;
+          if (nextState && nextState !== state) {
+            setStatus("Состояние изменилось. Обновляем экран…");
+            router.refresh();
+          } else if (announce) {
+            setStatus("Проверили: состояние пока не изменилось.");
+          }
         }
       } catch (error) {
-        if (!mounted.current) return;
-        setStatus(
-          error instanceof DOMException && error.name === "AbortError"
-            ? "Проверка заняла слишком много времени. Повторите ещё раз."
-            : "Не удалось проверить состояние. Повторите ещё раз.",
-        );
+        if (mounted.current) {
+          setStatus(
+            error instanceof DOMException && error.name === "AbortError"
+              ? "Проверка заняла слишком много времени. Повторите ещё раз."
+              : "Не удалось проверить состояние. Повторите ещё раз.",
+          );
+        }
       } finally {
         window.clearTimeout(timeout);
         pendingRef.current = false;
         if (mounted.current) setPending(false);
       }
+      return true;
     },
     [router, state],
   );
@@ -90,9 +93,10 @@ export function N8nAccessRefresh({
       };
     }
     let checks = 0;
-    const timer = window.setInterval(() => {
+    const timer = window.setInterval(async () => {
+      const started = await check(false);
+      if (!started) return;
       checks += 1;
-      void check(false);
       if (checks >= MAX_AUTO_CHECKS) window.clearInterval(timer);
     }, POLL_INTERVAL_MS);
     return () => {
