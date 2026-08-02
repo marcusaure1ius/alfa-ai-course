@@ -21,8 +21,7 @@ BEGIN
   LIMIT 1;
 
   IF v_admin_id IS NULL THEN
-    RAISE NOTICE 'T-0108 skipped: production seed requires an active admin';
-    RETURN;
+    RAISE EXCEPTION 'T-0108 requires an active admin';
   END IF;
 
   SELECT id INTO v_student_id
@@ -32,8 +31,7 @@ BEGIN
     AND status = 'active';
 
   IF v_student_id IS NULL THEN
-    RAISE NOTICE 'T-0108 skipped: production seed requires active test-student@neurokurs.ru';
-    RETURN;
+    RAISE EXCEPTION 'T-0108 requires active test-student@neurokurs.ru';
   END IF;
 
   -- Remove only the known empty T-0058 production fixture. No other course
