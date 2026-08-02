@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CompleteMaterialButton } from "@/components/student/complete-material-button";
 import { PracticeSubmissionDialog } from "@/components/student/practice-submission-dialog";
 import { MaterialToc } from "@/components/student/material-toc";
+import { MaterialReadingProgress } from "@/components/student/material-reading-progress";
 import {
   parseCourseMarkdown,
   SafeMarkdown,
@@ -52,7 +53,7 @@ export default async function StudentMaterialPage({
           {material.kind === "practice" ? "Практика" : "Материал"}
         </p>
         <div className="mt-4 max-w-4xl">
-          <h1 className="font-display text-3xl leading-[1.12] sm:text-5xl">
+          <h1 className="font-display break-words text-3xl leading-[1.12] text-balance [overflow-wrap:anywhere] sm:text-5xl">
             {material.title}
           </h1>
           <div className="mt-5 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
@@ -70,13 +71,21 @@ export default async function StudentMaterialPage({
         </div>
 
         {material.summary ? (
-          <div className="mt-8 max-w-3xl rounded-2xl bg-highlight p-5 sm:p-6">
-            <p className="text-base leading-7">{material.summary}</p>
+          <div className="mt-8 max-w-3xl rounded-xl bg-highlight p-5 sm:p-6">
+            <p className="break-words text-base leading-7 [overflow-wrap:anywhere]">
+              {material.summary}
+            </p>
           </div>
         ) : null}
 
-        <div className="mt-10 grid items-start gap-12 xl:grid-cols-[minmax(0,45rem)_14rem]">
+        <div className="mt-10 grid items-start gap-12 xl:grid-cols-[minmax(0,70ch)_14rem]">
           <article className="min-w-0">
+            <MaterialReadingProgress
+              key={material.id}
+              materialId={material.id}
+              initialPosition={material.lastPosition}
+              completed={Boolean(material.completedAt)}
+            />
             <MaterialToc items={toc} mode="mobile" />
             <SafeMarkdown source={material.bodyMarkdown} />
           </article>
@@ -103,14 +112,24 @@ export default async function StudentMaterialPage({
                 </Button>
               ) : null}
             </div>
-            <CompleteMaterialButton
-              materialId={material.id}
-              completed={Boolean(material.completedAt)}
-              nextHref={next ? `/student/materials/${next.slug}` : null}
-            />
-            {material.kind === "practice" ? (
-              <PracticeSubmissionDialog materialId={material.id} />
-            ) : null}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {material.kind === "practice" ? (
+                <PracticeSubmissionDialog materialId={material.id} />
+              ) : null}
+              <CompleteMaterialButton
+                materialId={material.id}
+                completed={Boolean(material.completedAt)}
+                nextHref={next ? `/student/materials/${next.slug}` : null}
+                triggerVariant={
+                  material.kind === "practice" ? "outline" : "default"
+                }
+                triggerLabel={
+                  material.kind === "practice"
+                    ? "Завершить практику"
+                    : "Завершить материал"
+                }
+              />
+            </div>
           </div>
         </footer>
       </div>

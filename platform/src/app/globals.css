@@ -286,10 +286,11 @@
   }
 
   .student-prose {
-    max-width: 45rem;
+    max-width: 70ch;
     color: var(--foreground);
     font-size: 1.0625rem;
     line-height: 1.78;
+    overflow-wrap: anywhere;
   }
 
   .student-prose h2 {
@@ -301,6 +302,7 @@
     font-weight: 500;
     line-height: 1.25;
     letter-spacing: -0.03em;
+    outline: none;
   }
 
   .student-prose h3 {
@@ -312,6 +314,14 @@
     font-weight: 500;
     line-height: 1.35;
     letter-spacing: -0.02em;
+    outline: none;
+  }
+
+  .student-prose h2:focus-visible,
+  .student-prose h3:focus-visible {
+    border-radius: 0.375rem;
+    outline: 2px solid var(--ring);
+    outline-offset: 0.25rem;
   }
 
   .student-prose p,
@@ -356,6 +366,51 @@
     font-family: var(--font-code);
     font-size: 0.875rem;
     line-height: 1.65;
+  }
+
+  .student-prose a,
+  .student-prose :not(pre) > code {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .student-table-scroll {
+    max-width: 100%;
+    margin-block: 1.25rem;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    outline: none;
+  }
+
+  .student-table-scroll:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 0.25rem;
+  }
+
+  .student-table-scroll table {
+    width: 100%;
+    min-width: 36rem;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .student-table-scroll th,
+  .student-table-scroll td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .student-table-scroll th {
+    background: var(--muted);
+    font-weight: 600;
+  }
+
+  .student-table-scroll tbody tr:last-child td {
+    border-bottom: 0;
   }
 
 }

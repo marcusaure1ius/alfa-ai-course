@@ -22,10 +22,14 @@ export function CompleteMaterialButton({
   materialId,
   completed,
   nextHref,
+  triggerVariant = "default",
+  triggerLabel = "Завершить материал",
 }: {
   materialId: string;
   completed: boolean;
   nextHref: string | null;
+  triggerVariant?: "default" | "outline";
+  triggerLabel?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -53,9 +57,12 @@ export function CompleteMaterialButton({
         body: JSON.stringify({ lastPosition: null, completed: nextCompleted }),
       });
       if (!response.ok) throw new Error("UPDATE_FAILED");
-      if (nextCompleted) setSuccess(true);
-      else setOpen(false);
-      router.refresh();
+      if (nextCompleted) {
+        setSuccess(true);
+      } else {
+        setOpen(false);
+        router.refresh();
+      }
     } catch {
       setError("Не удалось сохранить. Попробуйте ещё раз.");
     } finally {
@@ -78,14 +85,19 @@ export function CompleteMaterialButton({
   return (
     <Dialog open={open} onOpenChange={(next) => {
       if (pending) return;
+      const refreshAfterSuccess = !next && success;
       setOpen(next);
       if (!next) {
         setSuccess(false);
         setError(null);
+        if (refreshAfterSuccess) router.refresh();
       }
     }}>
       <DialogTrigger asChild>
-        <Button type="button"><Check aria-hidden="true" />Завершить материал</Button>
+        <Button type="button" variant={triggerVariant}>
+          <Check aria-hidden="true" />
+          {triggerLabel}
+        </Button>
       </DialogTrigger>
       <DialogContent>
         {success ? (
@@ -100,13 +112,26 @@ export function CompleteMaterialButton({
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button asChild variant="outline"><Link href="/student/program">В программу</Link></Button>
-              <Button asChild>
-                <Link href={nextHref ?? "/student/program"}>
-                  {nextHref ? "Следующий материал" : "Посмотреть программу"}
-                  <ArrowRight aria-hidden="true" />
-                </Link>
-              </Button>
+              {nextHref ? (
+                <>
+                  <Button asChild variant="outline">
+                    <Link href="/student/program">В программу</Link>
+                  </Button>
+                  <Button asChild>
+                    <Link href={nextHref}>
+                      Следующий материал
+                      <ArrowRight aria-hidden="true" />
+                    </Link>
+                  </Button>
+                </>
+              ) : (
+                <Button asChild>
+                  <Link href="/student/program">
+                    В программу
+                    <ArrowRight aria-hidden="true" />
+                  </Link>
+                </Button>
+              )}
             </DialogFooter>
           </>
         ) : (

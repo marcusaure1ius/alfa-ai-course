@@ -54,6 +54,42 @@ describe("student dialogs", () => {
     expect(await screen.findByText("Черновик сохранён")).toBeTruthy();
   });
 
+  it("keeps the practice form usable when localStorage read is denied", () => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: () => {
+          throw new Error("denied");
+        },
+        setItem: vi.fn(),
+      },
+    });
+
+    render(<PracticeSubmissionDialog materialId="practice-denied" />);
+    fireEvent.click(screen.getByRole("button", { name: "Подготовить ответ" }));
+
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Черновики браузера недоступны. Ссылку можно подготовить, но сохраните копию отдельно.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByLabelText("Ссылка на результат")).toBeTruthy();
+  });
+
+  it("rejects result URLs that contain credentials", () => {
+    render(<PracticeSubmissionDialog materialId="practice-secret" />);
+    fireEvent.click(screen.getByRole("button", { name: "Подготовить ответ" }));
+    fireEvent.change(screen.getByLabelText("Ссылка на результат"), {
+      target: { value: "https://user:password@example.test/result" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
+
+    expect(
+      screen.getByText("Ссылка не должна содержать логин или пароль."),
+    ).toBeTruthy();
+  });
+
   it("blocks repeat clipboard actions while the message is being copied", async () => {
     let finishCopy!: () => void;
     const writeText = vi.fn(

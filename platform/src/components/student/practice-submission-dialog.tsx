@@ -30,7 +30,7 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
     event.preventDefault();
     let parsed: URL;
     try {
-      parsed = new URL(url);
+      parsed = new URL(url.trim());
     } catch {
       setError("Вставьте полную ссылку, начинающуюся с https://");
       inputRef.current?.focus();
@@ -41,13 +41,18 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
       inputRef.current?.focus();
       return;
     }
+    if (parsed.username || parsed.password) {
+      setError("Ссылка не должна содержать логин или пароль.");
+      inputRef.current?.focus();
+      return;
+    }
     setPending(true);
     setError(null);
     try {
       await new Promise<void>((resolve) => {
         window.requestAnimationFrame(() => resolve());
       });
-      window.localStorage.setItem(storageKey, url);
+      window.localStorage.setItem(storageKey, url.trim());
       setSaved(true);
     } catch {
       setError(
@@ -63,7 +68,17 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
       open={open}
       onOpenChange={(next) => {
         if (pending) return;
-        if (next) setUrl(window.localStorage.getItem(storageKey) ?? "");
+        if (next) {
+          try {
+            setUrl(window.localStorage.getItem(storageKey) ?? "");
+            setError(null);
+          } catch {
+            setUrl("");
+            setError(
+              "Черновики браузера недоступны. Ссылку можно подготовить, но сохраните копию отдельно.",
+            );
+          }
+        }
         setOpen(next);
         if (!next) {
           setSaved(false);
@@ -72,7 +87,10 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" variant="outline"><ClipboardCheck aria-hidden="true" />Подготовить ответ</Button>
+        <Button type="button">
+          <ClipboardCheck aria-hidden="true" />
+          Подготовить ответ
+        </Button>
       </DialogTrigger>
       <DialogContent aria-busy={pending} onOpenAutoFocus={(event) => {
         event.preventDefault();
@@ -112,6 +130,7 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
                   placeholder="https://…"
                   className="pl-10"
                   value={url}
+                  maxLength={2048}
                   disabled={pending}
                   onChange={(event) => {
                     setUrl(event.target.value);
