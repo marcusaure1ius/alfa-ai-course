@@ -42,4 +42,12 @@ describe("GET /api/admin/infrastructure/environments", () => {
     expect(response.status).toBe(400);
     expect(mocks.sql).not.toHaveBeenCalled();
   });
+
+  it("fails closed when the service type is missing", async () => {
+    const response = await GET(new Request(
+      "https://course.example.test/api/admin/infrastructure/environments",
+    ));
+    expect(response.status).toBe(400);
+    expect(mocks.sql).not.toHaveBeenCalled();
+  });
 });

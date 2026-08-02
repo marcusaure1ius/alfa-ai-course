@@ -24,7 +24,7 @@ export async function GET(request: Request): Promise<Response> {
   const access = await requireAdmin(request);
   if (!access.ok) return access.response;
   const toolType = new URL(request.url).searchParams.get("toolType");
-  if (toolType && !/^[a-z][a-z0-9_-]{1,63}$/.test(toolType)) {
+  if (!toolType || !/^[a-z][a-z0-9_-]{1,63}$/.test(toolType)) {
     return operationError(400, "INVALID_TOOL_TYPE", "Проверьте тип сервиса.");
   }
   const rows = await getDatabase()<
@@ -142,7 +142,7 @@ export async function GET(request: Request): Promise<Response> {
           AND provider_resources.lifecycle_status <> 'deleted'
       ), '[]'::jsonb) AS owned_resources
     FROM environments
-    WHERE (${toolType}::text IS NULL OR environments.tool_type = ${toolType})
+    WHERE environments.tool_type = ${toolType}
     ORDER BY environments.created_at DESC
   `;
   return Response.json(
