@@ -52,7 +52,7 @@ export function StudentProgramView({ course }: StudentProgramViewProps) {
           <ArrowLeft className="size-4" aria-hidden="true" />
           Все курсы
         </Link>
-        <div className="flex flex-col gap-5 border-b pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="border-b pb-6">
           <div className="min-w-0">
             <p className="text-sm text-muted-foreground">Программа курса</p>
             <h1 className="font-display mt-2 max-w-4xl break-words text-3xl leading-tight text-balance [overflow-wrap:anywhere] sm:text-4xl">
@@ -63,28 +63,6 @@ export function StudentProgramView({ course }: StudentProgramViewProps) {
                 "Материалы курса собраны по разделам и идут в рекомендованном порядке."}
             </p>
           </div>
-          {progress.total > 0 ? (
-            <div className="w-full max-w-64 shrink-0 lg:w-64">
-              <progress
-                className="sr-only"
-                value={progress.completed}
-                max={progress.total}
-                aria-label={`Прогресс курса: ${progress.completed} из ${progress.total} материалов завершено`}
-              />
-              <div
-                className="h-1.5 overflow-hidden rounded-full bg-muted"
-                aria-hidden="true"
-              >
-                <div
-                  className="h-full rounded-full bg-brand"
-                  style={{ width: `${progress.percent}%` }}
-                />
-              </div>
-              <p className="mt-2 text-sm font-medium tabular-nums text-muted-foreground">
-                {progress.completed} из {progress.total} завершено
-              </p>
-            </div>
-          ) : null}
         </div>
 
         {progress.state === "empty" ? (

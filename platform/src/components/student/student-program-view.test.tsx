@@ -95,11 +95,8 @@ describe("StudentProgramView", () => {
 
     const current = container.querySelector('[aria-current="step"]');
     expect(current?.getAttribute("href")).toBe("/student/materials/next");
-    expect(
-      screen.getByRole("progressbar", {
-        name: "Прогресс курса: 1 из 3 материалов завершено",
-      }),
-    ).toBeTruthy();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.queryByText("1 из 3 завершено")).toBeNull();
   });
 
   it("shows a terminal state without inventing a current material", () => {
