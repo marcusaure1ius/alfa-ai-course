@@ -49,6 +49,12 @@ describe("CompleteMaterialButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Да, завершить" }));
 
     expect(await screen.findByText("Материал завершён")).toBeTruthy();
+    expect(
+      screen.getByRole("status").textContent,
+    ).toContain("Материал завершён");
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { name: "Материал завершён" }),
+    );
     expect(refresh).not.toHaveBeenCalled();
     expect(
       screen.getByRole("link", { name: "Следующий материал" }).getAttribute(

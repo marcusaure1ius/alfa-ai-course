@@ -22,11 +22,9 @@ export function normalizeReadingPosition(value: string | null): string | null {
 export function MaterialReadingProgress({
   materialId,
   initialPosition,
-  completed,
 }: {
   materialId: string;
   initialPosition: string | null;
-  completed: boolean;
 }) {
   const normalizedInitial = normalizeReadingPosition(initialPosition);
   const lastSavedRef = useRef<string | null>(normalizedInitial);
@@ -38,6 +36,7 @@ export function MaterialReadingProgress({
   useEffect(() => {
     let timeoutId: number | null = null;
     let disposed = false;
+    let persistQueue = Promise.resolve();
 
     async function persist(position: string) {
       try {
@@ -58,7 +57,6 @@ export function MaterialReadingProgress({
             },
             body: JSON.stringify({
               lastPosition: position,
-              completed,
             }),
           },
         );
@@ -87,7 +85,10 @@ export function MaterialReadingProgress({
           .at(-1)?.id;
         const normalized = normalizeReadingPosition(position ?? null);
         if (!normalized || normalized === lastSavedRef.current) return;
-        void persist(normalized);
+        persistQueue = persistQueue.then(() => {
+          if (disposed || normalized === lastSavedRef.current) return;
+          return persist(normalized);
+        });
       }, 700);
     }
 
@@ -97,7 +98,7 @@ export function MaterialReadingProgress({
       window.removeEventListener("scroll", scheduleSave);
       if (timeoutId !== null) window.clearTimeout(timeoutId);
     };
-  }, [completed, materialId]);
+  }, [materialId]);
 
   if (!resumePosition && !saveError) return null;
 

@@ -17,7 +17,17 @@ import {
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
-export function PracticeSubmissionDialog({ materialId }: { materialId: string }) {
+export function PracticeSubmissionDialog({
+  materialId,
+  onDraftSaved,
+  triggerLabel = "Подготовить ответ",
+  triggerVariant = "default",
+}: {
+  materialId: string;
+  onDraftSaved?: () => void;
+  triggerLabel?: string;
+  triggerVariant?: "default" | "outline";
+}) {
   const storageKey = `neurokurs:practice-draft:${materialId}`;
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
@@ -54,6 +64,7 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
       });
       window.localStorage.setItem(storageKey, url.trim());
       setSaved(true);
+      onDraftSaved?.();
     } catch {
       setError(
         "Не удалось сохранить черновик в этом браузере. Скопируйте ссылку в безопасное место.",
@@ -87,9 +98,9 @@ export function PracticeSubmissionDialog({ materialId }: { materialId: string })
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button">
+        <Button type="button" variant={triggerVariant}>
           <ClipboardCheck aria-hidden="true" />
-          Подготовить ответ
+          {triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent aria-busy={pending} onOpenAutoFocus={(event) => {

@@ -155,6 +155,10 @@ export function parseCourseMarkdown(source: string): {
   };
 }
 
+export function hasCourseMarkdownContent(source: string): boolean {
+  return parseCourseMarkdown(source).blocks.length > 0;
+}
+
 function safeHref(value: string): string | null {
   if (value.startsWith("//")) return null;
   if (value.startsWith("/") || value.startsWith("#")) return value;

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   COURSE_MARKDOWN_SUBSET,
+  hasCourseMarkdownContent,
   parseCourseMarkdown,
   SafeMarkdown,
 } from "./safe-markdown";
@@ -134,6 +135,8 @@ describe("SafeMarkdown", () => {
   });
 
   it("shows an explicit state for an empty published body", () => {
+    expect(hasCourseMarkdownContent("  \n")).toBe(false);
+    expect(hasCourseMarkdownContent("Готовый материал")).toBe(true);
     render(<SafeMarkdown source={"  \n"} />);
     expect(
       screen.getByText(

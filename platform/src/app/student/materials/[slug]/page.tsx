@@ -2,10 +2,11 @@ import { ArrowLeft, ArrowRight, Clock3 } from "lucide-react";
 import Link from "next/link";
 
 import { CompleteMaterialButton } from "@/components/student/complete-material-button";
-import { PracticeSubmissionDialog } from "@/components/student/practice-submission-dialog";
 import { MaterialToc } from "@/components/student/material-toc";
 import { MaterialReadingProgress } from "@/components/student/material-reading-progress";
+import { PracticeMaterialActions } from "@/components/student/practice-material-actions";
 import {
+  hasCourseMarkdownContent,
   parseCourseMarkdown,
   SafeMarkdown,
 } from "@/components/student/safe-markdown";
@@ -39,6 +40,7 @@ export default async function StudentMaterialPage({
   const next =
     index >= 0 && index < materials.length - 1 ? materials[index + 1] ?? null : null;
   const { toc } = parseCourseMarkdown(material.bodyMarkdown);
+  const hasReadableBody = hasCourseMarkdownContent(material.bodyMarkdown);
 
   return (
     <div className="px-5 py-8 sm:px-8 sm:py-12 xl:px-12">
@@ -84,7 +86,6 @@ export default async function StudentMaterialPage({
               key={material.id}
               materialId={material.id}
               initialPosition={material.lastPosition}
-              completed={Boolean(material.completedAt)}
             />
             <MaterialToc items={toc} mode="mobile" />
             <SafeMarkdown source={material.bodyMarkdown} />
@@ -112,24 +113,21 @@ export default async function StudentMaterialPage({
                 </Button>
               ) : null}
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              {material.kind === "practice" ? (
-                <PracticeSubmissionDialog materialId={material.id} />
-              ) : null}
-              <CompleteMaterialButton
-                materialId={material.id}
-                completed={Boolean(material.completedAt)}
-                nextHref={next ? `/student/materials/${next.slug}` : null}
-                triggerVariant={
-                  material.kind === "practice" ? "outline" : "default"
-                }
-                triggerLabel={
-                  material.kind === "practice"
-                    ? "Завершить практику"
-                    : "Завершить материал"
-                }
-              />
-            </div>
+            {hasReadableBody ? (
+              material.kind === "practice" ? (
+                <PracticeMaterialActions
+                  materialId={material.id}
+                  completed={Boolean(material.completedAt)}
+                  nextHref={next ? `/student/materials/${next.slug}` : null}
+                />
+              ) : (
+                <CompleteMaterialButton
+                  materialId={material.id}
+                  completed={Boolean(material.completedAt)}
+                  nextHref={next ? `/student/materials/${next.slug}` : null}
+                />
+              )
+            ) : null}
           </div>
         </footer>
       </div>

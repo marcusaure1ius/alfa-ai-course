@@ -3,7 +3,7 @@
 import { ArrowRight, Check, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +36,11 @@ export function CompleteMaterialButton({
   const [pending, setPending] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const successTitleRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (success) successTitleRef.current?.focus();
+  }, [success]);
 
   async function updateProgress(nextCompleted: boolean) {
     setPending(true);
@@ -102,11 +107,16 @@ export function CompleteMaterialButton({
       <DialogContent>
         {success ? (
           <>
+            <p className="sr-only" role="status" aria-live="polite">
+              Материал завершён. Прогресс сохранён.
+            </p>
             <DialogHeader>
               <span className="mb-2 flex size-12 items-center justify-center rounded-full bg-highlight text-foreground">
                 <Check aria-hidden="true" />
               </span>
-              <DialogTitle>Материал завершён</DialogTitle>
+              <DialogTitle ref={successTitleRef} tabIndex={-1}>
+                Материал завершён
+              </DialogTitle>
               <DialogDescription>
                 Прогресс сохранён. Можно перейти к следующему шагу или вернуться в программу.
               </DialogDescription>

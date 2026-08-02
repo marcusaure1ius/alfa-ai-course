@@ -38,7 +38,6 @@ describe("MaterialReadingProgress", () => {
         <MaterialReadingProgress
           materialId="material-1"
           initialPosition="контекст"
-          completed={false}
         />
       </>,
     );
@@ -84,7 +83,6 @@ describe("MaterialReadingProgress", () => {
         <MaterialReadingProgress
           materialId="material-1"
           initialPosition={null}
-          completed={false}
         />
       </>,
     );
@@ -100,7 +98,73 @@ describe("MaterialReadingProgress", () => {
     expect(update?.[0]).toBe("/api/student/materials/material-1/progress");
     expect(JSON.parse(String((update?.[1] as RequestInit | undefined)?.body))).toEqual({
       lastPosition: "next-step",
-      completed: false,
     });
+  });
+
+  it("serializes position saves and never rewrites completion state", async () => {
+    vi.useFakeTimers();
+    let firstTop = 120;
+    let secondTop = 260;
+    let releaseFirstUpdate!: () => void;
+    const firstUpdate = new Promise<Response>((resolve) => {
+      releaseFirstUpdate = () => resolve(new Response(null, { status: 200 }));
+    });
+    const updateBodies: string[] = [];
+    let updateCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      if (String(input) === "/api/auth/csrf") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ csrfToken: "csrf-token" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      updateBodies.push(String(init?.body));
+      updateCount += 1;
+      return updateCount === 1
+        ? firstUpdate
+        : Promise.resolve(new Response(null, { status: 200 }));
+    });
+
+    render(
+      <>
+        <h2
+          id="first"
+          data-reading-anchor
+          ref={(node) => {
+            if (node) node.getBoundingClientRect = () => ({ top: firstTop }) as DOMRect;
+          }}
+        />
+        <h2
+          id="second"
+          data-reading-anchor
+          ref={(node) => {
+            if (node) node.getBoundingClientRect = () => ({ top: secondTop }) as DOMRect;
+          }}
+        />
+        <MaterialReadingProgress materialId="material-1" initialPosition={null} />
+      </>,
+    );
+
+    fireEvent.scroll(window);
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    firstTop = 100;
+    secondTop = 120;
+    fireEvent.scroll(window);
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+
+    expect(updateBodies).toHaveLength(1);
+    releaseFirstUpdate();
+    await act(async () => {
+      await firstUpdate;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(updateBodies.map((body) => JSON.parse(body))).toEqual([
+      { lastPosition: "first" },
+      { lastPosition: "second" },
+    ]);
   });
 });

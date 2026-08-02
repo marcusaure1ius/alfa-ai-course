@@ -774,7 +774,7 @@ export async function getStudentMaterial(
 export async function saveMaterialProgress(
   sql: DatabaseSql,
   studentUserId: string,
-  input: { materialId: string; lastPosition?: string | null; completed: boolean },
+  input: { materialId: string; lastPosition?: string | null; completed?: boolean },
 ): Promise<void> {
   await sql.begin(async (transaction) => {
     const accessible = await transaction<Array<{ id: string }>>`
@@ -798,11 +798,15 @@ export async function saveMaterialProgress(
       )
       VALUES (
         ${input.materialId}, ${studentUserId}, ${input.lastPosition ?? null},
-        ${input.completed ? new Date() : null}
+        ${input.completed === true ? new Date() : null}
       )
       ON CONFLICT (material_id, user_id) DO UPDATE SET
         last_position = EXCLUDED.last_position,
-        completed_at = EXCLUDED.completed_at,
+        completed_at = CASE
+          WHEN ${input.completed === undefined}
+            THEN material_progress.completed_at
+          ELSE EXCLUDED.completed_at
+        END,
         updated_at = now()
     `;
   });

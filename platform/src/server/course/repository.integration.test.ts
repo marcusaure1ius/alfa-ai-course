@@ -371,6 +371,39 @@ describe("course content repository", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
+  it("updates a reading position without changing completion", async () => {
+    const { materialId, sectionId } =
+      await createPublishedCourseWithDraftMaterial();
+    await updateMaterial(sql, admin, materialId, {
+      sectionId,
+      slug: "reading-progress",
+      kind: "article",
+      title: "Позиция чтения",
+      summary: "",
+      bodyMarkdown: "## Начало\n\nТекст.\n\n## Дальше\n\nЕщё текст.",
+      position: 0,
+      estimatedMinutes: null,
+      status: "published",
+    });
+    await saveMaterialProgress(sql, studentId, {
+      materialId,
+      lastPosition: "начало",
+      completed: true,
+    });
+    await saveMaterialProgress(sql, studentId, {
+      materialId,
+      lastPosition: "дальше",
+    });
+
+    const material = await getStudentMaterial(
+      sql,
+      studentId,
+      "reading-progress",
+    );
+    expect(material?.lastPosition).toBe("дальше");
+    expect(material?.completedAt).not.toBeNull();
+  });
+
   it("rejects raw HTML before writing a material", async () => {
     const { courseId, sectionId } =
       await createPublishedCourseWithDraftMaterial();
