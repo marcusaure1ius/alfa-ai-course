@@ -126,7 +126,10 @@ export const resolveN8nMemberIdentity: N8nIdentityResolver = async (
     );
   }
   const invited = (await response.json().catch(() => null)) as N8nInviteResponse | null;
-  const result = invited?.[0];
+  if (!invited || invited.length !== 1) {
+    throw new N8nIdentityError("PROVIDER_UNAVAILABLE");
+  }
+  const result = invited[0];
   if (
     !result?.user ||
     (result.error !== undefined && result.error !== null && result.error !== "")

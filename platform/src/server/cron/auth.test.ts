@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { authorizeReconciliationCron } from "./auth";
+import { authorizeCronMaintenance, authorizeReconciliationCron } from "./auth";
 
 const secret = "synthetic-cron-secret-with-at-least-32-characters";
 
@@ -46,6 +46,21 @@ describe("authorizeReconciliationCron", () => {
       ok: false,
       status: 503,
       code: "CRON_NOT_CONFIGURED",
+    });
+  });
+
+  it("authorizes security maintenance independently of the provider gate", () => {
+    const input = request(`Bearer ${secret}`);
+    const environment = {
+      VERCEL_ENV: "production",
+      PLATFORM_PROVIDER: "timeweb",
+      CRON_SECRET: secret,
+    };
+    expect(authorizeCronMaintenance(input, environment)).toEqual({ ok: true });
+    expect(authorizeReconciliationCron(input, environment)).toEqual({
+      ok: false,
+      status: 503,
+      code: "PROVIDER_GATE_CLOSED",
     });
   });
 
