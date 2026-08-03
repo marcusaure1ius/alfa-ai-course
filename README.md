@@ -56,6 +56,9 @@ Starter kit не является SaaS, не перепродаёт доступ
 - [Домен и DNS](docs/domain-and-dns.md) — необязательный переход со стартового адреса на собственный домен;
 - [Установка](docs/installation.md) — preflight, interactive/non-interactive modes, rerun safety и exit codes;
 - [Публикация installer](docs/release-publication.md) — stable URL, immutable release, checksum и проверка артефакта;
+- [Release readiness](docs/release-readiness.md) — 13 критериев MVP, evidence, blockers и go/no-go решение;
+- [Release manifest](release-manifest.json) — exact commits, pins, checksums и artifact boundary для `v0.1.1`;
+- [Changelog](CHANGELOG.md) — изменения публичных release и открытые release gates;
 - [Security baseline](docs/security.md) — least-privilege defaults, retention и SSH-safe opt-in UFW;
 - [Диагностика](docs/diagnostics.md) — redacted OK/WARN/FAIL report и symptom mapping;
 - [Troubleshooting](docs/troubleshooting.md) — безопасные сценарии симптом → проверка → решение;
