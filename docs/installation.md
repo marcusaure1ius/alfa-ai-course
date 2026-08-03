@@ -142,4 +142,4 @@ docker compose logs --tail=100 caddy n8n postgres
 ./scripts/firewall.sh --check
 ```
 
-Откройте URL, напечатанный installer. Не публикуйте `.env`, не меняйте `N8N_ENCRYPTION_KEY` и не используйте `docker compose down --volumes`. Реальные DNS, certificate, webhook и reboot проверки требуют VPS evidence и не считаются пройденными локальным dry-run.
+Откройте URL, напечатанный installer. Не публикуйте `.env`, не меняйте `N8N_ENCRYPTION_KEY` и не используйте `docker compose down --volumes`. Реальные DNS, certificate, reboot и внешний отказ TCP `5432/5678` подтверждены для stable v0.1.0 в [fresh public VPS report](reports/2026-07-31-participant-public-install-e2e.md); локальный dry-run сам по себе этого не доказывает, а новый release требует повторной внешней проверки.

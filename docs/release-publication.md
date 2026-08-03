@@ -18,6 +18,11 @@ blockers выполнен targeted recovery, но новый clean 15–30-ми�
 не проведён. Поэтому технический артефакт пригоден для контролируемого пилота,
 но не для полного MVP claim.
 
+Отдельный технический fresh-VPS прогон stable `v0.1.0` от 2026-07-31 записан в
+[participant public install technical E2E](reports/2026-07-31-participant-public-install-e2e.md):
+safe rerun, reboot, внешний TLS и network exposure прошли. Он выполнен опытным
+оператором, предшествует находкам novice trial и не закрывает его gate.
+
 Exact commits, hashes, pins и artifact boundary записаны в
 [`release-manifest.json`](../release-manifest.json).
 
