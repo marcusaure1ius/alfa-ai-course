@@ -17,6 +17,7 @@ import {
   type MutationResourceKind,
 } from "@/server/operations/contracts";
 import { classifyProviderError } from "@/server/operations/state";
+import { STARTER_KIT_BOOTSTRAP_PROFILE } from "@/server/providers/timeweb/bootstrap-profile";
 import {
   createInfrastructureLifecycleAdapter,
   lifecycleProviderError,
@@ -821,6 +822,7 @@ async function runInstallReadinessStage(
   key: string,
   order: number,
   action: ReadinessAction,
+  retryAfterMs = 15_000,
 ): Promise<void> {
   const sql = getDatabase();
   const step = await beginStep(sql, command.operationId, key, order);
@@ -839,7 +841,7 @@ async function runInstallReadinessStage(
         key,
         executionToken,
         providerError,
-        15_000,
+        retryAfterMs,
       );
     }
     throw error;
@@ -863,9 +865,14 @@ export async function bootstrappingInstallStep(
     "bootstrapping",
     50,
     "verifyBootstrapReachable",
+    STARTER_KIT_BOOTSTRAP_PROFILE.probeIntervalSeconds * 1_000,
   );
 }
-bootstrappingInstallStep.maxRetries = 19;
+bootstrappingInstallStep.maxRetries =
+  Math.ceil(
+    STARTER_KIT_BOOTSTRAP_PROFILE.observationSeconds /
+      STARTER_KIT_BOOTSTRAP_PROFILE.probeIntervalSeconds,
+  ) - 1;
 
 export async function issuingInstallTlsStep(
   command: WorkflowCommand,

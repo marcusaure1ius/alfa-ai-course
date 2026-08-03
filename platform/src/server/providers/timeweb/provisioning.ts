@@ -165,7 +165,7 @@ function buildCatalog(
       ok: false,
       code: "PUBLIC_IP_PRICE_NOT_CONFIGURED",
       message:
-        "Timeweb API не вернул актуальную стоимость floating IP; создание запрещено.",
+        "Нет актуальной подтверждённой стоимости floating IP; создание запрещено.",
     };
   }
 

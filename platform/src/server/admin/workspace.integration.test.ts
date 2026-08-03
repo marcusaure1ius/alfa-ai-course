@@ -10,6 +10,7 @@ import {
   getAdminOverview,
   getAdminStudents,
 } from "./workspace";
+import { getAdminSearchResults } from "./search";
 
 const databaseUrl =
   process.env.DATABASE_URL ??
@@ -151,5 +152,40 @@ describe("admin workspace read models", () => {
       courseIds: [courseId, secondCourseId],
       courseTitles: ["Рабочий курс", "Второй курс"],
     });
+  });
+
+  it("finds courses, sections, material bodies, students, and tools", async () => {
+    await sql`
+      UPDATE course_materials
+      SET body_markdown = 'Практика по оркестрации рабочих процессов'
+      WHERE slug = 'published'
+    `;
+
+    const [course, section, material, student, tool] = await Promise.all([
+      getAdminSearchResults(sql, "Рабочий"),
+      getAdminSearchResults(sql, "Старт"),
+      getAdminSearchResults(sql, "оркестрации"),
+      getAdminSearchResults(sql, "student-workspace"),
+      getAdminSearchResults(sql, "n8n"),
+    ]);
+
+    expect(course.results).toEqual([
+      expect.objectContaining({ kind: "course", title: "Рабочий курс" }),
+    ]);
+    expect(section.results).toEqual([
+      expect.objectContaining({ kind: "section", title: "Старт" }),
+    ]);
+    expect(material.results).toEqual([
+      expect.objectContaining({ kind: "material", title: "Опубликован" }),
+    ]);
+    expect(student.results).toEqual([
+      expect.objectContaining({
+        kind: "student",
+        title: "student-workspace@example.test",
+      }),
+    ]);
+    expect(tool.results).toEqual([
+      expect.objectContaining({ kind: "tool", title: "n8n" }),
+    ]);
   });
 });

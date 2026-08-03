@@ -3,7 +3,12 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { parseCourseMarkdown, SafeMarkdown } from "./safe-markdown";
+import {
+  COURSE_MARKDOWN_SUBSET,
+  hasCourseMarkdownContent,
+  parseCourseMarkdown,
+  SafeMarkdown,
+} from "./safe-markdown";
 
 afterEach(cleanup);
 
@@ -53,6 +58,91 @@ describe("SafeMarkdown", () => {
     );
     expect(container.querySelector("a")).toBeNull();
     expect(container.textContent).toContain("опасная ссылка");
+  });
+
+  it("rejects protocol-relative and credential-bearing links", () => {
+    const { container } = render(
+      <SafeMarkdown
+        source={
+          "[внешняя](//example.test/path) [секрет](https://user:password@example.test/path)"
+        }
+      />,
+    );
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.textContent).toContain("внешняя");
+    expect(container.textContent).toContain("секрет");
+  });
+
+  it("keeps plain and language-tagged fences separate from following content", () => {
+    const source = [
+      "```",
+      "plain text",
+      "```",
+      "",
+      "```bash",
+      "npm run test",
+      "```",
+      "",
+      "## После кода",
+      "",
+      "Обычный текст.",
+      "",
+      "```json",
+      '{\"ok\":true}',
+      "```",
+    ].join("\n");
+    const { container } = render(<SafeMarkdown source={source} />);
+
+    expect(container.querySelectorAll("pre")).toHaveLength(3);
+    expect(container.querySelector('pre[data-language="bash"]')?.textContent).toBe(
+      "npm run test",
+    );
+    expect(container.querySelector('pre[data-language="json"]')?.textContent).toBe(
+      '{"ok":true}',
+    );
+    expect(
+      screen.getByRole("heading", { name: "После кода", level: 2 }),
+    ).toBeTruthy();
+    expect(screen.getByText("Обычный текст.")).toBeTruthy();
+  });
+
+  it("renders an unclosed fence as bounded code through the end of source", () => {
+    const { container } = render(
+      <SafeMarkdown source={"```bash\necho one\necho two"} />,
+    );
+    expect(container.querySelectorAll("pre")).toHaveLength(1);
+    expect(container.querySelector("code")?.textContent).toBe(
+      "echo one\necho two",
+    );
+  });
+
+  it("renders the documented table subset in its own scroll region", () => {
+    expect(COURSE_MARKDOWN_SUBSET).toContain("pipe-tables");
+    render(
+      <SafeMarkdown
+        source={
+          "| Шаг | Результат |\n| --- | --- |\n| Проверить | Работает |\n| Повторить | Готово |"
+        }
+      />,
+    );
+
+    const tableRegion = screen.getByRole("region", {
+      name: "Таблица материала",
+    });
+    expect(tableRegion.querySelector("table")).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Шаг" })).toBeTruthy();
+    expect(screen.getByText("Работает")).toBeTruthy();
+  });
+
+  it("shows an explicit state for an empty published body", () => {
+    expect(hasCourseMarkdownContent("  \n")).toBe(false);
+    expect(hasCourseMarkdownContent("Готовый материал")).toBe(true);
+    render(<SafeMarkdown source={"  \n"} />);
+    expect(
+      screen.getByText(
+        "Содержимое материала готовится. Оно появится здесь после публикации.",
+      ),
+    ).toBeTruthy();
   });
 
   it("renders source as React nodes without injecting markup", () => {

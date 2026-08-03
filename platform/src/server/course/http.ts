@@ -42,6 +42,17 @@ export function isBoundedText(
 }
 
 export function courseRepositoryError(error: unknown): Response | null {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "23505" &&
+    "constraint_name" in error &&
+    typeof error.constraint_name === "string" &&
+    error.constraint_name.includes("slug")
+  ) {
+    return courseError(409, "ADDRESS_CONFLICT", "Этот адрес уже используется.");
+  }
   if (error instanceof UnsafeCourseContentError) {
     return courseError(
       400,
@@ -50,13 +61,24 @@ export function courseRepositoryError(error: unknown): Response | null {
     );
   }
   if (error instanceof CourseContentError) {
-    const status = error.code === "FORBIDDEN" ? 403 : error.code === "NOT_FOUND" ? 404 : 409;
+    const status =
+      error.code === "FORBIDDEN"
+        ? 403
+        : error.code === "NOT_FOUND"
+          ? 404
+          : 409;
+    const message =
+      error.code === "NOT_FOUND"
+        ? "Объект не найден."
+        : error.code === "CONFIRMATION_MISMATCH"
+          ? "Введите точное название курса."
+        : error.code === "SECTION_NOT_EMPTY"
+          ? "Сначала перенесите или удалите материалы раздела."
+          : "Операцию нельзя выполнить с выбранными данными.";
     return courseError(
       status,
       error.code,
-      error.code === "NOT_FOUND"
-        ? "Объект не найден."
-        : "Операцию нельзя выполнить с выбранными данными.",
+      message,
     );
   }
   return null;

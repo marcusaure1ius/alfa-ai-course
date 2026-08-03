@@ -10,11 +10,15 @@ function verifier(overrides: Partial<ConstructorParameters<typeof ExternalEnviro
     resolveIpv4: async () => [address],
     isPortOpen: async (_address, port) => port === 80 || port === 443,
     tlsFingerprint: async () => "AA:BB",
-    fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(
-      Response.json({
-        data: { userManagement: { showSetupOnFirstLoad: true } },
-      }),
-    ),
+    fetchImpl: vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const pathname = new URL(String(input)).pathname;
+      if (pathname === "/healthz") return new Response("ok", { status: 200 });
+      if (pathname === "/") return new Response(null, { status: 401 });
+      return Response.json(
+        { error: "invalid ticket" },
+        { status: 401, headers: { "cache-control": "no-store" } },
+      );
+    }),
     ...overrides,
   });
 }
@@ -52,15 +56,16 @@ describe("ExternalEnvironmentVerifier", () => {
     });
   });
 
-  it("requires both healthz and the editor to return 200 without redirects", async () => {
+  it("rejects a publicly reachable editor instead of accepting standalone n8n", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("ok", { status: 200 }))
-      .mockResolvedValueOnce(new Response("starting", { status: 503 }));
+      .mockResolvedValueOnce(new Response("editor", { status: 200 }));
     await expect(
       verifier({ fetchImpl }).verifyN8nHealth(),
     ).rejects.toMatchObject({
-      code: "EDITOR_NOT_READY",
+      code: "GATEWAY_NOT_ENFORCED",
+      retryable: false,
     });
     expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
       `https://${COURSE_HOSTNAME}/healthz`,
@@ -68,21 +73,24 @@ describe("ExternalEnvironmentVerifier", () => {
     ]);
   });
 
-  it("rejects an automatically configured instance owner", async () => {
+  it("requires the internal exchange route to reach Course Platform", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("ok", { status: 200 }))
-      .mockResolvedValueOnce(new Response("editor", { status: 200 }))
-      .mockResolvedValueOnce(
-        Response.json({
-          data: { userManagement: { showSetupOnFirstLoad: false } },
-        }),
-      );
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response("Cannot POST", { status: 404 }));
     await expect(
       verifier({ fetchImpl }).verifyN8nHealth(),
     ).rejects.toMatchObject({
-      code: "OWNER_BYPASS_DETECTED",
-      retryable: false,
+      code: "MANAGED_GATEWAY_NOT_READY",
+    });
+    const exchangeCall = fetchImpl.mock.calls[2];
+    expect(exchangeCall?.[0]).toBe(
+      `https://${COURSE_HOSTNAME}/__neurokurs/exchange`,
+    );
+    expect(exchangeCall?.[1]).toMatchObject({
+      method: "POST",
+      body: "ticket=managed-gateway-readiness-probe",
     });
   });
 });

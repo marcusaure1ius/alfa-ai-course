@@ -29,6 +29,11 @@ server-side окружению проекта. Второй фактор, есл
 проверяет TLS/health. До успешного install интерфейс не выдаёт VPS за готовую
 n8n-среду.
 
+Удаление среды окончательное. Платформа не восстанавливает удалённый VPS и не
+возобновляет операции его tombstone. Чтобы запустить инструмент снова,
+администратор создаёт новую среду; старый audit/tombstone сохраняется только как
+история.
+
 ## Отдельная установка n8n
 
 `POST /api/admin/infrastructure/environments/:id/install-n8n` запускает durable
@@ -44,7 +49,9 @@ Production adapter:
 - резервирует `n8n.neurokurs.ru` и создаёт только owned A record;
 - перед destructive mutation записывает durable marker;
 - отправляет allowlisted `PATCH` того же server ID с Ubuntu 24.04 и exact
-  `starter-kit-v0.1.0` cloud-init;
+  `starter-kit-v0.1.1` cloud-init; bootstrap выполняется отдельным bounded
+  systemd unit, поэтому interruption cloud-final или deployment не превращает
+  установку в невозобновляемый one-shot;
 - после reimage проверяет OS/status, повторно прикрепляет исходный SSH key и
   подтверждает DNS, 80/443, закрытые 5432/5678, TLS, `/healthz`, editor и
   `ready_owner_setup_required`;
@@ -80,6 +87,42 @@ Admin API:
 - `PATCH /api/admin/materials/:id` — редактирование и публикация материала;
 - `PUT /api/admin/sections/:id/materials/order` — атомарный полный порядок;
 - `PUT /api/admin/students/:id/access` — выдать или отозвать доступ к курсу.
+- `PUT /api/admin/tools/n8n/access/:studentId` — выдать или отозвать
+  ограниченный по сроку доступ к основной n8n-среде;
+- `GET /api/student/tools/n8n` — вернуть только учебное состояние, HTTPS URL и
+  срок доступа без provider IDs, IP, тарифа, стоимости и operation logs.
+
+Выдача student URL закрыта по умолчанию. Production должен явно задать
+`N8N_STUDENT_ACCESS_LICENSE_MODE=written_permission`, `commercial_agreement`
+либо `product_owner_risk_acceptance` и
+`N8N_STUDENT_ACCESS_LICENSE_EVIDENCE` со ссылкой или идентификатором
+подтверждающего решения. Последний mode фиксирует отдельное принятие риска
+владельцем продукта и не означает разрешение n8n. Значения проверяются только
+на сервере, а их snapshot сохраняется в `tool_access`; browser их не получает.
+Каждое назначение имеет обязательный срок не более 366 дней. Student никогда не
+получает прямой origin n8n. Launch передаёт одноразовый ticket через POST body,
+а не URL, и проходит через Caddy gateway. Gateway cookie привязана к поколению
+назначения: после срока, renewal/regrant, revoke или цикла общего service off-on
+сохранённый адрес и существующая n8n login session не оживают. Перенос VPS и
+billing не обещается.
+
+Для управляемой среды порядок такой:
+
+1. Установка из Course Platform автоматически включает
+   `docker-compose.platform.yml`, создаёт внутренний gateway secret из
+   `AUTH_SECRET` и сохраняет VPS-конфигурацию с mode `0600`.
+2. Admin открывает среду только через `/api/admin/tools/n8n/launch` и завершает
+   owner setup. Прямую ссылку ученику не передавать.
+3. Owner один раз создаёт n8n API key со scopes `user:read` и `user:create` и
+   сохраняет его только в server environment платформы как
+   `N8N_MANAGEMENT_API_KEY`.
+4. Admin нажимает «Выдать доступ» в карточке ученика. Платформа сама находит или
+   приглашает Member по точному email. Если n8n не отправил email, принятие
+   приглашения безопасно откроется ученику при первом запуске инструмента.
+5. При revoke/expiry account и учебные данные не удаляются автоматически.
+   Одноразовые данные приглашения удаляются сразу при revoke либо ежедневным
+   reconciliation после expiry. Окончательное удаление account выполняется
+   отдельно в n8n после выбора передачи или удаления workflow/credentials.
 
 Student API:
 
@@ -132,6 +175,9 @@ npm run dev
 Миграции версионируются в `src/server/db/migrations/`. Повторный запуск
 `npm run db:migrate` безопасен: применённая миграция пропускается, а изменение
 её checksum после применения считается ошибкой.
+
+Production deployment Vercel автоматически выполняет этот migration gate перед
+`next build`. Preview deployment не меняет shared database schema.
 
 ## Первый администратор
 
@@ -316,6 +362,14 @@ Production mutation adapter имеет только typed create/update/delete/r
 `TIMEWEB_API_TOKEN`. Project и SSH key adapter получает из Public API; ручные
 provider IDs и feature gates не настраиваются. В preview/development workflow
 использует fake adapter и не совершает реальных provider mutation.
+
+`/api/v1/account/services/cost` возвращает цену только уже активных сервисов.
+При нулевом baseline цена нового IPv4 задаётся двумя несекретными production
+переменными после ручной сверки с [официальной страницей Timeweb](https://timeweb.cloud/docs/public-ip):
+`TIMEWEB_PUBLIC_IPV4_MONTHLY_ROUBLES` и
+`TIMEWEB_PUBLIC_IPV4_PRICE_VERIFIED_AT`. Подтверждение действует семь суток;
+отсутствующее, некорректное или просроченное значение блокирует paid create.
+Если API уже видит активный IPv4, его цена имеет приоритет.
 
 Полный контракт, reconciliation и checklist production-подключения описаны в
 [`docs/timeweb-mutation-guard.md`](../docs/timeweb-mutation-guard.md).

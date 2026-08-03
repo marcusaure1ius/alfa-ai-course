@@ -17,21 +17,12 @@ export type CronAuthorization =
         | "PROVIDER_GATE_CLOSED";
     }>;
 
-/**
- * Production Cron uses the same fail-closed provider gates as Workflow.
- */
-export function authorizeReconciliationCron(
+export function authorizeCronMaintenance(
   request: Request,
   environment: ServerEnvironment = process.env,
 ): CronAuthorization {
   if (environment.VERCEL_ENV !== "production") {
     return { ok: false, status: 404, code: "CRON_NOT_PRODUCTION" };
-  }
-  if (
-    environment.PLATFORM_PROVIDER !== "fake" &&
-    readCloudProviderRuntime(environment).mode !== "provider"
-  ) {
-    return { ok: false, status: 503, code: "PROVIDER_GATE_CLOSED" };
   }
   const secret = environment.CRON_SECRET;
   if (!secret || secret.length < 32) {
@@ -40,6 +31,24 @@ export function authorizeReconciliationCron(
   const authorization = request.headers.get("authorization") ?? "";
   if (!safeEqual(authorization, `Bearer ${secret}`)) {
     return { ok: false, status: 401, code: "CRON_UNAUTHORIZED" };
+  }
+  return { ok: true };
+}
+
+/**
+ * Production Cron uses the same fail-closed provider gates as Workflow.
+ */
+export function authorizeReconciliationCron(
+  request: Request,
+  environment: ServerEnvironment = process.env,
+): CronAuthorization {
+  const maintenance = authorizeCronMaintenance(request, environment);
+  if (!maintenance.ok) return maintenance;
+  if (
+    environment.PLATFORM_PROVIDER !== "fake" &&
+    readCloudProviderRuntime(environment).mode !== "provider"
+  ) {
+    return { ok: false, status: 503, code: "PROVIDER_GATE_CLOSED" };
   }
   return { ok: true };
 }

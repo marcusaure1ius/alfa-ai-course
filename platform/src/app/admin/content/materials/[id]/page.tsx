@@ -20,9 +20,9 @@ export default async function AdminMaterialPage({
   return (
     <main className="page-container">
       <Button asChild variant="ghost" className="-ml-3">
-        <Link href="/admin/content">
+        <Link href={`/admin/program/sections/${material.sectionId}`}>
           <ArrowLeft aria-hidden="true" />
-          Материалы
+          К заданиям раздела
         </Link>
       </Button>
       <div className="mt-6 flex flex-wrap items-start justify-between gap-4">

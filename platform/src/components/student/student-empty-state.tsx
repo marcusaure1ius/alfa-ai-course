@@ -14,7 +14,7 @@ const content = {
     description:
       "Как только преподаватель добавит вас в курс, программа и материалы появятся здесь.",
     action: "Что делать дальше",
-    href: "/student/help",
+    href: "/student/help#course-access",
   },
   empty: {
     icon: BookOpenText,

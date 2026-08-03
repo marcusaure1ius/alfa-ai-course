@@ -293,6 +293,29 @@ describe("getTimewebProvisioningPreview", () => {
     });
   });
 
+  it("uses a fresh official provider-publication price when active-service cost is absent", async () => {
+    const preview = await getTimewebProvisioningPreview(
+      {
+        ...productionEnvironment,
+        TIMEWEB_PUBLIC_IPV4_MONTHLY_ROUBLES: "180",
+        TIMEWEB_PUBLIC_IPV4_PRICE_VERIFIED_AT: new Date().toISOString(),
+      },
+      vi.fn<typeof fetch>(async (input) => {
+        if (String(input).endsWith("/account/services/cost")) {
+          return Response.json({ services_costs: [] });
+        }
+        return Response.json(providerPayload(String(input)));
+      }),
+    );
+    expect(preview).toMatchObject({
+      ok: true,
+      plan: {
+        monthlyPublicIpRoubles: 180,
+        monthlyTotalRoubles: 1_180,
+      },
+    });
+  });
+
   it("validates an already reserved IP against the selected zone", async () => {
     const ownedIp = {
       externalId: "11111111-2222-4333-8444-555555555555",
