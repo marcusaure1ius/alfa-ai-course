@@ -5,9 +5,11 @@ import type { WorkflowCommand } from "@/server/operations/contracts";
 import {
   authorizeMutationStep,
   beginStep,
+  completeInstallOperationStep,
   completeOperationStep,
   finishOperation,
   finishStep,
+  markInstallEnvironmentDegraded,
   transitionEnvironment,
 } from "@/server/operations/repository";
 import {
@@ -15,6 +17,7 @@ import {
   type MutationResourceKind,
 } from "@/server/operations/contracts";
 import { classifyProviderError } from "@/server/operations/state";
+import { STARTER_KIT_BOOTSTRAP_PROFILE } from "@/server/providers/timeweb/bootstrap-profile";
 import {
   createInfrastructureLifecycleAdapter,
   lifecycleProviderError,
@@ -27,6 +30,7 @@ async function adapter(
     createExecutionToken?: string;
     reserveIpExecutionToken?: string;
     configureDnsExecutionToken?: string;
+    installExecutionToken?: string;
   }> = {},
 ) {
   return createInfrastructureLifecycleAdapter(command, options);
@@ -83,6 +87,33 @@ async function failProviderStep(
   throw new RetryableError(error.message, { retryAfter: retryAfterMs });
 }
 
+async function failInstallStep(
+  command: WorkflowCommand,
+  key: string,
+  executionToken: string,
+  error: Readonly<{ code: string; message: string; retryable?: boolean }>,
+  retryAfterMs = 1_000,
+): Promise<never> {
+  const sql = getDatabase();
+  const retryClass = classifyProviderError(error.code, error.retryable);
+  await finishStep(sql, command.operationId, key, executionToken, {
+    status: "failed",
+    code: error.code,
+    message: error.message,
+    retryClass,
+  });
+  if (retryClass !== "permanent") {
+    throw new RetryableError(error.message, { retryAfter: retryAfterMs });
+  }
+  await markInstallEnvironmentDegraded(sql, command.operationId);
+  await finishOperation(sql, command.operationId, {
+    status: "failed",
+    code: error.code,
+    message: error.message,
+  });
+  throw new FatalError(error.message);
+}
+
 function requireStepClaim(step: {
   claimed: boolean;
   executionToken: string | null;
@@ -97,7 +128,7 @@ function requireStepClaim(step: {
 
 async function guardMutation(
   command: WorkflowCommand,
-  action: "create" | "delete",
+  action: "create" | "install" | "delete",
   resourceKind: MutationResourceKind,
 ) {
   return authorizeMutationStep(getDatabase(), {
@@ -597,6 +628,135 @@ export async function configureDnsStep(
 }
 configureDnsStep.maxRetries = 9;
 
+export async function configureInstallDnsStep(
+  command: WorkflowCommand,
+): Promise<void> {
+  "use step";
+  const sql = getDatabase();
+  const authorization = await guardMutation(command, "install", "dns_record");
+  const step = await beginStep(sql, command.operationId, "configure_dns", 10);
+  if (step.alreadyCompleted) return;
+  const executionToken = requireStepClaim(step);
+  try {
+    if (authorization.resource.state !== "active") {
+      await (
+        await adapter(command, {
+          configureDnsExecutionToken: executionToken,
+        })
+      ).configureDns();
+    }
+    await finishStep(
+      sql,
+      command.operationId,
+      "configure_dns",
+      executionToken,
+      { status: "succeeded" },
+    );
+  } catch (error) {
+    const providerError = lifecycleProviderError(error);
+    if (providerError) {
+      await failInstallStep(
+        command,
+        "configure_dns",
+        executionToken,
+        providerError,
+        5_000,
+      );
+    }
+    throw error;
+  }
+}
+configureInstallDnsStep.maxRetries = 9;
+
+export async function installServerStep(command: WorkflowCommand): Promise<void> {
+  "use step";
+  const sql = getDatabase();
+  const authorization = await guardMutation(command, "install", "server");
+  const step = await beginStep(sql, command.operationId, "installing_n8n", 30);
+  if (step.alreadyCompleted) return;
+  const executionToken = requireStepClaim(step);
+  try {
+    if (authorization.resource.state !== "active") {
+      throw new FatalError("Owned VPS отсутствует до установки n8n.");
+    }
+    await (
+      await adapter(command, { installExecutionToken: executionToken })
+    ).installServer();
+    await finishStep(
+      sql,
+      command.operationId,
+      "installing_n8n",
+      executionToken,
+      { status: "succeeded" },
+    );
+  } catch (error) {
+    const providerError = lifecycleProviderError(error);
+    if (providerError) {
+      await failInstallStep(
+        command,
+        "installing_n8n",
+        executionToken,
+        providerError,
+        15_000,
+      );
+    }
+    throw error;
+  }
+}
+installServerStep.maxRetries = 2;
+
+export async function reconcileInstallationStep(
+  command: WorkflowCommand,
+): Promise<void> {
+  "use step";
+  const sql = getDatabase();
+  await guardMutation(command, "install", "server");
+  const step = await beginStep(
+    sql,
+    command.operationId,
+    "provider_installing",
+    40,
+  );
+  if (step.alreadyCompleted) return;
+  const executionToken = requireStepClaim(step);
+  try {
+    await (await adapter(command)).reconcileInstallation();
+    await finishStep(
+      sql,
+      command.operationId,
+      "provider_installing",
+      executionToken,
+      { status: "succeeded" },
+    );
+  } catch (error) {
+    const providerError = lifecycleProviderError(error);
+    if (providerError) {
+      if (providerError.retryable && step.attempts >= 20) {
+        await failInstallStep(
+          command,
+          "provider_installing",
+          executionToken,
+          {
+            code: "INSTALL_RECONCILE_EXHAUSTED",
+            message:
+              "Timeweb не подтвердил готовность сервера за ограниченное окно reconciliation.",
+            retryable: false,
+          },
+        );
+      }
+      await failInstallStep(
+        command,
+        "provider_installing",
+        executionToken,
+        providerError,
+        15_000,
+      );
+    }
+    throw error;
+  }
+}
+reconcileInstallationStep.maxRetries = 20;
+
 type ReadinessAction =
   | "verifyBootstrapReachable"
   | "waitForDns"
@@ -656,6 +816,84 @@ async function runReadinessStage(
     return "degraded";
   }
 }
+
+async function runInstallReadinessStage(
+  command: WorkflowCommand,
+  key: string,
+  order: number,
+  action: ReadinessAction,
+  retryAfterMs = 15_000,
+): Promise<void> {
+  const sql = getDatabase();
+  const step = await beginStep(sql, command.operationId, key, order);
+  if (step.alreadyCompleted) return;
+  const executionToken = requireStepClaim(step);
+  try {
+    await (await adapter(command))[action]();
+    await finishStep(sql, command.operationId, key, executionToken, {
+      status: "succeeded",
+    });
+  } catch (error) {
+    const providerError = lifecycleProviderError(error);
+    if (providerError) {
+      await failInstallStep(
+        command,
+        key,
+        executionToken,
+        providerError,
+        retryAfterMs,
+      );
+    }
+    throw error;
+  }
+}
+
+export async function waitingInstallDnsStep(
+  command: WorkflowCommand,
+): Promise<void> {
+  "use step";
+  return runInstallReadinessStage(command, "waiting_dns", 20, "waitForDns");
+}
+waitingInstallDnsStep.maxRetries = 19;
+
+export async function bootstrappingInstallStep(
+  command: WorkflowCommand,
+): Promise<void> {
+  "use step";
+  return runInstallReadinessStage(
+    command,
+    "bootstrapping",
+    50,
+    "verifyBootstrapReachable",
+    STARTER_KIT_BOOTSTRAP_PROFILE.probeIntervalSeconds * 1_000,
+  );
+}
+bootstrappingInstallStep.maxRetries =
+  Math.ceil(
+    STARTER_KIT_BOOTSTRAP_PROFILE.observationSeconds /
+      STARTER_KIT_BOOTSTRAP_PROFILE.probeIntervalSeconds,
+  ) - 1;
+
+export async function issuingInstallTlsStep(
+  command: WorkflowCommand,
+): Promise<void> {
+  "use step";
+  return runInstallReadinessStage(command, "issuing_tls", 60, "verifyTls");
+}
+issuingInstallTlsStep.maxRetries = 19;
+
+export async function installHealthCheckStep(
+  command: WorkflowCommand,
+): Promise<void> {
+  "use step";
+  return runInstallReadinessStage(
+    command,
+    "health_check",
+    70,
+    "verifyN8nHealth",
+  );
+}
+installHealthCheckStep.maxRetries = 19;
 
 export async function bootstrappingStep(
   command: WorkflowCommand,
@@ -745,6 +983,21 @@ export async function completeCreateStep(command: WorkflowCommand): Promise<void
     executionToken,
     "creating",
     "active",
+  );
+}
+
+export async function completeInstallStep(command: WorkflowCommand): Promise<void> {
+  "use step";
+  const sql = getDatabase();
+  const step = await beginStep(sql, command.operationId, "complete_install", 80);
+  if (step.alreadyCompleted) return;
+  const executionToken = requireStepClaim(step);
+  await (await adapter(command)).recordReadyInstallation();
+  await completeInstallOperationStep(
+    sql,
+    command.operationId,
+    "complete_install",
+    executionToken,
   );
 }
 

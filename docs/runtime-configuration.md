@@ -4,6 +4,7 @@
 - Target: one Ubuntu 24.04 LTS x86_64 VPS
 - Canonical architecture: [docs/architecture.md](architecture.md)
 - Version evidence: [ADR-0003](../adr/0003-version-pinning-policy.md)
+- Registry fallback: [ADR-0012](../adr/0012-timeweb-dockerhub-proxy-fallback.md)
 
 ## Files
 
@@ -12,6 +13,8 @@
 | `docker-compose.yml` | n8n, PostgreSQL and Caddy services, networks, volumes and health checks |
 | `.env.example` | documented variables without credential values |
 | `config/Caddyfile` | HTTPS termination, reverse proxy, active upstream health and response headers |
+| `docker-compose.platform.yml` | explicit managed-Neurokurs override; never enabled for standalone installs by accident |
+| `config/Caddyfile.platform` | revocable student/editor gateway with public endpoint allowlist |
 | `tests/fixtures/compose.env` | known fake values for static Compose validation only |
 
 Do not deploy `tests/fixtures/compose.env`. It is intentionally public, contains no usable secrets and uses the reserved `.test` domain.
@@ -28,7 +31,50 @@ Copy `.env.example` to `.env` and set:
 
 The encryption key must never change during update. Losing it makes stored n8n credentials unreadable. `.env` must have mode `0600`, remain outside Git and be included in protected backup material.
 
+## Управляемый профиль Neurokurs
+
+Только для среды, назначаемой ученикам, используется
+`-f docker-compose.platform.yml`. При установке из Course Platform bootstrap
+автоматически создаёт `.env.platform` с mode `0600`:
+
+- `PLATFORM_GATE_ORIGIN` — HTTPS origin Course Platform без path;
+- внутренний `N8N_GATE_MANAGEMENT_SECRET` — HMAC, производный от обязательного
+  `AUTH_SECRET`; оператор его не создаёт и не переносит вручную.
+
+В server environment Course Platform вручную добавляется только owner API key
+n8n как `N8N_MANAGEMENT_API_KEY` со scopes `user:read` и `user:create`.
+`AUTH_SECRET` уже обязателен для платформенной auth-системы. Не добавляйте эти
+значения в browser-prefixed variables, Git, команды shell history или логи.
+Standalone установка managed-значения не использует.
+
+Проверка resolved managed profile без запуска контейнеров:
+
+```bash
+docker compose --env-file .env \
+  -f docker-compose.yml -f docker-compose.platform.yml config --quiet
+```
+
+Gateway не является подтверждённым на VPS только по `config --quiet`: отдельно
+нужны deployment evidence, TLS, saved-URL revoke и active-session проверки.
+Course Platform записывает `managed_gateway_verified_at` только после внешнего
+fail-closed probe: health endpoint возвращает `200`, editor без gateway cookie
+возвращает `401`, а POST с заведомо недействительным ticket доходит через Caddy
+до Course Platform и возвращает JSON `401` с `cache-control: no-store`. Пока
+этой отметки нет, admin/student launch ticket не выдаётся.
+
+Оба внутренних маршрута Course Platform (`exchange` и `authorize`) принимают
+контекст только от managed Caddy после constant-time проверки производного
+gateway secret. Целевой host закреплён профилем как `n8n.neurokurs.ru` и не
+берётся из `X-Forwarded-Host`, который CDN может переписать. Прямой внешний
+вызов authorizer без внутреннего заголовка получает `403`.
+
 `EXECUTIONS_DATA_MAX_AGE=168` and `EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000` are privacy-minded training defaults. Reduce them for sensitive/high-volume workflows after understanding the diagnostic tradeoff.
+
+`N8N_IMAGE_SOURCE=official` сохраняет канонические registry references.
+Timeweb onboarding явно выбирает `timeweb`; installer записывает allowlisted
+`POSTGRES_IMAGE`, `N8N_IMAGE_REPOSITORY` и `CADDY_IMAGE` с теми же exact tags через
+официальный proxy провайдера. Произвольные registry overrides не входят в
+beginner contract.
 
 The Compose environment always keeps `EXECUTIONS_DATA_PRUNE=true`. Overrides change the age/count bounds, not the fact that pruning is enabled. See [security baseline](security.md) for examples and the evidence boundary.
 
@@ -72,7 +118,7 @@ docker compose --env-file tests/fixtures/compose.env config --quiet
 docker compose --env-file tests/fixtures/compose.env config --images
 ```
 
-The rendered config must contain only the three exact images from ADR-0003. It must not contain `latest`, PostgreSQL host ports, `privileged`, or Docker socket mounts.
+The rendered config must contain only one of the two approved exact image sets from ADR-0003 and ADR-0012: official registries or the Timeweb proxy with unchanged tags. It must not contain `latest`, PostgreSQL host ports, `privileged`, or Docker socket mounts.
 
 Run the complete automated security assertions with `./tests/security_test.sh`.
 

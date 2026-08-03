@@ -6,6 +6,14 @@ import type { AuthSession } from "../auth/service";
 import { hasFreshReauthentication, hasPermission } from "../auth/rbac";
 import type { DatabaseSql } from "../db/client";
 import type { OwnedProviderResource } from "../providers/timeweb/contracts";
+import {
+  COURSE_DNS_ZONE,
+  COURSE_HOSTNAME,
+} from "../providers/timeweb/bootstrap-profile";
+import type {
+  TimewebInstallPlan,
+  TimewebInstallTarget,
+} from "../providers/timeweb/installation";
 import type { TimewebProvisioningPlan } from "../providers/timeweb/provisioning";
 import {
   MUTATION_COMMAND_VERSION,
@@ -28,7 +36,8 @@ export class OperationConflictError extends Error {
       | "ACTIVE_ENVIRONMENT"
       | "ACTIVE_MUTATION"
       | "IDEMPOTENCY_CONFLICT"
-      | "INVALID_STATE",
+      | "INVALID_STATE"
+      | "DNS_CONFLICT",
   ) {
     super(code);
   }
@@ -131,6 +140,40 @@ function deleteFingerprint(input: {
   });
 }
 
+function installFingerprint(input: {
+  environmentId: string;
+  confirmationName: string;
+  confirmedLoss: true;
+  scenario: FakeScenario;
+  installPlan: TimewebInstallPlan;
+}): string {
+  return idempotencyFingerprint({
+    kind: "install_environment",
+    environmentId: input.environmentId,
+    confirmationName: input.confirmationName,
+    confirmedLoss: input.confirmedLoss,
+    scenario: input.scenario,
+    installPlan: installPlanIntent(input.installPlan),
+  });
+}
+
+function installPlanIntent(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const plan = value as Record<string, unknown>;
+  return {
+    version: plan.version,
+    deploymentMode: plan.deploymentMode,
+    operatingSystemId: plan.operatingSystemId,
+    operatingSystemLabel: plan.operatingSystemLabel,
+    sshKeyId: plan.sshKeyId,
+    hostname: plan.hostname,
+    profileVersion: plan.profileVersion,
+    release: plan.release,
+    installerUrl: plan.installerUrl,
+    installerSha256: plan.installerSha256,
+  };
+}
+
 async function existingOperation(
   sql: DatabaseSql,
   actorUserId: string,
@@ -168,6 +211,17 @@ function storedDeleteFingerprint(operation: ExistingOperation): string {
     confirmationName: operation.input_snapshot.confirmedName,
     confirmedLoss: operation.input_snapshot.confirmed,
     scenario: operation.input_snapshot.scenario,
+  });
+}
+
+function storedInstallFingerprint(operation: ExistingOperation): string {
+  return idempotencyFingerprint({
+    kind: operation.kind,
+    environmentId: operation.environment_id,
+    confirmationName: operation.input_snapshot.confirmedName,
+    confirmedLoss: operation.input_snapshot.confirmed,
+    scenario: operation.input_snapshot.scenario,
+    installPlan: installPlanIntent(operation.input_snapshot.installPlan),
   });
 }
 
@@ -257,6 +311,310 @@ export async function reserveCreateOperation(
   };
 }
 
+export async function getInstallTarget(
+  sql: DatabaseSql,
+  environmentId: string,
+): Promise<TimewebInstallTarget | null> {
+  const rows = await sql<
+    {
+      environment_status: string;
+      server_provider: string;
+      server_id: string;
+      public_ip_provider: string;
+      public_ip_id: string;
+      public_ipv4: string | null;
+      ssh_key_id: number | null;
+    }[]
+  >`
+    SELECT
+      environments.status AS environment_status,
+      server.provider AS server_provider,
+      server.provider_resource_id AS server_id,
+      public_ip.provider AS public_ip_provider,
+      public_ip.provider_resource_id AS public_ip_id,
+      public_ip.public_metadata->>'address' AS public_ipv4,
+      (
+        SELECT (operations.input_snapshot->'providerPlan'->>'sshKeyId')::int
+        FROM operations
+        WHERE operations.environment_id = environments.id
+          AND operations.kind = 'create_environment'
+          AND operations.input_snapshot ? 'providerPlan'
+        ORDER BY operations.created_at DESC
+        LIMIT 1
+      ) AS ssh_key_id
+    FROM environments
+    JOIN provider_resources AS server
+      ON server.environment_id = environments.id
+      AND server.resource_kind = 'server'
+      AND server.ownership = 'platform'
+      AND server.lifecycle_status <> 'deleted'
+    JOIN provider_resources AS public_ip
+      ON public_ip.environment_id = environments.id
+      AND public_ip.resource_kind = 'public_ip'
+      AND public_ip.ownership = 'platform'
+      AND public_ip.lifecycle_status <> 'deleted'
+    WHERE environments.id = ${environmentId}
+      AND environments.status IN ('active', 'degraded')
+    LIMIT 2
+  `;
+  if (rows.length !== 1) return null;
+  const row = rows[0]!;
+  if (
+    row.server_provider !== row.public_ip_provider ||
+    !["fake-timeweb", "timeweb"].includes(row.server_provider) ||
+    typeof row.public_ipv4 !== "string"
+  ) {
+    return null;
+  }
+  const sshKeyId =
+    row.server_provider === "fake-timeweb" ? 1 : row.ssh_key_id;
+  if (!sshKeyId || !Number.isSafeInteger(sshKeyId) || sshKeyId <= 0) {
+    return null;
+  }
+  return {
+    provider: row.server_provider as "fake-timeweb" | "timeweb",
+    serverExternalId: row.server_id,
+    publicIpExternalId: row.public_ip_id,
+    publicIpv4: row.public_ipv4,
+    sshKeyId,
+  };
+}
+
+export async function reserveInstallOperation(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  input: {
+    environmentId: string;
+    confirmationName: string;
+    confirmedLoss: true;
+    idempotencyKey: string;
+    scenario: FakeScenario;
+    installPlan: TimewebInstallPlan;
+  },
+): Promise<{ accepted: MutationAccepted; created: boolean }> {
+  assertFreshAdmin(actor);
+  const expectedFingerprint = installFingerprint(input);
+  const operationId = randomUUID();
+  const reservation = await sql.begin(async (transaction) => {
+    const lockKey = `${actor.userId}:${input.idempotencyKey}`;
+    await transaction`
+      SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+    `;
+    const existingRows = await transaction<ExistingOperation[]>`
+      SELECT
+        operations.id,
+        operations.environment_id,
+        environments.name AS environment_name,
+        operations.kind,
+        operations.input_snapshot
+      FROM operations
+      JOIN environments ON environments.id = operations.environment_id
+      WHERE operations.requested_by_user_id = ${actor.userId}
+        AND operations.idempotency_key = ${input.idempotencyKey}
+      LIMIT 1
+    `;
+    const existing = acceptMatchingOperation(
+      existingRows[0] ?? null,
+      expectedFingerprint,
+      storedInstallFingerprint,
+    );
+    if (existing) {
+      return { operationId: existing.accepted.operationId, created: false };
+    }
+    const environments = await transaction<
+      { id: string; name: string; status: string }[]
+    >`
+      SELECT id, name, status
+      FROM environments
+      WHERE id = ${input.environmentId}
+      FOR UPDATE
+    `;
+    const environment = environments[0];
+    if (
+      !environment ||
+      environment.name !== input.confirmationName ||
+      !["active", "degraded"].includes(environment.status)
+    ) {
+      throw new OperationConflictError("INVALID_STATE");
+    }
+    const resources = await transaction<
+      { resource_kind: string; ownership: string }[]
+    >`
+      SELECT resource_kind, ownership
+      FROM provider_resources
+      WHERE environment_id = ${input.environmentId}
+        AND lifecycle_status <> 'deleted'
+        AND resource_kind IN ('server', 'public_ip')
+    `;
+    if (
+      resources.length !== 2 ||
+      resources.some((resource) => resource.ownership !== "platform") ||
+      !resources.some((resource) => resource.resource_kind === "server") ||
+      !resources.some((resource) => resource.resource_kind === "public_ip")
+    ) {
+      throw new OperationConflictError("INVALID_STATE");
+    }
+    const installed = await transaction<{ count: number }[]>`
+      SELECT count(*)::int AS count
+      FROM software_installations
+      WHERE environment_id = ${input.environmentId}
+        AND status = 'ready_owner_setup_required'
+    `;
+    if ((installed[0]?.count ?? 0) > 0) {
+      throw new OperationConflictError("INVALID_STATE");
+    }
+    await transaction`
+      INSERT INTO operations (
+        id, environment_id, kind, status, requested_by_user_id,
+        requested_by_session_id, idempotency_key, input_snapshot
+      )
+      VALUES (
+        ${operationId}, ${input.environmentId}, 'install_environment', 'queued',
+        ${actor.userId}, ${actor.sessionId}, ${input.idempotencyKey},
+        ${transaction.json({
+          scenario: input.scenario,
+          confirmedName: input.confirmationName,
+          confirmed: input.confirmedLoss,
+          installPlan: input.installPlan,
+        })}
+      )
+    `;
+    const allocations = await transaction<{ id: string }[]>`
+      INSERT INTO domain_allocations (
+        id, environment_id, hostname, zone_name, record_type, status
+      )
+      VALUES (
+        ${randomUUID()}, ${input.environmentId}, ${COURSE_HOSTNAME},
+        ${COURSE_DNS_ZONE}, 'A', 'reserved'
+      )
+      ON CONFLICT (hostname) WHERE status NOT IN ('released', 'deleted')
+      DO UPDATE SET
+        updated_at = now(),
+        status = CASE
+          WHEN domain_allocations.status = 'record_created'
+          THEN 'record_created'
+          ELSE 'reserved'
+        END
+      WHERE domain_allocations.environment_id = EXCLUDED.environment_id
+      RETURNING id
+    `;
+    if (!allocations[0]) throw new OperationConflictError("DNS_CONFLICT");
+    await transaction`
+      INSERT INTO audit_events (
+        id, actor_user_id, action, subject_type, subject_id, outcome, metadata
+      )
+      VALUES (
+        ${randomUUID()}, ${actor.userId}, 'operation.install_n8n.started',
+        'operation', ${operationId}, 'success',
+        ${transaction.json({
+          environmentId: input.environmentId,
+          confirmed: input.confirmedLoss,
+          installProfileVersion: input.installPlan.profileVersion,
+        })}
+      )
+    `;
+    return { operationId, created: true };
+  });
+  return {
+    accepted: {
+      version: OPERATIONS_DTO_VERSION,
+      operationId: reservation.operationId,
+    },
+    created: reservation.created,
+  };
+}
+
+/**
+ * Restarts a durable install whose Workflow already released its failed step.
+ * The existing operation and its completed steps are reused, so a recovery
+ * cannot allocate another server, public IP, or DNS record.
+ */
+export async function resumeInterruptedInstallOperation(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  input: {
+    environmentId: string;
+    confirmationName: string;
+    confirmedLoss: true;
+  },
+): Promise<{ accepted: MutationAccepted; resumed: true } | null> {
+  assertFreshAdmin(actor);
+  return sql.begin(async (transaction) => {
+    await transaction`
+      SELECT pg_advisory_xact_lock(hashtextextended(${input.environmentId}, 0))
+    `;
+    const operations = await transaction<
+      { id: string; environment_name: string }[]
+    >`
+      SELECT operations.id, environments.name AS environment_name
+      FROM operations
+      JOIN environments ON environments.id = operations.environment_id
+      WHERE operations.environment_id = ${input.environmentId}
+        AND operations.kind = 'install_environment'
+        AND operations.status = 'running'
+        AND environments.status IN ('active', 'degraded')
+      ORDER BY operations.created_at DESC
+      FOR UPDATE OF operations, environments
+      LIMIT 1
+    `;
+    const operation = operations[0];
+    if (!operation) return null;
+    if (operation.environment_name !== input.confirmationName) {
+      throw new OperationConflictError("INVALID_STATE");
+    }
+    const resumable = await transaction<{ resumable: boolean }[]>`
+      SELECT COALESCE((
+        SELECT
+          operation_steps.status = 'failed'
+          AND operation_steps.retry_class = 'transient'
+          AND operation_steps.execution_token IS NULL
+          AND operation_steps.lease_expires_at IS NULL
+          AND operation_steps.updated_at < now() - interval '2 minutes'
+        FROM operation_steps
+        WHERE operation_steps.operation_id = ${operation.id}
+          AND operation_steps.status <> 'succeeded'
+        ORDER BY operation_steps.step_order DESC
+        LIMIT 1
+      ), false) AS resumable
+    `;
+    if (!resumable[0]?.resumable) return null;
+
+    const resumed = await transaction<{ id: string }[]>`
+      UPDATE operations
+      SET requested_by_user_id = ${actor.userId},
+          requested_by_session_id = ${actor.sessionId},
+          workflow_run_id = NULL,
+          updated_at = now()
+      WHERE id = ${operation.id}
+        AND status = 'running'
+        AND NOT EXISTS (
+          SELECT 1 FROM operation_steps
+          WHERE operation_steps.operation_id = operations.id
+            AND operation_steps.status = 'running'
+        )
+      RETURNING id
+    `;
+    if (!resumed[0]) return null;
+    await transaction`
+      INSERT INTO audit_events (
+        id, actor_user_id, action, subject_type, subject_id, outcome, metadata
+      )
+      VALUES (
+        ${randomUUID()}, ${actor.userId}, 'operation.install_n8n.resumed',
+        'operation', ${operation.id}, 'success',
+        ${transaction.json({ environmentId: input.environmentId })}
+      )
+    `;
+    return {
+      accepted: {
+        version: OPERATIONS_DTO_VERSION,
+        operationId: operation.id,
+      },
+      resumed: true,
+    };
+  });
+}
+
 export async function reserveDeleteOperation(
   sql: DatabaseSql,
   actor: AuthSession,
@@ -299,6 +657,65 @@ export async function reserveDeleteOperation(
           operationId: existing.accepted.operationId,
           created: false,
         };
+      }
+      const activeOperations = await transaction<
+        { id: string; kind: string }[]
+      >`
+        SELECT id, kind
+        FROM operations
+        WHERE environment_id = ${input.environmentId}
+          AND status IN ('queued', 'running')
+          AND kind IN (
+            'create_environment',
+            'install_environment',
+            'delete_environment'
+          )
+        FOR UPDATE
+      `;
+      const activeOperation = activeOperations[0];
+      if (activeOperation) {
+        if (activeOperation.kind !== "install_environment") {
+          throw new OperationConflictError("INVALID_STATE");
+        }
+        const resumable = await transaction<{ resumable: boolean }[]>`
+          SELECT COALESCE((
+            SELECT
+              operation_steps.status = 'failed'
+              AND operation_steps.retry_class = 'transient'
+              AND operation_steps.execution_token IS NULL
+              AND operation_steps.lease_expires_at IS NULL
+              AND operation_steps.updated_at < now() - interval '2 minutes'
+            FROM operation_steps
+            WHERE operation_steps.operation_id = ${activeOperation.id}
+              AND operation_steps.status <> 'succeeded'
+            ORDER BY operation_steps.step_order DESC
+            LIMIT 1
+          ), false) AS resumable
+        `;
+        if (!resumable[0]?.resumable) {
+          throw new OperationConflictError("INVALID_STATE");
+        }
+        await transaction`
+          UPDATE operations
+          SET status = 'cancelled', error_code = 'CLEANUP_REQUESTED',
+              error_message_redacted =
+                'Прерванная установка отменена перед удалением среды.',
+              finished_at = now(), state_version = state_version + 1,
+              updated_at = now()
+          WHERE id = ${activeOperation.id}
+            AND status = 'running'
+        `;
+        await transaction`
+          INSERT INTO audit_events (
+            id, actor_user_id, action, subject_type, subject_id, outcome, metadata
+          )
+          VALUES (
+            ${randomUUID()}, ${actor.userId},
+            'operation.install_n8n.cancelled_for_delete', 'operation',
+            ${activeOperation.id}, 'success',
+            ${transaction.json({ environmentId: input.environmentId })}
+          )
+        `;
       }
       const rows = await transaction<{ id: string }[]>`
         UPDATE environments
@@ -383,7 +800,7 @@ export async function authorizeMutationStep(
       ["version", "operationId", "action", "resourceKind"].includes(key),
     ) ||
     command.version !== MUTATION_COMMAND_VERSION ||
-    !["create", "delete"].includes(command.action) ||
+    !["create", "install", "delete"].includes(command.action) ||
     !["server", "public_ip", "dns_record"].includes(command.resourceKind)
   ) {
     throw new MutationGuardError("INVALID_COMMAND");
@@ -435,14 +852,21 @@ export async function authorizeMutationStep(
     const row = rows[0];
     if (!row) throw new MutationGuardError("INVALID_OPERATION");
     if (
-      row.user_role !== "admin" ||
-      row.user_status !== "active" ||
-      !row.session_active
+      row.operation_status === "queued" &&
+      (row.user_role !== "admin" ||
+        row.user_status !== "active" ||
+        !row.session_active)
     ) {
       throw new MutationGuardError("FORBIDDEN");
     }
-    if (!row.reauth_fresh) throw new MutationGuardError("STALE_REAUTH");
+    // The first guarded step revalidates the account, session, password and
+    // MFA proof. After that, the durable operation must finish reconciliation
+    // even if its interactive session expires or is revoked.
+    if (row.operation_status === "queued" && !row.reauth_fresh) {
+      throw new MutationGuardError("STALE_REAUTH");
+    }
     if (
+      row.operation_status === "queued" &&
       process.env.VERCEL_ENV === "production" &&
       row.has_verified_factor &&
       !row.mfa_fresh
@@ -454,11 +878,20 @@ export async function authorizeMutationStep(
     }
 
     const expectedOperation =
-      command.action === "create" ? "create_environment" : "delete_environment";
-    const expectedEnvironment = command.action === "create" ? "creating" : "deleting";
+      command.action === "create"
+        ? "create_environment"
+        : command.action === "install"
+          ? "install_environment"
+          : "delete_environment";
+    const expectedEnvironment =
+      command.action === "create"
+        ? ["creating"]
+        : command.action === "install"
+          ? ["active", "degraded"]
+          : ["deleting"];
     if (
       row.operation_kind !== expectedOperation ||
-      row.environment_status !== expectedEnvironment
+      !expectedEnvironment.includes(row.environment_status)
     ) {
       throw new MutationGuardError("INVALID_STATE");
     }
@@ -477,6 +910,12 @@ export async function authorizeMutationStep(
       row.input_snapshot.confirmedName !== row.environment_name
     ) {
       throw new MutationGuardError("INVALID_STATE");
+    }
+    if (
+      command.action === "install" &&
+      !["server", "dns_record"].includes(command.resourceKind)
+    ) {
+      throw new MutationGuardError("INVALID_COMMAND");
     }
 
     const resources = await transaction<
@@ -544,7 +983,7 @@ export async function operationNeedsWorkflowStart(
 
 export type WorkflowReconciliationCandidate = Readonly<{
   operationId: string;
-  kind: "create_environment" | "delete_environment";
+  kind: "create_environment" | "install_environment" | "delete_environment";
   scenario: FakeScenario;
   claimToken: string;
 }>;
@@ -583,7 +1022,7 @@ export async function claimOrphanedWorkflowOperations(
       SELECT id, kind, input_snapshot
       FROM operations
       WHERE status IN ('queued', 'running')
-        AND kind IN ('create_environment', 'delete_environment')
+        AND kind IN ('create_environment', 'install_environment', 'delete_environment')
         AND input_snapshot->>'scenario' IN (
           'success',
           'timeout_after_create',
@@ -608,7 +1047,11 @@ export async function claimOrphanedWorkflowOperations(
     for (const row of rows) {
       const scenario = row.input_snapshot.scenario;
       if (
-        !["create_environment", "delete_environment"].includes(row.kind) ||
+        ![
+          "create_environment",
+          "install_environment",
+          "delete_environment",
+        ].includes(row.kind) ||
         typeof scenario !== "string" ||
         !fakeScenarios.has(scenario as FakeScenario)
       ) {
@@ -624,7 +1067,10 @@ export async function claimOrphanedWorkflowOperations(
       if (!claimed[0]) continue;
       candidates.push({
         operationId: row.id,
-        kind: row.kind as "create_environment" | "delete_environment",
+        kind: row.kind as
+          | "create_environment"
+          | "install_environment"
+          | "delete_environment",
         scenario: scenario as FakeScenario,
         claimToken,
       });
@@ -802,7 +1248,9 @@ export async function completeOperationStep(
 
     const environment = await transaction<{ id: string }[]>`
       UPDATE environments
-      SET status = ${next}, updated_at = now()
+      SET status = ${next},
+          public_url = CASE WHEN ${next} = 'deleted' THEN NULL ELSE public_url END,
+          updated_at = now()
       WHERE id = (
         SELECT environment_id FROM operations WHERE id = ${operationId}
       )
@@ -810,6 +1258,15 @@ export async function completeOperationStep(
       RETURNING id
     `;
     if (!environment[0]) throw new OperationConflictError("INVALID_STATE");
+    if (next === "deleted") {
+      await transaction`
+        UPDATE software_installations
+        SET status = 'deleted', health_status = NULL, updated_at = now()
+        WHERE environment_id = (
+          SELECT environment_id FROM operations WHERE id = ${operationId}
+        )
+      `;
+    }
 
     const operation = await transaction<
       { requested_by_user_id: string; kind: string; environment_id: string }[]
@@ -830,6 +1287,88 @@ export async function completeOperationStep(
       VALUES (
         ${randomUUID()}, ${operation[0].requested_by_user_id},
         ${`operation.${operation[0].kind}.finished`}, 'operation', ${operationId},
+        'success',
+        ${transaction.json({
+          environmentId: operation[0].environment_id,
+          code: "OK",
+        })}
+      )
+    `;
+  });
+}
+
+export async function markInstallEnvironmentDegraded(
+  sql: DatabaseSql,
+  operationId: string,
+): Promise<void> {
+  const rows = await sql<{ id: string }[]>`
+    UPDATE environments
+    SET status = 'degraded', updated_at = now()
+    WHERE id = (
+      SELECT environment_id
+      FROM operations
+      WHERE id = ${operationId} AND kind = 'install_environment'
+    )
+      AND status IN ('active', 'degraded')
+    RETURNING id
+  `;
+  if (!rows[0]) throw new OperationConflictError("INVALID_STATE");
+}
+
+export async function completeInstallOperationStep(
+  sql: DatabaseSql,
+  operationId: string,
+  key: string,
+  executionToken: string,
+): Promise<void> {
+  await sql.begin(async (transaction) => {
+    const step = await transaction<{ id: string }[]>`
+      UPDATE operation_steps
+      SET status = 'succeeded', error_code = NULL,
+          error_message_redacted = NULL, retry_class = 'none',
+          finished_at = now(), execution_token = NULL,
+          lease_expires_at = NULL, updated_at = now()
+      WHERE operation_id = ${operationId}
+        AND logical_key = ${key}
+        AND execution_token = ${executionToken}
+      RETURNING id
+    `;
+    if (!step[0]) throw new StepLeaseLostError();
+
+    const environment = await transaction<{ id: string }[]>`
+      UPDATE environments
+      SET status = 'active', updated_at = now()
+      WHERE id = (
+        SELECT environment_id
+        FROM operations
+        WHERE id = ${operationId} AND kind = 'install_environment'
+      )
+        AND status IN ('active', 'degraded')
+      RETURNING id
+    `;
+    if (!environment[0]) throw new OperationConflictError("INVALID_STATE");
+
+    const operation = await transaction<
+      { requested_by_user_id: string; environment_id: string }[]
+    >`
+      UPDATE operations
+      SET status = 'succeeded', error_code = NULL,
+          error_message_redacted = NULL, finished_at = now(),
+          state_version = state_version + 1, updated_at = now()
+      WHERE id = ${operationId}
+        AND kind = 'install_environment'
+        AND status IN ('queued', 'running')
+      RETURNING requested_by_user_id, environment_id
+    `;
+    if (!operation[0]) throw new OperationConflictError("INVALID_STATE");
+
+    await transaction`
+      INSERT INTO audit_events (
+        id, actor_user_id, action, subject_type, subject_id, outcome, metadata
+      )
+      VALUES (
+        ${randomUUID()}, ${operation[0].requested_by_user_id},
+        'operation.install_environment.finished', 'operation', ${operationId},
         'success',
         ${transaction.json({
           environmentId: operation[0].environment_id,

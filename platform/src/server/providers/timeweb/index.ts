@@ -11,6 +11,8 @@ export {
   type TimewebAdapter,
   type TimewebAdapterVersion,
   type TimewebCreateServerInput,
+  type TimewebInstallServerInput,
+  type TimewebInstallationReconciliation,
   type TimewebMutationAdapter,
   type TimewebMutationAdapterVersion,
   type TimewebProviderErrorCode,
@@ -23,6 +25,12 @@ export {
   type TimewebServerReconciliation,
   type TimewebUpdateServerInput,
 } from "./contracts";
+export {
+  getTimewebInstallPreview,
+  type TimewebInstallPlan,
+  type TimewebInstallPreview,
+  type TimewebInstallTarget,
+} from "./installation";
 export { FakeProviderError, FakeTimewebAdapter } from "./fake";
 export { FakeTimewebReadAdapter } from "./read-only-fake";
 export {

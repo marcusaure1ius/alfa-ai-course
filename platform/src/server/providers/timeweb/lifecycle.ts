@@ -19,11 +19,13 @@ import type {
   TimewebServerStatus,
 } from "./contracts";
 import {
+  buildStarterKitCloudInit,
   COURSE_DNS_TTL_SECONDS,
   COURSE_DNS_ZONE,
   COURSE_HOSTNAME,
   STARTER_KIT_BOOTSTRAP_PROFILE,
 } from "./bootstrap-profile";
+import type { TimewebInstallPlan } from "./installation";
 import { FakeProviderError, FakeTimewebAdapter } from "./fake";
 import {
   createExternalEnvironmentVerifier,
@@ -59,6 +61,8 @@ export type InfrastructureLifecycleAdapter = Readonly<{
   createServer(): Promise<OwnedProviderResource>;
   reconcileServer(): Promise<void>;
   configureBackups(): Promise<void>;
+  installServer(): Promise<void>;
+  reconcileInstallation(): Promise<void>;
   configureDns(): Promise<OwnedProviderResource | void>;
   verifyBootstrapReachable(): Promise<void>;
   waitForDns(): Promise<void>;
@@ -69,9 +73,11 @@ export type InfrastructureLifecycleAdapter = Readonly<{
 }>;
 
 type OperationContext = Readonly<{
+  operationKind: string;
   environmentId: string;
   environmentName: string;
   plan: TimewebProvisioningPlan | null;
+  installPlan: TimewebInstallPlan | null;
 }>;
 
 function safePlan(value: unknown): TimewebProvisioningPlan {
@@ -112,6 +118,37 @@ function safePlan(value: unknown): TimewebProvisioningPlan {
   return value as TimewebProvisioningPlan;
 }
 
+function safeInstallPlan(value: unknown): TimewebInstallPlan {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new LifecycleProviderError(
+      "INVALID_INSTALL_PLAN",
+      "Install operation не содержит versioned install plan.",
+    );
+  }
+  const plan = value as Record<string, unknown>;
+  if (
+    plan.version !== "timeweb-install-v1" ||
+    plan.deploymentMode !== "starter-kit-reinstall" ||
+    typeof plan.checkedAt !== "string" ||
+    !Number.isSafeInteger(plan.operatingSystemId) ||
+    Number(plan.operatingSystemId) <= 0 ||
+    plan.operatingSystemLabel !== "Ubuntu 24.04 LTS x86_64" ||
+    !Number.isSafeInteger(plan.sshKeyId) ||
+    Number(plan.sshKeyId) <= 0 ||
+    plan.hostname !== COURSE_HOSTNAME ||
+    plan.profileVersion !== STARTER_KIT_BOOTSTRAP_PROFILE.version ||
+    plan.release !== STARTER_KIT_BOOTSTRAP_PROFILE.release ||
+    plan.installerUrl !== STARTER_KIT_BOOTSTRAP_PROFILE.installerUrl ||
+    plan.installerSha256 !== STARTER_KIT_BOOTSTRAP_PROFILE.installerSha256
+  ) {
+    throw new LifecycleProviderError(
+      "INVALID_INSTALL_PLAN",
+      "Install plan не прошёл exact profile allowlist.",
+    );
+  }
+  return value as TimewebInstallPlan;
+}
+
 async function operationContext(
   sql: DatabaseSql,
   command: WorkflowCommand,
@@ -120,12 +157,14 @@ async function operationContext(
     {
       environment_id: string;
       environment_name: string;
+      operation_kind: string;
       input_snapshot: Record<string, unknown>;
     }[]
   >`
     SELECT
       operations.environment_id,
       environments.name AS environment_name,
+      operations.kind AS operation_kind,
       operations.input_snapshot
     FROM operations
     JOIN environments ON environments.id = operations.environment_id
@@ -139,12 +178,17 @@ async function operationContext(
     );
   }
   return {
+    operationKind: row.operation_kind,
     environmentId: row.environment_id,
     environmentName: row.environment_name,
     plan:
       row.input_snapshot.providerPlan === undefined
         ? null
         : safePlan(row.input_snapshot.providerPlan),
+    installPlan:
+      row.input_snapshot.installPlan === undefined
+        ? null
+        : safeInstallPlan(row.input_snapshot.installPlan),
   };
 }
 
@@ -237,6 +281,71 @@ const PROVIDER_MUTATION_STARTED_LOG =
   "provider mutation started; response outcome may be ambiguous";
 const PUBLIC_IP_MUTATION_LOG_VERSION = "public-ip-create-v1";
 const DNS_MUTATION_LOG_VERSION = "dns-a-create-v1";
+const INSTALL_MUTATION_LOG_VERSION = "starter-kit-reinstall-v1";
+
+async function installMutationStarted(
+  sql: DatabaseSql,
+  operationId: string,
+  plan: TimewebInstallPlan,
+): Promise<boolean> {
+  const rows = await sql<{ logs_redacted: string | null }[]>`
+    SELECT logs_redacted
+    FROM operation_steps
+    WHERE operation_id = ${operationId} AND logical_key = 'installing_n8n'
+  `;
+  const value = rows[0]?.logs_redacted;
+  if (!value) return false;
+  let parsed: { version?: unknown; planHash?: unknown };
+  try {
+    parsed = JSON.parse(value) as typeof parsed;
+  } catch {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "Install mutation marker повреждён.",
+    );
+  }
+  const expectedHash = createHash("sha256")
+    .update(JSON.stringify(plan))
+    .digest("hex");
+  if (
+    parsed.version !== INSTALL_MUTATION_LOG_VERSION ||
+    parsed.planHash !== expectedHash
+  ) {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "Install mutation marker не совпадает с approved plan.",
+    );
+  }
+  return true;
+}
+
+async function markInstallMutationStarted(
+  sql: DatabaseSql,
+  operationId: string,
+  executionToken: string,
+  plan: TimewebInstallPlan,
+): Promise<void> {
+  const logs = JSON.stringify({
+    version: INSTALL_MUTATION_LOG_VERSION,
+    planHash: createHash("sha256").update(JSON.stringify(plan)).digest("hex"),
+  });
+  const rows = await sql<{ id: string }[]>`
+    UPDATE operation_steps
+    SET logs_redacted = ${logs}, updated_at = now()
+    WHERE operation_id = ${operationId}
+      AND logical_key = 'installing_n8n'
+      AND status = 'running'
+      AND execution_token = ${executionToken}
+    RETURNING id
+  `;
+  if (!rows[0]) {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "Install step потерял durable lease до provider mutation.",
+      true,
+    );
+  }
+}
 
 export async function providerMutationStarted(
   sql: DatabaseSql,
@@ -444,6 +553,28 @@ async function clearDnsMutationMarkerAfterDefinitiveRejection(
   }
 }
 
+async function clearInstallMutationMarkerAfterDefinitiveRejection(
+  sql: DatabaseSql,
+  operationId: string,
+  executionToken: string,
+): Promise<void> {
+  const rows = await sql<{ id: string }[]>`
+    UPDATE operation_steps
+    SET logs_redacted = NULL, updated_at = now()
+    WHERE operation_id = ${operationId}
+      AND logical_key = 'installing_n8n'
+      AND status = 'running'
+      AND execution_token = ${executionToken}
+    RETURNING id
+  `;
+  if (!rows[0]) {
+    throw new LifecycleProviderError(
+      "STEP_STATE_INVALID",
+      "Install step потерял durable lease после definitive provider rejection.",
+    );
+  }
+}
+
 export async function runFreshDnsCreate<T>(
   create: () => Promise<T>,
   clearMarker: () => Promise<void>,
@@ -460,6 +591,28 @@ export async function runFreshDnsCreate<T>(
       await clearMarker();
     }
     throw error;
+  }
+}
+
+export async function runFreshInstallMutation(
+  install: () => Promise<void>,
+  clearMarker: () => Promise<void>,
+): Promise<void> {
+  try {
+    await install();
+  } catch (error) {
+    if (
+      error instanceof TimewebProviderError &&
+      ["INVALID_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"].includes(
+        error.code,
+      )
+    ) {
+      await clearMarker();
+      throw error;
+    }
+    // Timeweb can apply a reinstall and still return an unconfirmed outcome.
+    // The durable marker prevents a duplicate PATCH; the following bounded
+    // reconciliation step proves the resulting OS and server state.
   }
 }
 
@@ -801,6 +954,7 @@ class ProductionTimewebLifecycleAdapter
     private readonly createExecutionToken?: string,
     private readonly reserveIpExecutionToken?: string,
     private readonly configureDnsExecutionToken?: string,
+    private readonly installExecutionToken?: string,
   ) {}
 
   private requirePlan(): TimewebProvisioningPlan {
@@ -811,6 +965,16 @@ class ProductionTimewebLifecycleAdapter
       );
     }
     return this.context.plan;
+  }
+
+  private requireInstallPlan(): TimewebInstallPlan {
+    if (!this.context.installPlan) {
+      throw new LifecycleProviderError(
+        "INVALID_INSTALL_PLAN",
+        "Install operation не содержит exact install plan.",
+      );
+    }
+    return this.context.installPlan;
   }
 
   private async publicIpv4(): Promise<string> {
@@ -1232,6 +1396,120 @@ class ProductionTimewebLifecycleAdapter
     }
   }
 
+  async installServer(): Promise<void> {
+    const plan = this.requireInstallPlan();
+    const resource = await activeResource(
+      this.sql,
+      this.context.environmentId,
+      "server",
+    );
+    if (!resource) {
+      throw new LifecycleProviderError(
+        "SERVER_NOT_RECORDED",
+        "Owned VPS отсутствует до установки n8n.",
+      );
+    }
+    try {
+      if (
+        await installMutationStarted(
+          this.sql,
+          this.command.operationId,
+          plan,
+        )
+      ) {
+        return;
+      }
+      if (!this.installExecutionToken) {
+        throw new LifecycleProviderError(
+          "STEP_STATE_INVALID",
+          "Install execution token отсутствует до provider mutation.",
+        );
+      }
+      await markInstallMutationStarted(
+        this.sql,
+        this.command.operationId,
+        this.installExecutionToken,
+        plan,
+      );
+      await runFreshInstallMutation(
+        () =>
+          this.adapter.installServer({
+            resource: { ...resource, kind: "server" },
+            operatingSystemId: plan.operatingSystemId,
+            sshKeyId: plan.sshKeyId,
+            cloudInit: buildStarterKitCloudInit(),
+          }),
+        () =>
+          clearInstallMutationMarkerAfterDefinitiveRejection(
+            this.sql,
+            this.command.operationId,
+            this.installExecutionToken!,
+          ),
+      );
+    } catch (error) {
+      throw mappedError(error);
+    }
+  }
+
+  async reconcileInstallation(): Promise<void> {
+    const plan = this.requireInstallPlan();
+    const resource = await activeResource(
+      this.sql,
+      this.context.environmentId,
+      "server",
+    );
+    if (!resource) {
+      throw new LifecycleProviderError(
+        "SERVER_NOT_RECORDED",
+        "Owned VPS отсутствует во время reconciliation установки.",
+      );
+    }
+    try {
+      const reconciliation = await this.adapter.reconcileInstallation({
+        ...resource,
+        kind: "server",
+      });
+      if (reconciliation.state !== "present") {
+        throw new LifecycleProviderError(
+          "SERVER_REMOVED",
+          "Timeweb больше не возвращает owned VPS после переустановки.",
+        );
+      }
+      const attempts = await operationStepAttempts(
+        this.sql,
+        this.command.operationId,
+        "provider_installing",
+      );
+      requireReadyServerStatus(reconciliation.status, attempts);
+      if (reconciliation.operatingSystemId !== plan.operatingSystemId) {
+        throw new LifecycleProviderError(
+          attempts < 4 ? "SERVER_NOT_READY" : "INSTALL_OS_MISMATCH",
+          attempts < 4
+            ? "Timeweb ещё не подтвердил approved Ubuntu 24.04 image."
+            : "Timeweb вернул running VPS с OS вне approved install plan.",
+          attempts < 4,
+        );
+      }
+      await this.adapter.ensureServerSshKey(
+        { ...resource, kind: "server" },
+        plan.sshKeyId,
+      );
+      await this.ensureAttachedPublicIp({ ...resource, kind: "server" });
+      await recordResource(
+        this.sql,
+        this.command,
+        { ...resource, kind: "server" },
+        {
+          operatingSystemId: plan.operatingSystemId,
+          operatingSystemLabel: plan.operatingSystemLabel,
+          installProfileVersion: plan.profileVersion,
+        },
+      );
+    } catch (error) {
+      throw mappedError(error);
+    }
+  }
+
   async reconcileServer(): Promise<void> {
     const resource = await activeResource(
       this.sql,
@@ -1550,25 +1828,27 @@ class ProductionTimewebLifecycleAdapter
   }
 
   async recordReadyInstallation(): Promise<void> {
-    if (this.requirePlan().deploymentMode === "plain-vps") return;
+    if (this.context.operationKind === "create_environment") return;
+    const installPlan = this.requireInstallPlan();
     await this.sql.begin(async (transaction) => {
       await transaction`
         INSERT INTO software_installations (
           id, environment_id, profile_name, profile_version,
           software_version, status, health_status, installed_at,
-          last_checked_at
+          last_checked_at, managed_gateway_verified_at
         )
         VALUES (
           ${randomUUID()}, ${this.context.environmentId}, 'starter-kit',
-          ${STARTER_KIT_BOOTSTRAP_PROFILE.version},
+          ${installPlan.profileVersion},
           ${STARTER_KIT_BOOTSTRAP_PROFILE.n8nVersion},
-          'ready_owner_setup_required', 'healthy', now(), now()
+          'ready_owner_setup_required', 'healthy', now(), now(), now()
         )
         ON CONFLICT (environment_id, profile_name) DO UPDATE SET
           profile_version = EXCLUDED.profile_version,
           software_version = EXCLUDED.software_version,
           status = EXCLUDED.status,
           health_status = EXCLUDED.health_status,
+          managed_gateway_verified_at = EXCLUDED.managed_gateway_verified_at,
           installed_at = COALESCE(
             software_installations.installed_at,
             EXCLUDED.installed_at
@@ -1781,6 +2061,7 @@ export async function createInfrastructureLifecycleAdapter(
     createExecutionToken?: string;
     reserveIpExecutionToken?: string;
     configureDnsExecutionToken?: string;
+    installExecutionToken?: string;
   }> = {},
 ): Promise<InfrastructureLifecycleAdapter> {
   const sql = getDatabase();
@@ -1805,12 +2086,14 @@ export async function createInfrastructureLifecycleAdapter(
       createServer: () => fake.createServer(),
       reconcileServer: async () => undefined,
       configureBackups: () => fake.configureBackups(),
+      installServer: () => fake.installServer(),
+      reconcileInstallation: async () => undefined,
       configureDns: () => fake.configureDns(),
       verifyBootstrapReachable: async () => undefined,
       waitForDns: async () => undefined,
       verifyTls: () => fake.verifyTls(),
       verifyN8nHealth: async () => undefined,
-      recordReadyInstallation: async () => undefined,
+      recordReadyInstallation: () => fake.recordReadyInstallation(),
       deleteOwnedResource: (resource) => fake.deleteOwnedResource(resource),
     };
   }
@@ -1829,6 +2112,7 @@ export async function createInfrastructureLifecycleAdapter(
     options.createExecutionToken,
     options.reserveIpExecutionToken,
     options.configureDnsExecutionToken,
+    options.installExecutionToken,
   );
 }
 

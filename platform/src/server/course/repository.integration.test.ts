@@ -9,14 +9,21 @@ import {
   createCourse,
   createMaterial,
   createSection,
+  deleteCourse,
+  deleteSection,
   getStudentCourse,
+  getStudentCourseCount,
+  getStudentCourses,
   getStudentMaterial,
   getStudentWorkspaceCourse,
+  reorderCourseSections,
   reorderSectionMaterials,
   saveMaterialProgress,
   setCoursePublication,
   setSectionPublication,
   setStudentCourseAccess,
+  updateSection,
+  updateCourse,
   updateMaterial,
 } from "./repository";
 
@@ -127,6 +134,54 @@ describe("course content repository", () => {
     });
   });
 
+  it("returns every accessible published course for the student catalog", async () => {
+    for (const [slug, title] of [
+      ["first-course", "Первый курс"],
+      ["second-course", "Второй курс"],
+    ] as const) {
+      const courseId = await createCourse(sql, admin, { slug, title });
+      await setCoursePublication(sql, admin, courseId, "published");
+      await setStudentCourseAccess(sql, admin, {
+        courseId,
+        studentUserId: studentId,
+        granted: true,
+      });
+    }
+
+    const courses = await getStudentCourses(sql, studentId);
+    expect(courses.map((course) => course.slug)).toEqual([
+      "first-course",
+      "second-course",
+    ]);
+    await expect(getStudentCourseCount(sql, studentId)).resolves.toBe(2);
+  });
+
+  it("keeps a published section hidden while its course is a draft", async () => {
+    const courseId = await createCourse(sql, admin, {
+      slug: "draft-course",
+      title: "Неопубликованный курс",
+    });
+    const sectionId = await createSection(sql, admin, {
+      courseId,
+      slug: "ready-section",
+      title: "Подготовленный раздел",
+      position: 0,
+    });
+    await setSectionPublication(sql, admin, sectionId, "published");
+    await setStudentCourseAccess(sql, admin, {
+      courseId,
+      studentUserId: studentId,
+      granted: true,
+    });
+
+    await expect(
+      getStudentCourse(sql, studentId, "draft-course"),
+    ).resolves.toBeNull();
+    await expect(
+      getStudentWorkspaceCourse(sql, studentId),
+    ).resolves.toBeNull();
+  });
+
   it("publishes an edited material with an incremented version and audit", async () => {
     const { materialId, sectionId } =
       await createPublishedCourseWithDraftMaterial();
@@ -170,6 +225,135 @@ describe("course content repository", () => {
     ]);
   });
 
+  it("updates section metadata and publication together", async () => {
+    const { sectionId } = await createPublishedCourseWithDraftMaterial();
+    await updateSection(sql, admin, sectionId, {
+      slug: "new-start",
+      title: "Новый старт",
+      status: "published",
+    });
+
+    const stored = await sql<
+      Array<{
+        slug: string;
+        title: string;
+        status: string;
+        version: number;
+        published_by_user_id: string;
+      }>
+    >`
+      SELECT slug, title, status, version, published_by_user_id
+      FROM course_sections WHERE id = ${sectionId}
+    `;
+    expect(stored[0]).toEqual({
+      slug: "new-start",
+      title: "Новый старт",
+      status: "published",
+      version: 3,
+      published_by_user_id: admin.userId,
+    });
+    const audit = await sql<Array<{ action: string }>>`
+      SELECT action FROM audit_events
+      WHERE subject_id = ${sectionId}
+      ORDER BY occurred_at
+    `;
+    expect(audit.map((event) => event.action)).toEqual([
+      "course.section.created",
+      "course.section.publication.changed",
+      "course.section.updated",
+    ]);
+  });
+
+  it("updates course metadata and publication together", async () => {
+    const courseId = await createCourse(sql, admin, {
+      slug: "editable-course",
+      title: "Исходный курс",
+      description: "Исходное описание",
+    });
+
+    await updateCourse(sql, admin, courseId, {
+      slug: "updated-course",
+      title: "Обновлённый курс",
+      description: "Новое описание",
+      status: "published",
+    });
+
+    const stored = await sql<
+      Array<{
+        slug: string;
+        title: string;
+        description: string;
+        status: string;
+        version: number;
+        published_by_user_id: string;
+      }>
+    >`
+      SELECT slug, title, description, status, version, published_by_user_id
+      FROM courses WHERE id = ${courseId}
+    `;
+    expect(stored[0]).toEqual({
+      slug: "updated-course",
+      title: "Обновлённый курс",
+      description: "Новое описание",
+      status: "published",
+      version: 2,
+      published_by_user_id: admin.userId,
+    });
+    const audit = await sql<Array<{ action: string }>>`
+      SELECT action FROM audit_events
+      WHERE subject_id = ${courseId}
+      ORDER BY occurred_at
+    `;
+    expect(audit.map((event) => event.action)).toEqual([
+      "course.created",
+      "course.updated",
+    ]);
+  });
+
+  it("requires a matching title and cascade-deletes a confirmed course", async () => {
+    const { courseId, materialId, sectionId } =
+      await createPublishedCourseWithDraftMaterial();
+
+    await expect(
+      deleteCourse(sql, admin, courseId, "Другой курс"),
+    ).rejects.toMatchObject({ code: "CONFIRMATION_MISMATCH" });
+    await deleteCourse(sql, admin, courseId, "Neurokurs");
+
+    const remaining = await sql<
+      Array<{
+        courses: number;
+        sections: number;
+        materials: number;
+        memberships: number;
+      }>
+    >`
+      SELECT
+        (SELECT count(*)::int FROM courses WHERE id = ${courseId}) AS courses,
+        (SELECT count(*)::int FROM course_sections WHERE id = ${sectionId}) AS sections,
+        (SELECT count(*)::int FROM course_materials WHERE id = ${materialId}) AS materials,
+        (
+          SELECT count(*)::int FROM course_memberships
+          WHERE course_id = ${courseId}
+        ) AS memberships
+    `;
+    expect(remaining[0]).toEqual({
+      courses: 0,
+      sections: 0,
+      materials: 0,
+      memberships: 0,
+    });
+    const audit = await sql<Array<{ action: string }>>`
+      SELECT action FROM audit_events
+      WHERE subject_id = ${courseId}
+      ORDER BY occurred_at
+    `;
+    expect(audit.map((event) => event.action)).toEqual([
+      "course.created",
+      "course.publication.changed",
+      "course.deleted",
+    ]);
+  });
+
   it("revokes course and progress access immediately on the server", async () => {
     const { courseId, materialId, sectionId } =
       await createPublishedCourseWithDraftMaterial();
@@ -209,6 +393,39 @@ describe("course content repository", () => {
         completed: false,
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("updates a reading position without changing completion", async () => {
+    const { materialId, sectionId } =
+      await createPublishedCourseWithDraftMaterial();
+    await updateMaterial(sql, admin, materialId, {
+      sectionId,
+      slug: "reading-progress",
+      kind: "article",
+      title: "Позиция чтения",
+      summary: "",
+      bodyMarkdown: "## Начало\n\nТекст.\n\n## Дальше\n\nЕщё текст.",
+      position: 0,
+      estimatedMinutes: null,
+      status: "published",
+    });
+    await saveMaterialProgress(sql, studentId, {
+      materialId,
+      lastPosition: "начало",
+      completed: true,
+    });
+    await saveMaterialProgress(sql, studentId, {
+      materialId,
+      lastPosition: "дальше",
+    });
+
+    const material = await getStudentMaterial(
+      sql,
+      studentId,
+      "reading-progress",
+    );
+    expect(material?.lastPosition).toBe("дальше");
+    expect(material?.completedAt).not.toBeNull();
   });
 
   it("rejects raw HTML before writing a material", async () => {
@@ -257,6 +474,100 @@ describe("course content repository", () => {
       { id: secondId, position: 0, version: 2 },
       { id: materialId, position: 1, version: 2 },
     ]);
+  });
+
+  it("reorders every course section atomically and closes position gaps", async () => {
+    const courseId = await createCourse(sql, admin, {
+      slug: "ordered-course",
+      title: "Курс с порядком",
+    });
+    const firstId = await createSection(sql, admin, {
+      courseId,
+      slug: "first",
+      title: "Первый",
+      position: 0,
+    });
+    const secondId = await createSection(sql, admin, {
+      courseId,
+      slug: "second",
+      title: "Второй",
+      position: 2,
+    });
+    const thirdId = await createSection(sql, admin, {
+      courseId,
+      slug: "third",
+      title: "Третий",
+      position: 4,
+    });
+
+    await reorderCourseSections(sql, admin, courseId, [
+      thirdId,
+      firstId,
+      secondId,
+    ]);
+
+    const order = await sql<Array<{ id: string; position: number }>>`
+      SELECT id, position
+      FROM course_sections
+      WHERE course_id = ${courseId}
+      ORDER BY position
+    `;
+    expect(order).toEqual([
+      { id: thirdId, position: 0 },
+      { id: firstId, position: 1 },
+      { id: secondId, position: 2 },
+    ]);
+  });
+
+  it("deletes an empty section and closes the remaining position gap", async () => {
+    const courseId = await createCourse(sql, admin, {
+      slug: "delete-empty-section",
+      title: "Курс для удаления",
+    });
+    const firstId = await createSection(sql, admin, {
+      courseId,
+      slug: "keep-first",
+      title: "Оставить первым",
+      position: 0,
+    });
+    const deletedId = await createSection(sql, admin, {
+      courseId,
+      slug: "delete-me",
+      title: "Удалить",
+      position: 1,
+    });
+    const lastId = await createSection(sql, admin, {
+      courseId,
+      slug: "keep-last",
+      title: "Оставить последним",
+      position: 2,
+    });
+
+    await deleteSection(sql, admin, deletedId);
+
+    const remaining = await sql<Array<{ id: string; position: number }>>`
+      SELECT id, position
+      FROM course_sections
+      WHERE course_id = ${courseId}
+      ORDER BY position
+    `;
+    expect(remaining).toEqual([
+      { id: firstId, position: 0 },
+      { id: lastId, position: 1 },
+    ]);
+  });
+
+  it("refuses to cascade-delete a section that still has materials", async () => {
+    const { sectionId, materialId } =
+      await createPublishedCourseWithDraftMaterial();
+
+    await expect(deleteSection(sql, admin, sectionId)).rejects.toMatchObject({
+      code: "SECTION_NOT_EMPTY",
+    });
+    const rows = await sql<Array<{ id: string }>>`
+      SELECT id FROM course_materials WHERE id = ${materialId}
+    `;
+    expect(rows).toEqual([{ id: materialId }]);
   });
 
   it("rejects a cross-course material at the database boundary", async () => {

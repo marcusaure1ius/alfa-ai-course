@@ -3,7 +3,10 @@ import Link from "next/link";
 
 import { CompleteMaterialButton } from "@/components/student/complete-material-button";
 import { MaterialToc } from "@/components/student/material-toc";
+import { MaterialReadingProgress } from "@/components/student/material-reading-progress";
+import { PracticeMaterialActions } from "@/components/student/practice-material-actions";
 import {
+  hasCourseMarkdownContent,
   parseCourseMarkdown,
   SafeMarkdown,
 } from "@/components/student/safe-markdown";
@@ -37,12 +40,16 @@ export default async function StudentMaterialPage({
   const next =
     index >= 0 && index < materials.length - 1 ? materials[index + 1] ?? null : null;
   const { toc } = parseCourseMarkdown(material.bodyMarkdown);
+  const hasReadableBody = hasCourseMarkdownContent(material.bodyMarkdown);
 
   return (
     <div className="px-5 py-8 sm:px-8 sm:py-12 xl:px-12">
       <div className="mx-auto max-w-6xl">
         <p className="text-sm text-muted-foreground">
-          <Link href="/student/program" className="hover:text-foreground">
+          <Link
+            href={`/student/program?course=${encodeURIComponent(material.course.slug)}`}
+            className="hover:text-foreground"
+          >
             {material.section.title}
           </Link>
           <span className="px-2" aria-hidden="true">
@@ -51,7 +58,7 @@ export default async function StudentMaterialPage({
           {material.kind === "practice" ? "Практика" : "Материал"}
         </p>
         <div className="mt-4 max-w-4xl">
-          <h1 className="font-display text-3xl leading-[1.12] sm:text-5xl">
+          <h1 className="font-display break-words text-3xl leading-[1.12] text-balance [overflow-wrap:anywhere] sm:text-5xl">
             {material.title}
           </h1>
           <div className="mt-5 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
@@ -69,13 +76,20 @@ export default async function StudentMaterialPage({
         </div>
 
         {material.summary ? (
-          <div className="mt-8 max-w-3xl rounded-2xl bg-highlight p-5 sm:p-6">
-            <p className="text-base leading-7">{material.summary}</p>
+          <div className="mt-8 max-w-3xl rounded-xl bg-highlight p-5 sm:p-6">
+            <p className="break-words text-base leading-7 [overflow-wrap:anywhere]">
+              {material.summary}
+            </p>
           </div>
         ) : null}
 
-        <div className="mt-10 grid items-start gap-12 xl:grid-cols-[minmax(0,45rem)_14rem]">
+        <div className="mt-10 grid items-start gap-12 xl:grid-cols-[minmax(0,70ch)_14rem]">
           <article className="min-w-0">
+            <MaterialReadingProgress
+              key={material.id}
+              materialId={material.id}
+              initialPosition={material.lastPosition}
+            />
             <MaterialToc items={toc} mode="mobile" />
             <SafeMarkdown source={material.bodyMarkdown} />
           </article>
@@ -102,10 +116,21 @@ export default async function StudentMaterialPage({
                 </Button>
               ) : null}
             </div>
-            <CompleteMaterialButton
-              materialId={material.id}
-              completed={Boolean(material.completedAt)}
-            />
+            {hasReadableBody ? (
+              material.kind === "practice" ? (
+                <PracticeMaterialActions
+                  materialId={material.id}
+                  completed={Boolean(material.completedAt)}
+                  nextHref={next ? `/student/materials/${next.slug}` : null}
+                />
+              ) : (
+                <CompleteMaterialButton
+                  materialId={material.id}
+                  completed={Boolean(material.completedAt)}
+                  nextHref={next ? `/student/materials/${next.slug}` : null}
+                />
+              )
+            ) : null}
           </div>
         </footer>
       </div>

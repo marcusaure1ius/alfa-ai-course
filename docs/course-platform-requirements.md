@@ -2,7 +2,7 @@
 
 **Статус:** требования первого этапа
 **Задачи:** `T-0048`, упрощение deployment — `T-0059`, live configurator — `T-0060`, продуктовый вход — `T-0061`
-**Дата проверки внешних источников:** 2026-07-30
+**Дата проверки внешних источников:** 2026-07-31
 **Язык интерфейса первого этапа:** русский
 
 ## 1. Решение
@@ -15,7 +15,7 @@ Neurokurs следует создавать как закрытое text-first �
 2. student попадает в учебный workspace: продолжает текущий материал, открывает программу, задания, помощь и доступные инструменты;
 3. admin попадает в task-first область управления учениками, контентом и инструментами;
 4. при добавлении инструмента admin управляет его учебной конфигурацией; создание VPS, DNS и установка runtime остаются вложенной инфраструктурной реализацией;
-5. длительные операции показывают прогресс, конкретную ошибку и безопасное действие восстановления;
+5. длительные операции показывают прогресс, конкретную ошибку и безопасное повторение текущего шага либо удаление среды;
 6. администратор может безопасно удалить среду и связанные с ней платные ресурсы.
 
 Интерфейс не показывает пользователю provider mode, tokens, deployment gates и
@@ -42,7 +42,7 @@ server-side окружении. Второй фактор, если он тре�
 
 Проверенные внешние факты:
 
-- Timeweb позволяет создавать VPS через API и передавать `cloud-init` при создании; `cloud-init` выполняется без интерактивных запросов от `root` ([создание сервера](https://timeweb.cloud/docs/cloud-servers/manage-servers/create-server), [cloud-init](https://timeweb.cloud/docs/cloud-servers/manage-servers/cloud-init));
+- Timeweb позволяет создавать VPS через API, а актуальный update contract допускает provider-side переустановку существующего server ID с `os_id` и `cloud_init`; `cloud-init` выполняется без интерактивных запросов от `root` ([API](https://timeweb.cloud/api-docs), [создание сервера](https://timeweb.cloud/docs/cloud-servers/manage-servers/create-server), [cloud-init](https://timeweb.cloud/docs/cloud-servers/manage-servers/cloud-init));
 - Timeweb позволяет после создания сервера получить системный диск и включить или выключить его автобэкап отдельным API-вызовом; стоимость существующей backup-копии составляет 6 ₽/ГБ ([API](https://timeweb.cloud/api-docs), [резервное копирование](https://timeweb.cloud/docs/cloud-servers/manage-servers/backup));
 - Timeweb API token можно ограничить по сервисам и сроку действия; разрешение удалять сервисы без кода из Telegram задаётся отдельно ([API-токены](https://timeweb.cloud/docs/account-management/token));
 - публичный IPv4 является отдельным тарифицируемым ресурсом, после удаления сервера может сохраниться и продолжить тарифицироваться ([публичные IP](https://timeweb.cloud/docs/public-ip));
@@ -53,9 +53,22 @@ server-side окружении. Второй фактор, если он тре�
 - Vercel Cron вызывает Function endpoint только в production; endpoint должен проверять `CRON_SECRET` ([Vercel Cron Jobs](https://vercel.com/docs/cron-jobs));
 - текущий starter kit поддерживает только Ubuntu 24.04 LTS x86_64, использует Caddy, PostgreSQL и закреплённый n8n; `.env` имеет права `0600`, а `N8N_ENCRYPTION_KEY` генерируется и хранится постоянно.
 
-Цены и идентификаторы тарифов/образов запрещено фиксировать в коде: они читаются из актуального API. Разрешён versioned product-policy allowlist поддерживаемых region/zone, текущих product tags и resource shapes, потому что публичный catalog не содержит отдельного `orderable` flag и включает legacy presets. Перед реализацией provider adapter исполнитель должен сверить DTO и доступные операции с текущей официальной спецификацией/SDK Timeweb. Этот документ не является свидетельством реального вызова Timeweb API, покупки VPS или выпуска сертификата.
+Цены и идентификаторы тарифов/образов запрещено фиксировать в коде: они читаются из актуального API. Для цены отдельного IPv4 действует узкое исключение ADR-0012: endpoint стоимости показывает только активные сервисы, поэтому при нулевом baseline разрешена несекретная production-конфигурация, подтверждённая не более семи суток назад по официальной публикации Timeweb. Отсутствующее, некорректное или просроченное подтверждение блокирует paid mutation. Разрешён versioned product-policy allowlist поддерживаемых region/zone, текущих product tags и resource shapes, потому что публичный catalog не содержит отдельного `orderable` flag и включает legacy presets. Перед реализацией provider adapter исполнитель должен сверить DTO и доступные операции с текущей официальной спецификацией/SDK Timeweb. Этот документ не является свидетельством реального вызова Timeweb API, покупки VPS или выпуска сертификата.
 
-Отдельный release gate — модель владения n8n. Официальное разъяснение n8n различает помощь клиенту с его собственным instance и hosting/management клиентских workflow и credentials ([n8n license use cases](https://support.n8n.io/article/can-i-use-your-license-for-my-use-case), [Sustainable Use License](https://docs.n8n.io/sustainable-use-license/)). Если серверы остаются в аккаунте школы, а ученики используют размещённый и управляемый школой n8n, до production запуска требуется письменное подтверждение допустимой лицензии от n8n. Этот документ не является юридическим заключением.
+Отдельный release gate — модель владения n8n. Официальное разъяснение n8n,
+повторно проверенное 2026-07-31, различает помощь клиенту с его собственным
+instance и hosting/management клиентских workflow и credentials
+([n8n license use cases](https://support.n8n.io/article/can-i-use-your-license-for-my-use-case),
+[Sustainable Use License](https://docs.n8n.io/sustainable-use-license/)). Если
+серверы остаются в аккаунте школы, а ученики используют размещённый и
+управляемый школой n8n, до production запуска требуется письменное разрешение
+n8n либо подходящее коммерческое соглашение. Этот документ не является
+юридическим заключением.
+
+Решение владельца от 2026-07-31: довести управляемый student access до
+production самостоятельно, приняв связанный лицензионный риск. Это решение
+фиксируется отдельным mode `product_owner_risk_acceptance` и никогда не
+описывается как разрешение, одобрение или соглашение со стороны n8n.
 
 Решения владельца от 2026-07-29:
 
@@ -64,8 +77,17 @@ server-side окружении. Второй фактор, если он тре�
 - базовая DNS zone — `neurokurs.ru`, default hostname основной среды — `n8n.neurokurs.ru`;
 - первый этап допускает не более одного активного n8n VPS;
 - удаление полностью автоматическое после усиленного подтверждения в модальном окне;
+- удаление среды терминально: платформа не восстанавливает удалённый provider resource, а повторный запуск создаёт новую среду и новый VPS;
 - web/API, durable orchestration и база размещаются через Vercel и подключённый Marketplace Postgres;
 - после курса владелец либо сохраняет ученикам доступ на определённый срок, либо выдаёт инструкцию самостоятельного запуска; автоматическая передача VPS между аккаунтами не обещается.
+
+Техническая политика первого этапа: каждое назначение n8n ученику имеет явный
+`expires_at` не дальше 366 дней. После срока student DTO перестаёт возвращать
+launch URL; admin может выдать новый срок либо передать инструкцию
+самостоятельного запуска. Assignment API fail-closed: без server-side mode
+`written_permission`/`commercial_agreement`/`product_owner_risk_acceptance` и
+ссылки или идентификатора подтверждающего решения доступ не выдаётся. Snapshot
+evidence сохраняется в `tool_access`, но никогда не входит в student DTO.
 
 ## 3. Цели первого этапа
 
@@ -82,7 +104,7 @@ server-side окружении. Второй фактор, если он тре�
 
 ### 3.2. Метрики результата
 
-- Не менее 95% запусков в тестовом окружении либо завершаются состоянием `ready`, либо показывают конкретный неисправный шаг и безопасное действие восстановления.
+- Не менее 95% запусков в тестовом окружении либо завершаются состоянием `ready`, либо показывают конкретный неисправный шаг и безопасное повторение текущего шага либо удаление среды.
 - Между нажатием «Создать среду» и стартом фоновой операции проходит не более 2 секунд при нормальной работе control plane.
 - Администратор видит обновление длительной операции не позднее чем через 5 секунд после изменения её состояния.
 - Ни один API token, SSH private key, пароль или `N8N_ENCRYPTION_KEY` не попадает в браузер, application log, audit payload или Git.
@@ -105,7 +127,7 @@ server-side окружении. Второй фактор, если он тре�
 
 - проверка настроенного Timeweb Cloud account без передачи raw token в браузер;
 - чтение актуальных регионов, зон, образов, конфигураций и доступного баланса, если это предоставляет API;
-- просмотр, создание и безопасное удаление единственного активного VPS;
+- просмотр, создание и безопасное терминальное удаление единственного активного VPS; после удаления можно создать только новую среду;
 - durable operations, audit log, cost guardrails и обработка частичного сбоя.
 
 ### 4.3. Готовая среда n8n
@@ -247,14 +269,24 @@ Desktop: сворачиваемая панель шириной около 256 p
 Обязательные состояния: loading skeleton, empty state, список, недоступный
 инструмент и ошибка создания среды.
 
-В списке отображаются:
+Admin-каталог строится от сервисов, а не от VPS или общего списка экземпляров.
+Глобального действия «Создать экземпляр» нет: настройка начинается только в
+карточке выбранного сервиса. В карточке отображаются:
 
 - название и краткое учебное назначение;
 - тип инструмента, например n8n;
-- состояние публикации и кому выдан доступ;
-- количество назначенных learning environments;
+- нужен ли сервису environment (`required`, `optional`, `none`);
+- состояние общего доступа и количество активных непросроченных назначений;
+- существующие learning environments только этого сервиса;
 - агрегированное состояние «готов», «создаётся», «требует внимания»;
-- основное действие «Открыть» или «Настроить доступ».
+- основное действие «Настроить» или «Открыть» в контексте сервиса.
+
+Индивидуальное назначение выполняется только из карточки ученика. Действие
+«Закрыть доступ всем» появляется в карточке сервиса только при наличии активных
+назначений и требует подтверждения с их количеством. Оно выключает launch, но
+сохраняет назначения, сроки и environment; обратное действие «Открыть доступ»
+возвращает рабочие ссылки для всё ещё активных назначений. Оба действия требуют
+admin RBAC, CSRF, идемпотентны и создают audit event.
 
 Provider status, IP, тариф и стоимость не показываются на уровне каталога.
 Они доступны admin только после перехода в конкретную learning environment.
@@ -283,7 +315,7 @@ Environment открывается из конкретного инструме�
 6. Публичный/переносимый IPv4 включён и создаётся сразу.
 7. Preview ресурсов и provider price, подтверждение и переход к экрану durable operation.
 
-Этот мастер создаёт чистый VPS. Он не принимает shell script, не запускает Ubuntu-24-only starter kit и не обещает готовность n8n. Установка совместимого профиля остаётся отдельным versioned flow.
+Этот мастер создаёт чистый VPS. Он не принимает shell script, не запускает Ubuntu-24-only starter kit и не обещает готовность n8n. Отдельное действие «Установить n8n» после fresh re-auth и exact-name confirmation переустанавливает тот же owned VPS на Ubuntu 24.04, сохраняет floating IPv4 и запускает только versioned allowlisted profile. UI явно предупреждает о полной потере данных системного диска.
 
 Мастер не принимает произвольный shell script. Профили установки версионируются и выбираются из allowlist.
 
@@ -312,7 +344,7 @@ Environment открывается из конкретного инструме�
 
 `PROV-04` Provider adapter находится только на сервере и имеет versioned internal interface. Browser никогда не обращается к Timeweb напрямую.
 
-`PROV-05` Идентификаторы preset, OS, project, SSH key, region/zone и стоимость загружаются из API. Project и SSH key выбираются детерминированно из live catalog без environment IDs и сохраняются только в versioned provider plan snapshot. Пустой список возвращает отдельную catalog/plan ошибку. При недоступности provider UI показывает cached data как устаревшие и запрещает платные mutation, если безопасный preview невозможен.
+`PROV-05` Идентификаторы preset, OS, project, SSH key и region/zone, а также цены тарифов загружаются из API. Цена IPv4 берётся из active-service cost API, а при отсутствии активного IP — только из датированного не более чем семью сутками официального provider evidence согласно ADR-0012; значение не фиксируется в коде. Project и SSH key выбираются детерминированно из live catalog без environment IDs и сохраняются только в versioned provider plan snapshot. Пустой список возвращает отдельную catalog/plan ошибку. При недоступности provider UI показывает cached data как устаревшие и запрещает платные mutation, если безопасный preview невозможен.
 
 `PROV-06` Preview и development deployments Vercel не получают production Timeweb tokens. Реальный provider smoke разрешён только из production deployment после явного подтверждения владельца. Клиентский денежный cap не применяется: актуальные provider price, balance и `monthly_fee` показываются как телеметрия, а решение принять или отклонить mutation остаётся за Timeweb.
 
@@ -333,7 +365,7 @@ Environment открывается из конкретного инструме�
 - выбранные region, zone, Premium NVMe preset и Ubuntu image всё ещё присутствуют в актуальном catalog;
 - отсутствует другая активная mutation этой среды.
 
-`INF-03` Deploy configurator резервирует переносимый публичный IP, затем создаёт чистый VPS с этим IP. После provider readiness он применяет выбранное состояние автобэкапа к единственному системному диску. DNS и `cloud-init` выполняются только отдельным совместимым install flow.
+`INF-03` Deploy configurator резервирует переносимый публичный IP, затем создаёт чистый VPS с этим IP. После provider readiness он применяет выбранное состояние автобэкапа к единственному системному диску. DNS и `cloud-init` выполняются только отдельным destructive install flow по [ADR-0011](../adr/0011-control-plane-post-provisioning-install.md); install не создаёт второй VPS или IP.
 
 `INF-04` Если резервирование IP до VPS невозможно для выбранной конфигурации, adapter использует подтверждённый альтернативный порядок и фиксирует его отдельным provider capability flag.
 
@@ -343,7 +375,7 @@ Environment открывается из конкретного инструме�
 
 ### 7.3. Bootstrap и установка n8n
 
-`N8N-01` Default путь первого создания использует versioned `cloud-init`, а не интерактивный SSH.
+`N8N-01` Отдельный `install_environment` flow после создания plain VPS использует provider-side `PATCH`/reinstall того же server ID с Ubuntu 24.04 и versioned `cloud-init`, а не интерактивный SSH. Перед destructive mutation обязательны fresh re-auth, точное имя среды и подтверждение потери данных.
 
 `N8N-02` `cloud-init`:
 
@@ -351,9 +383,15 @@ Environment открывается из конкретного инструме�
 - скачивает установочный артефакт exact release URL;
 - проверяет закреплённый SHA-256;
 - передаёт публичный `N8N_HOST`;
-- запускает installer в non-interactive режиме;
+- запускает installer в non-interactive режиме через отдельный systemd unit,
+  который не зависит от времени жизни `cloud-final` или Vercel deployment;
+- ограничивает число автоматических повторов и общее окно внешнего наблюдения;
+  бесконечные timeout/restart запрещены;
+- повторно использует тот же installer, `.env`, persistent volumes, VPS и IP;
+  успешный marker делает повторный запуск идемпотентным;
 - сохраняет локальные secrets только на VPS по контракту starter kit;
-- записывает bounded результат bootstrap без вывода секретов.
+- атомарно записывает phase, номер попытки и redacted error stage, а bounded log
+  скрывает IP и secret-like значения.
 
 Использование `releases/latest` в production profile запрещено.
 
@@ -368,11 +406,26 @@ Environment открывается из конкретного инструме�
 - `/healthz` отвечает ожидаемо;
 - страница editor открывается без redirect loop.
 
-`N8N-05` Первый этап не использует исходящий SSH из Vercel: bootstrap выполняется только через `cloud-init`, а готовность подтверждается Timeweb status и внешними HTTPS/health checks. Добавление remote execution требует отдельного ADR с egress/network policy и уникальным ED25519 key; один общий root key запрещён.
+`N8N-05` Первый этап не использует исходящий SSH из Vercel: bootstrap выполняется только через provider-side reinstall с `cloud-init`, исходный SSH key после reimage проверяется и повторно прикрепляется через typed Timeweb API, а готовность подтверждается Timeweb status/OS и внешними HTTPS/health checks. Добавление remote execution требует отдельного ADR с egress/network policy и уникальным ED25519 key; один общий root key запрещён.
 
-`N8N-06` Платформа не заявляет, что owner account n8n создан автоматически, пока для выбранной версии не подтверждён официальный безопасный API/CLI. В готовой среде допускается финальное состояние `ready_owner_setup_required` с инструкцией открыть URL и создать owner.
+`N8N-06` `ready_owner_setup_required` доступен только доверенному admin через
+обязательный gateway. Student не получает прямой URL или owner setup. После
+создания owner и состояния `ready` одно действие grant автоматически находит
+или приглашает отдельного n8n Member с тем же email через официальный Public
+API; owner/admin identity и несовпадение email отклоняются.
 
-`N8N-07` До выдачи production-среды ученику сохраняется evidence выбранной лицензионной модели: собственный instance ученика, коммерческое соглашение n8n либо иное письменное разрешение. Наличие технически работающего VPS не снимает этот gate.
+`N8N-07` До выдачи production-среды ученику сохраняется evidence выбранного основания: собственный instance ученика, коммерческое соглашение n8n, иное письменное разрешение либо явное принятие риска владельцем продукта. Принятие риска хранится и отображается отдельно и не заявляется как разрешение n8n. Наличие технически работающего VPS само по себе не снимает этот gate.
+
+`N8N-08` Управляемая среда запускается с platform Caddy profile. Editor/API
+одноразовый launch ticket передаётся только в POST body, без URL. Editor/API
+запросы требуют короткоживущую gateway session, привязанную к неизменяемому
+поколению назначения, и на каждом запросе повторно проверяют active
+user/membership, identity binding, assignment, expiry, license decision,
+global service gate и health. Revoke, expiry, renewal и global off-on блокируют
+сохранённый origin и существующую n8n session. Public health/webhook/form имеют
+явный allowlist. Оператор задаёт только scoped management API key; внутренний
+gateway secret выводится из `AUTH_SECRET`, автоматически синхронизируется при
+managed install и никогда не показывается в UI.
 
 ### 7.4. DNS и TLS
 
@@ -390,29 +443,33 @@ Environment открывается из конкретного инструме�
 
 ```mermaid
 stateDiagram-v2
-  [*] --> validating
-  validating --> reserving_ip
-  reserving_ip --> creating_dns
-  creating_dns --> creating_server
+  [*] --> validating_create
+  validating_create --> reserving_ip
+  reserving_ip --> creating_server
   creating_server --> provider_installing
-  provider_installing --> bootstrapping
-  bootstrapping --> installing_n8n
-  installing_n8n --> waiting_dns
-  waiting_dns --> issuing_tls
+  provider_installing --> active_plain_vps
+  active_plain_vps --> validating_install
+  validating_install --> creating_dns
+  creating_dns --> waiting_dns
+  waiting_dns --> installing_n8n
+  installing_n8n --> provider_reinstalling
+  provider_reinstalling --> bootstrapping
+  bootstrapping --> issuing_tls
   issuing_tls --> health_check
-  health_check --> ready
   health_check --> ready_owner_setup_required
-  validating --> failed
+  validating_create --> failed
+  validating_install --> degraded
   reserving_ip --> failed
-  creating_dns --> failed
+  creating_dns --> degraded
   creating_server --> failed
   provider_installing --> failed
-  bootstrapping --> failed
-  installing_n8n --> failed
+  provider_reinstalling --> degraded
+  bootstrapping --> degraded
+  installing_n8n --> degraded
   waiting_dns --> degraded
   issuing_tls --> degraded
   health_check --> degraded
-  ready --> deleting
+  active_plain_vps --> deleting
   ready_owner_setup_required --> deleting
   degraded --> deleting
   failed --> deleting
@@ -449,6 +506,8 @@ stateDiagram-v2
 `DEL-05` Если один ресурс не удалён, environment становится `cleanup_required`; UI показывает остаточный ресурс, расход и безопасное действие повтора. Audit/tombstone среды сохраняется.
 
 `DEL-06` Опция «Сохранить IP» выключена по умолчанию и требует отдельного явного подтверждения стоимости.
+
+`DEL-07` Состояние `deleted` терминально. Платформа не предлагает и не вызывает provider restore, install или resume для tombstone. Следующий запуск создаёт новый environment и новый VPS; audit/tombstone удалённой среды остаётся неизменным.
 
 ## 8. Архитектура control plane
 
@@ -541,8 +600,9 @@ Browser-facing namespace не содержит generic Timeweb endpoint. Cleanup
 | `courses`, `course_sections` | пространство курса, порядок и навигация программы |
 | `materials` | text-first статья, практическое задание или ссылка; draft/published state |
 | `material_progress` | последнее открытое место и completion без оценочной LMS-модели |
-| `tools` | учебный продукт, его описание, launch policy и тип runtime |
-| `tool_access` | назначение инструмента ученику и безопасное состояние доступа |
+| server-side tool definitions | учебный продукт, описание и capabilities среды, доступа и launch |
+| `tool_service_settings` | обратимый общий gate доступа учеников к сервису |
+| `tool_access` | назначение инструмента ученику; `environment_id` nullable для сервисов без среды |
 | `learning_environments` | учебная среда конкретного инструмента без provider деталей в student DTO |
 | `provider_connections` | provider kind, Vercel env aliases, capability snapshot и время проверки без raw secret |
 | `infrastructure_profiles` | allowlisted OS, preset rules, installer version/checksum, network policy |
@@ -597,8 +657,8 @@ Append-only audit фиксирует:
 
 ### 9.4. Стоимость и лимиты
 
-- UI получает цену и баланс из Timeweb, когда API их предоставляет; иначе показывает «нет актуальных данных» и не выдумывает сумму.
-- Конфигурация содержит hard limit `1` активная среда. Денежный warning/critical budget и максимальная стоимость create preview не используются.
+- UI получает цену и баланс из Timeweb API, когда API их предоставляет. Для нового IPv4 при нулевом baseline допускается только свежее официальное provider evidence по ADR-0012; иначе UI показывает «нет актуальных данных» и не разрешает paid create.
+- Для n8n действует hard limit `1` незавершённая или активная среда этого типа. Ограничение индексируется по `tool_type` и не блокирует среды других сервисов. Денежный warning/critical budget и максимальная стоимость create preview не используются.
 - При превышении resource hard limit новые create блокируются; health, cleanup и delete остаются доступны.
 - Платформа учитывает публичный IP как отдельный ресурс.
 - Provider rate limits, суточный лимит выдачи IPv4 и отсутствие средств классифицируются отдельно и видны admin.
@@ -662,9 +722,9 @@ navigation.
 
 `AC-03` Двойное нажатие create с одним idempotency key создаёт одну operation и не более одного VPS.
 
-`AC-04` Успешная операция создаёт VPS, DNS и n8n; external check подтверждает валидный HTTPS и health; UI показывает URL и фактические provider IDs.
+`AC-04` Успешный create оставляет один active plain VPS с exact owned floating IP. Отдельный подтверждённый install переустанавливает тот же server ID, создаёт owned DNS и n8n; external check подтверждает валидный HTTPS, закрытые 5432/5678, health и owner setup state; UI показывает URL без выдачи provider IDs ученику.
 
-`AC-05` Повтор step, рестарт Function или новый Vercel deployment между `creating_server` и `bootstrapping` не создаёт второй сервер, а продолжает/reconciles исходную operation.
+`AC-05` Повтор step, рестарт Function или новый Vercel deployment не создаёт второй сервер и не повторяет destructive reimage вслепую: create reconciles owned resources, install — provider status и exact OS по durable mutation marker.
 
 `AC-06` Ошибка DNS или TLS переводит среду в `degraded`, сохраняет работающий VPS и показывает конкретное действие, не повторяя создание VPS.
 
@@ -723,7 +783,7 @@ Student не может читать draft, изменять чужой progress
 |---|---|---|
 | Где размещён control plane? | Один Vercel project с Root Directory `platform/`, Workflow, Cron и Marketplace Postgres | Длительные операции нельзя держать в одном HTTP request; Timeweb token доступен только server-side production adapter |
 | Где находится код? | Текущий репозиторий, изолированный root `platform/` | Нужны отдельные CI, release, secrets и regression gates starter kit |
-| Кто владеет VPS и оплачивает его? | Владелец курса/школа | До выдачи ученикам нужен license gate n8n и политика срока доступа |
+| Кто владеет VPS и оплачивает его? | Владелец курса/школа | До выдачи ученикам нужны документированное основание production-доступа и политика срока доступа |
 | Какая базовая DNS zone? | `neurokurs.ru`, default `n8n.neurokurs.ru` | Zone должна обслуживаться через доступный Timeweb DNS API |
 | Сколько VPS? | Один активный основной n8n VPS | Database constraint и preflight блокируют второй |
 | Как удалять? | Полностью автоматически после destructive modal/re-auth | Единый server-side adapter проверяет ownership и вызывает только allowlisted delete methods; token должен разрешать удаление без Telegram-кода |
@@ -749,7 +809,7 @@ Student не может читать draft, изменять чужой progress
 4. disposable cleanup plan и ownership assertions прошли на fake adapter;
 5. production admin использует свежую re-auth для destructive action; если MFA
    enrolled, свежий второй фактор также обязателен;
-6. n8n license gate закрыт до предоставления управляемой среды ученикам;
+6. production-access gate закрыт документированным основанием до предоставления управляемой среды ученикам;
 7. Vercel production Workflow/Cron, Postgres backup policy и secret redaction проверены evidence.
 
 ## 15. Двойной саморевью
@@ -764,7 +824,7 @@ Student не может читать draft, изменять чужой progress
 - разделены создание VPS и создание готовой n8n-среды;
 - добавлены preview стоимости, degraded state и явная обработка оставшегося платного IP;
 - автоматическое создание owner n8n вынесено из обещаний в открытое ограничение.
-- добавлен обязательный license/ownership gate для случая, когда школа размещает n8n для учеников.
+- добавлен обязательный production-access/ownership gate для случая, когда школа размещает n8n для учеников.
 
 ### Проход 2 — безопасность и реализуемость
 

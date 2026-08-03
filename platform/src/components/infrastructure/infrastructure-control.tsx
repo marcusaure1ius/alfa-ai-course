@@ -5,10 +5,12 @@ import {
   AlertTriangle,
   ArrowLeft,
   Check,
+  ExternalLink,
   HardDrive,
   Loader2,
   MapPin,
   Plus,
+  Download,
   RefreshCw,
   Server,
   ShieldCheck,
@@ -41,6 +43,16 @@ type Environment = {
   name: string;
   status: string;
   updatedAt: string;
+  publicUrl: string | null;
+  installationStatus: string | null;
+  managedGatewayVerified: boolean;
+  currentOperation: {
+    id: string;
+    kind: string;
+    status: string;
+    currentStep: string | null;
+    canResume: boolean;
+  } | null;
   publicIp: string | null;
   monthlyRoubles: number;
   ownedResources: Array<{
@@ -65,6 +77,17 @@ async function csrfToken(): Promise<string> {
   return body.csrfToken;
 }
 
+function apiErrorMessage(body: unknown, fallback: string): string {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return fallback;
+  const error = (body as { error?: unknown }).error;
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object" && !Array.isArray(error)) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return fallback;
+}
+
 const statusLabels: Record<string, string> = {
   creating: "Создаётся",
   active: "Работает",
@@ -80,11 +103,202 @@ const resourceLabels: Record<string, string> = {
   backup: "Резервные копии",
 };
 
-function DeleteEnvironment({
+const operationStepLabels: Record<string, string> = {
+  configure_dns: "Настраиваем DNS",
+  waiting_dns: "Ждём DNS",
+  installing_n8n: "Переустанавливаем Ubuntu и n8n",
+  provider_installing: "Проверяем сервер после переустановки",
+  bootstrapping: "Запускаем сервисы",
+  issuing_tls: "Получаем TLS-сертификат",
+  health_check: "Проверяем n8n",
+  complete_install: "Завершаем установку",
+};
+
+function operationStepLabel(operation: Environment["currentOperation"]): string {
+  if (!operation) return "Операция поставлена в очередь";
+  if (
+    operation.kind === "create_environment" &&
+    operation.currentStep === "provider_installing"
+  ) {
+    return "Проверяем готовность сервера";
+  }
+  return (
+    operationStepLabels[operation.currentStep ?? ""] ??
+    "Операция поставлена в очередь"
+  );
+}
+
+function InstallEnvironment({
   environment,
+  toolType,
+  resume = false,
   onAccepted,
 }: {
   environment: Environment;
+  toolType: string;
+  resume?: boolean;
+  onAccepted(): void;
+}) {
+  const [confirmationName, setConfirmationName] = useState("");
+  const [confirmedLoss, setConfirmedLoss] = useState(false);
+  const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [pending, setPending] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
+  const exact = confirmationName === environment.name && confirmedLoss;
+
+  async function install() {
+    if (!exact) return;
+    setPending(true);
+    setInstallError(null);
+    try {
+      const csrf = await csrfToken();
+      const reauth = await fetch("/api/auth/reauth", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+          "x-csrf-token": csrf,
+        },
+        body: JSON.stringify({
+          password,
+          ...(mfaCode ? { mfaCode } : {}),
+        }),
+      });
+      if (!reauth.ok) throw new Error("Не удалось подтвердить вход.");
+      const response = await fetch(
+        `/api/admin/infrastructure/environments/${environment.id}/install-n8n`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "content-type": "application/json",
+            "x-csrf-token": csrf,
+          },
+          body: JSON.stringify({
+            toolType,
+            confirmationName,
+            confirmedLoss,
+            idempotencyKey: `install-${environment.id}-${crypto.randomUUID()}`,
+          }),
+        },
+      );
+      const body = (await response.json()) as {
+        error?: { message?: string };
+      };
+      if (!response.ok) {
+        throw new Error(body.error?.message ?? "Не удалось запустить установку.");
+      }
+      onAccepted();
+    } catch (error) {
+      setInstallError(
+        error instanceof Error
+          ? error.message
+          : "Не удалось запустить установку.",
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="sm" className="min-h-11">
+          <Download aria-hidden="true" />
+          {resume ? "Возобновить установку" : "Установить n8n"}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {resume
+              ? `Возобновить установку на «${environment.name}»?`
+              : `Установить n8n на «${environment.name}»?`}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {resume
+              ? "Прерванная durable-операция продолжится с последнего незавершённого шага. Второй VPS или публичный IP создаваться не будет."
+              : "Тот же VPS будет полностью переустановлен на Ubuntu 24.04. Публичный IP сохранится, но все текущие файлы и настройки сервера будут удалены. После установки нужно будет создать владельца n8n."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-3">
+          <Alert variant="destructive">
+            <AlertTriangle aria-hidden="true" />
+            <AlertTitle>Все данные VPS будут удалены</AlertTitle>
+            <AlertDescription>
+              Продолжайте только для чистого сервера, созданного этим мастером.
+            </AlertDescription>
+          </Alert>
+          <label className="grid gap-1.5 text-sm">
+            Введите точное имя среды
+            <Input
+              value={confirmationName}
+              onChange={(event) => setConfirmationName(event.target.value)}
+              autoComplete="off"
+            />
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={confirmedLoss}
+              onChange={(event) => setConfirmedLoss(event.target.checked)}
+              className="mt-1"
+            />
+            Я подтверждаю полную переустановку и потерю данных VPS.
+          </label>
+          <label className="grid gap-1.5 text-sm">
+            Пароль Neurokurs
+            <Input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm">
+            Код из приложения (если включён)
+            <Input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={mfaCode}
+              onChange={(event) =>
+                setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              placeholder="000000"
+            />
+          </label>
+          {installError ? (
+            <p className="text-sm text-destructive" aria-live="polite">
+              {installError}
+            </p>
+          ) : null}
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Отмена</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!exact || password.length < 12 || pending}
+            onClick={(event) => {
+              event.preventDefault();
+              void install();
+            }}
+          >
+            {pending ? <Loader2 aria-hidden="true" className="animate-spin" /> : null}
+            {resume ? "Продолжить установку" : "Переустановить VPS и n8n"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function DeleteEnvironment({
+  environment,
+  toolType,
+  onAccepted,
+}: {
+  environment: Environment;
+  toolType: string;
   onAccepted(): void;
 }) {
   const [confirmationName, setConfirmationName] = useState("");
@@ -124,6 +338,7 @@ function DeleteEnvironment({
             "x-csrf-token": csrf,
           },
           body: JSON.stringify({
+            toolType,
             confirmationName,
             confirmedLoss,
             idempotencyKey: `delete-${environment.id}-${crypto.randomUUID()}`,
@@ -245,12 +460,20 @@ function DeleteEnvironment({
   );
 }
 
-export function InfrastructureControl() {
+export function InfrastructureControl({ toolType = "n8n" }: { toolType?: string }) {
   const [preview, setPreview] = useState<CloudProvisioningPreview | null>(null);
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selection, setSelection] = useState<TimewebDeploySelection | null>(null);
   const [name, setName] = useState("Учебная среда");
   const [pending, setPending] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createCostConfirmed, setCreateCostConfirmed] = useState(false);
+  const [createPassword, setCreatePassword] = useState("");
+  const [createMfaCode, setCreateMfaCode] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createIdempotencyKey, setCreateIdempotencyKey] = useState<string | null>(
+    null,
+  );
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -274,7 +497,7 @@ export function InfrastructureControl() {
             credentials: "same-origin",
           },
         ),
-        fetch("/api/admin/infrastructure/environments", {
+        fetch(`/api/admin/infrastructure/environments?toolType=${encodeURIComponent(toolType)}`, {
           cache: "no-store",
           credentials: "same-origin",
         }),
@@ -295,19 +518,58 @@ export function InfrastructureControl() {
     } finally {
       setLoaded(true);
     }
-  }, [selection]);
+  }, [selection, toolType]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(), selection ? 180 : 0);
     return () => window.clearTimeout(timer);
   }, [refresh, selection]);
 
+  useEffect(() => {
+    const hasRunningOperation = environments.some(
+      (environment) =>
+        environment.currentOperation ||
+        ["creating", "deleting"].includes(environment.status),
+    );
+    if (!loaded || !hasRunningOperation) return;
+    const timer = window.setTimeout(() => void refresh(selection), 1_500);
+    return () => window.clearTimeout(timer);
+  }, [environments, loaded, refresh, selection]);
+
   async function create() {
-    if (!preview?.ok || !selection || name.trim().length < 2) return;
+    if (
+      !preview?.ok ||
+      !selection ||
+      name.trim().length < 2 ||
+      !createCostConfirmed
+    ) {
+      return;
+    }
     setPending(true);
-    setMessage(null);
+    setCreateError(null);
     try {
       const csrf = await csrfToken();
+      const reauth = await fetch("/api/auth/reauth", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+          "x-csrf-token": csrf,
+        },
+        body: JSON.stringify({
+          password: createPassword,
+          ...(createMfaCode ? { mfaCode: createMfaCode } : {}),
+        }),
+      });
+      const reauthBody = await reauth.json().catch(() => null);
+      if (!reauth.ok) {
+        throw new Error(
+          apiErrorMessage(reauthBody, "Не удалось подтвердить вход."),
+        );
+      }
+      const idempotencyKey =
+        createIdempotencyKey ?? `create-${crypto.randomUUID()}`;
+      setCreateIdempotencyKey(idempotencyKey);
       const response = await fetch("/api/admin/infrastructure/environments", {
         method: "POST",
         credentials: "same-origin",
@@ -316,22 +578,25 @@ export function InfrastructureControl() {
           "x-csrf-token": csrf,
         },
         body: JSON.stringify({
+          toolType,
           name: name.trim(),
-          idempotencyKey: `create-${crypto.randomUUID()}`,
+          idempotencyKey,
           deployment: selection,
         }),
       });
-      const body = (await response.json()) as {
-        operationId?: string;
-        error?: { message?: string };
-      };
+      const body = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(body.error?.message ?? "Не удалось создать среду.");
+        throw new Error(apiErrorMessage(body, "Не удалось создать среду."));
       }
       setMessage("Среда поставлена в очередь на создание.");
+      setCreateDialogOpen(false);
+      setCreateCostConfirmed(false);
+      setCreatePassword("");
+      setCreateMfaCode("");
+      setCreateIdempotencyKey(null);
       await refresh();
     } catch (error) {
-      setMessage(
+      setCreateError(
         error instanceof Error ? error.message : "Не удалось создать среду.",
       );
     } finally {
@@ -622,18 +887,113 @@ export function InfrastructureControl() {
                 </p>
               </div>
             ) : null}
-            <Button
-              size="lg"
-              disabled={!preview?.ok || !selection || activeEnvironment || pending}
-              onClick={() => void create()}
+            <AlertDialog
+              open={createDialogOpen}
+              onOpenChange={(open) => {
+                setCreateDialogOpen(open);
+                if (!open && !pending) {
+                  setCreateCostConfirmed(false);
+                  setCreatePassword("");
+                  setCreateMfaCode("");
+                  setCreateError(null);
+                  setCreateIdempotencyKey(null);
+                }
+              }}
             >
-              {pending ? (
-                <Loader2 aria-hidden="true" className="animate-spin" />
-              ) : (
-                <Plus aria-hidden="true" />
-              )}
-              Создать среду
-            </Button>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="lg"
+                  disabled={
+                    !preview?.ok || !selection || activeEnvironment || pending
+                  }
+                >
+                  <Plus aria-hidden="true" />
+                  Создать среду
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Создать «{name.trim() || "Учебная среда"}»?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Будут созданы один новый VPS и один публичный IPv4. Бэкапы{" "}
+                    {selection?.backupsEnabled ? "включены" : "выключены"}.
+                    Timeweb списывает оплату почасово.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="space-y-3">
+                  <div className="rounded-md border bg-muted/40 p-3 text-sm">
+                    <p className="font-medium">VPS + IPv4</p>
+                    <p className="mt-1 text-lg font-semibold">
+                      {preview?.ok
+                        ? preview.plan.monthlyTotalRoubles.toLocaleString("ru-RU")
+                        : "—"}{" "}
+                      ₽/мес
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Перед созданием требуется свежая повторная аутентификация.
+                    </p>
+                  </div>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={createCostConfirmed}
+                      onChange={(event) =>
+                        setCreateCostConfirmed(event.target.checked)
+                      }
+                      className="mt-1"
+                    />
+                    Подтверждаю создание платных ресурсов по показанной цене.
+                  </label>
+                  <label className="grid gap-1.5 text-sm">
+                    Пароль Neurokurs
+                    <Input
+                      type="password"
+                      autoComplete="current-password"
+                      value={createPassword}
+                      onChange={(event) => setCreatePassword(event.target.value)}
+                    />
+                  </label>
+                  <label className="grid gap-1.5 text-sm">
+                    Код из приложения (если включён)
+                    <Input
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={createMfaCode}
+                      onChange={(event) =>
+                        setCreateMfaCode(
+                          event.target.value.replace(/\D/g, "").slice(0, 6),
+                        )
+                      }
+                      placeholder="000000"
+                    />
+                  </label>
+                  {createError ? (
+                    <p className="text-sm text-destructive" aria-live="polite">
+                      {createError}
+                    </p>
+                  ) : null}
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={pending}>Отмена</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={
+                      !createCostConfirmed || createPassword.length < 12 || pending
+                    }
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void create();
+                    }}
+                  >
+                    {pending ? (
+                      <Loader2 aria-hidden="true" className="animate-spin" />
+                    ) : null}
+                    Подтвердить и создать
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
           {activeEnvironment ? (
             <p className="text-sm text-muted-foreground lg:col-span-2">
@@ -672,6 +1032,31 @@ export function InfrastructureControl() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     {environment.publicIp ?? "IP ещё не назначен"} · {environment.monthlyRoubles.toLocaleString("ru-RU")} ₽/мес.
                   </p>
+                  {environment.currentOperation ? (
+                    <p className="mt-2 text-sm text-muted-foreground" role="status">
+                      {operationStepLabel(environment.currentOperation)}
+                    </p>
+                  ) : environment.installationStatus ===
+                      "ready_owner_setup_required" &&
+                    environment.managedGatewayVerified ? (
+                    <p className="mt-2 text-sm text-status-ready">
+                      n8n готов — требуется создать владельца.
+                    </p>
+                  ) : environment.installationStatus ===
+                    "ready_owner_setup_required" ? (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Безопасный вход в n8n ещё настраивается.
+                    </p>
+                  ) : environment.status === "active" ? (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Сервер готов. n8n ещё не установлен.
+                    </p>
+                  ) : environment.status === "deleted" ? (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Удаление окончательное. Чтобы продолжить, создайте новую
+                      среду.
+                    </p>
+                  ) : null}
                   {environment.status === "cleanup_required" ? (
                     <ul className="mt-2 space-y-1 text-xs text-destructive">
                       {environment.ownedResources.map((resource) => (
@@ -683,9 +1068,43 @@ export function InfrastructureControl() {
                     </ul>
                   ) : null}
                 </div>
-                {["active", "degraded", "cleanup_required"].includes(environment.status) ? (
-                  <DeleteEnvironment environment={environment} onAccepted={() => void refresh()} />
-                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  {environment.publicUrl && environment.managedGatewayVerified ? (
+                    <Button asChild variant="outline" size="sm" className="min-h-11">
+                      <a
+                        href={`/api/admin/tools/n8n/launch?environmentId=${encodeURIComponent(environment.id)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Открыть n8n
+                        <ExternalLink aria-hidden="true" />
+                      </a>
+                    </Button>
+                  ) : null}
+                  {["active", "degraded"].includes(environment.status) &&
+                  environment.installationStatus !==
+                    "ready_owner_setup_required" &&
+                  (!environment.currentOperation ||
+                    environment.currentOperation.canResume) ? (
+                    <InstallEnvironment
+                      environment={environment}
+                      toolType={toolType}
+                      resume={environment.currentOperation?.canResume ?? false}
+                      onAccepted={() => void refresh()}
+                    />
+                  ) : null}
+                  {["active", "degraded", "cleanup_required"].includes(
+                    environment.status,
+                  ) &&
+                  (!environment.currentOperation ||
+                    environment.currentOperation.canResume) ? (
+                    <DeleteEnvironment
+                      environment={environment}
+                      toolType={toolType}
+                      onAccepted={() => void refresh()}
+                    />
+                  ) : null}
+                </div>
               </CardContent>
             </Card>
           ))

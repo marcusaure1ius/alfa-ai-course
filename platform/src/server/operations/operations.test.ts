@@ -1,13 +1,33 @@
 import { describe, expect, it } from "vitest";
 
 import { redactBounded } from "./redaction";
-import { canTransitionEnvironment, classifyProviderError } from "./state";
+import {
+  canTransitionEnvironment,
+  classifyProviderError,
+  type EnvironmentStatus,
+} from "./state";
 
 describe("operation safety primitives", () => {
   it("allows only declared environment transitions", () => {
     expect(canTransitionEnvironment("creating", "active")).toBe(true);
     expect(canTransitionEnvironment("active", "creating")).toBe(false);
     expect(canTransitionEnvironment("deleted", "active")).toBe(false);
+  });
+
+  it("treats deletion as terminal instead of a restore state", () => {
+    const statuses: EnvironmentStatus[] = [
+      "draft",
+      "creating",
+      "active",
+      "degraded",
+      "deleting",
+      "deleted",
+      "cleanup_required",
+    ];
+
+    for (const status of statuses) {
+      expect(canTransitionEnvironment("deleted", status)).toBe(false);
+    }
   });
 
   it("classifies unknown outcomes separately from permanent failures", () => {

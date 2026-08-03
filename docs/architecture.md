@@ -22,6 +22,17 @@ Tool не равен VPS: n8n — первый тип учебного инст�
 одна из возможных реализаций его environment. Новые инструменты могут не
 требовать собственного VPS и не должны наследовать provider DTO в публичный UI.
 
+Каталог инструментов задаётся server-side definition с явными capabilities:
+`environment = required | optional | none`, наличием student access и launch.
+Каждая запись `environments` хранит `tool_type`; detail-query сверяет и тип, и
+идентификатор среды. Ограничение одной незавершённой/активной среды применяется
+по `tool_type`, поэтому n8n не блокирует другой тип инструмента. Для сервиса без
+среды `tool_access.environment_id` остаётся `null`, а фиктивный VPS не создаётся.
+Общий `tool_service_settings.student_access_enabled` — обратимый операционный
+gate: он немедленно скрывает launch у всех учеников, но не удаляет назначения,
+сроки доступа или environment. Каждое переключение защищено admin RBAC и CSRF и
+фиксируется в append-only audit.
+
 Platform использует Neon Postgres через Vercel Marketplace и provider-neutral registry server-only cloud adapters; первый adapter реализован для Timeweb. Root installer/runtime сохраняет прежний контракт и проверяется независимо. Application runtime получает pooled `DATABASE_URL`; локальная разработка использует отдельный PostgreSQL 17 container с синтетическими credentials и fake provider mode.
 
 ```mermaid
@@ -43,9 +54,9 @@ flowchart LR
   N --> P["Private PostgreSQL"]
 ```
 
-Платные create/delete операции запускаются как durable Vercel Workflow и не удерживают один HTTP request. Deploy configurator читает live catalog, включая проекты и SSH-ключи, создаёт чистый VPS в выбранной зоне с отдельным IPv4 и применяет autobackup системного диска. Ubuntu 26.04 — default только для чистого VPS; root starter kit остаётся Ubuntu-24-only. Bootstrap через `cloud-init`, DNS и n8n readiness относятся к отдельному совместимому install flow. Исходящий SSH из Vercel не используется. Общий `PLATFORM_PROVIDER` выбирает adapter; для Timeweb единственный provider-specific secret `TIMEWEB_API_TOKEN` находится только в production environment Vercel. Project/SSH key IDs выбираются детерминированно из Public API и сохраняются только в versioned operation snapshot. Delete дополнительно требует RBAC, exact-name modal, свежую re-auth, audit, ownership и idempotency checks. Hard limit — один active/creating/degraded VPS.
+Платные create/install/delete операции запускаются как durable Vercel Workflow и не удерживают один HTTP request. Deploy configurator читает live catalog, включая проекты и SSH-ключи, создаёт чистый VPS в выбранной зоне с отдельным IPv4 и применяет autobackup системного диска. Ubuntu 26.04 — default только для чистого VPS; root starter kit остаётся Ubuntu-24-only. Отдельный destructive install flow после exact-name confirmation переустанавливает тот же owned VPS через allowlisted Timeweb `PATCH` на Ubuntu 24.04 с exact versioned `cloud-init`, сохраняет floating IPv4, повторно прикрепляет исходный SSH key, создаёт owned DNS и подтверждает n8n внешними TLS/health checks. Retry сначала reconciles provider status и OS и не повторяет reimage вслепую. Исходящий SSH из Vercel не используется. Общий `PLATFORM_PROVIDER` выбирает adapter; для Timeweb единственный provider-specific secret `TIMEWEB_API_TOKEN` находится только в production environment Vercel. Project/SSH key IDs выбираются детерминированно из Public API и сохраняются только в versioned operation snapshot. Install/delete дополнительно требуют RBAC, exact-name modal, свежую re-auth, audit, ownership и idempotency checks. Hard limit — один active/creating/degraded VPS.
 
-Подробные решения: [ADR-0005](../adr/0005-course-platform-control-plane.md), superseding [ADR-0006](../adr/0006-single-vercel-project-for-course-platform.md), [ADR-0007 по Neon Postgres](../adr/0007-neon-postgres-for-course-platform.md), [ADR-0009 по deploy configurator](../adr/0009-timeweb-deploy-configurator.md), [ADR-0010 по provider-neutral runtime](../adr/0010-provider-neutral-cloud-runtime.md) и [требования control plane](course-platform-requirements.md). Разделы ниже продолжают быть канонической архитектурой самого starter-kit runtime.
+Подробные решения: [ADR-0005](../adr/0005-course-platform-control-plane.md), superseding [ADR-0006](../adr/0006-single-vercel-project-for-course-platform.md), [ADR-0007 по Neon Postgres](../adr/0007-neon-postgres-for-course-platform.md), [ADR-0009 по deploy configurator](../adr/0009-timeweb-deploy-configurator.md), [ADR-0010 по provider-neutral runtime](../adr/0010-provider-neutral-cloud-runtime.md), [ADR-0011 по post-provisioning install](../adr/0011-control-plane-post-provisioning-install.md), [ADR-0012 по цене IPv4 при нулевом baseline](../adr/0012-timeweb-public-ip-price-evidence.md) и [требования control plane](course-platform-requirements.md). Разделы ниже продолжают быть канонической архитектурой самого starter-kit runtime.
 
 ## Контекст системы
 
@@ -81,7 +92,7 @@ Exact baseline:
 | Docker Engine для Ubuntu 24.04 amd64 | `5:29.6.1-1~ubuntu.24.04~noble` |
 | Docker Compose plugin для Ubuntu 24.04 amd64 | `5.3.1-1~ubuntu.24.04~noble` |
 
-Container digests записываются в release evidence после pull, но Compose использует exact application tags. Политика и источники зафиксированы в [ADR-0003](../adr/0003-version-pinning-policy.md).
+Container digests записываются в release evidence после pull, но Compose использует exact application tags. Default registry остаётся official; Timeweb onboarding может явно выбрать allowlisted provider proxy без изменения tags. Политика версий зафиксирована в [ADR-0003](../adr/0003-version-pinning-policy.md), а bounded pull retry и proxy boundary — в [ADR-0012](../adr/0012-timeweb-dockerhub-proxy-fallback.md).
 
 ## Runtime configuration contract
 
@@ -108,6 +119,41 @@ Implementation в `T-0005` переносит следующие решения 
 
 Caddy выбран для базового профиля из-за небольшой конфигурационной поверхности и автоматического HTTPS. Выбор не отменяет обязательную проверку актуальной официальной документации, требований ACME, forwarded headers и pinned release в research-задаче.
 
+## Управляемый student-доступ к n8n
+
+Standalone starter kit продолжает использовать обычный reverse proxy. Среда,
+которую Neurokurs выдаёт ученикам, обязана запускаться с
+`docker-compose.platform.yml`: `config/Caddyfile.platform` становится
+единственной фактической границей editor/API. Прямой URL никогда не входит в
+student DTO. Same-origin launch выдаёт одноразовый ticket только в POST form
+body, без token в URL и стандартных access logs. После обмена Caddy
+проверяет host-only gateway cookie через platform `forward_auth` на каждом
+запросе.
+
+Authorizer fail-closed объединяет active student, course membership,
+индивидуальный n8n Member binding, точное поколение assignment, expiry,
+license decision, общий
+service gate, environment, installation health и доказанную внешним probe
+отметку `managed_gateway_verified_at`. Probe требует открытый health endpoint,
+закрытый без cookie editor и достижимый через Caddy exchange-маршрут. Поэтому
+статус обычного standalone n8n не может считаться готовностью managed gateway,
+а revoke, expiry и
+global off действуют на сохранённый URL и уже существующую n8n login session.
+Owner setup проходит только через admin ticket. Public webhook/form и health
+остаются отдельными allowlisted маршрутами. Внешняя конфигурация требует только
+scoped `N8N_MANAGEMENT_API_KEY`: grant сам находит или приглашает Member, а
+внутренний Caddy secret выводится из `AUTH_SECRET` и синхронизируется bootstrap.
+Тем же secret Caddy аутентифицирует и exchange, и каждый forward-auth запрос;
+Course Platform использует закреплённый профильный hostname вместо переписываемых
+CDN-заголовков `X-Forwarded-Host`.
+Если n8n не отправил invitation email, same-origin invite path хранится только
+в зашифрованном виде в назначении, не копируется в launch tickets, атомарно
+удаляется первым gateway exchange или revoke и очищается после expiry ежедневным
+reconciliation. Boundary
+зафиксирован в [ADR-0012](../adr/0012-n8n-student-identity-and-revocable-gateway.md),
+упрощённый configuration/invite flow — в
+[ADR-0013](../adr/0013-one-click-n8n-student-access.md).
+
 ## Установка
 
 Публичный автономный `install.sh` — пользовательская точка входа. Он содержит versioned `git archive` и точный SHA-256, проверяет payload, разворачивает его в `/opt/n8n-entrepreneur-starter-kit` и вызывает внутренний `scripts/install.sh`. Артефакт собирается только из exact Git commit через `scripts/build-one-command-installer.sh`.
@@ -122,7 +168,7 @@ Caddy выбран для базового профиля из-за неболь
 6. запустить сервисы и выполнить те же существенные проверки, что `doctor.sh`;
 7. показать URL, пути и команды безопасной эксплуатации.
 
-Повторный запуск должен быть разумно идемпотентным. `--dry-run` не меняет систему. Изменение firewall выполняется только после отдельного подтверждения и не должно обрывать текущий SSH-доступ.
+Image pull использует максимум три bounded attempts. Default source — official registries; только явный `N8N_IMAGE_SOURCE=timeweb` выбирает allowlisted Timeweb proxy с теми же exact tags и сохраняет выбор для последующих Compose-команд. Повторный запуск должен быть разумно идемпотентным. `--dry-run` не меняет систему. Изменение firewall выполняется только после отдельного подтверждения и не должно обрывать текущий SSH-доступ.
 
 Реализация и таблица deterministic preflight/exit codes: [`scripts/install.sh`](../scripts/install.sh), [`scripts/build-one-command-installer.sh`](../scripts/build-one-command-installer.sh) и [installation reference](installation.md). Публичный URL является release gate: до выбора лицензии и размещения собранного артефакта по стабильному HTTPS-адресу документация показывает синтаксис, но не выдумывает работающий endpoint.
 

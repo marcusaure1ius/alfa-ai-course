@@ -22,7 +22,9 @@ export class CourseContentError extends Error {
       | "NOT_FOUND"
       | "FORBIDDEN"
       | "INVALID_SECTION"
-      | "POSITION_CONFLICT",
+      | "POSITION_CONFLICT"
+      | "SECTION_NOT_EMPTY"
+      | "CONFIRMATION_MISMATCH",
   ) {
     super(code);
   }
@@ -75,6 +77,78 @@ export async function createCourse(
   `;
   await appendAudit(sql, actor.userId, "course.created", "course", id);
   return id;
+}
+
+export async function updateCourse(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  courseId: string,
+  input: {
+    slug: string;
+    title: string;
+    description: string;
+    status: PublicationStatus;
+  },
+  context: RequestAuditContext = {},
+): Promise<void> {
+  requireAdminActor(actor);
+  const publication = publicationFields(input.status, actor.userId);
+  await sql.begin(async (transaction) => {
+    const rows = await transaction<Array<{ id: string }>>`
+      UPDATE courses
+      SET slug = ${input.slug}, title = ${input.title},
+        description = ${input.description}, status = ${input.status},
+        version = version + 1, updated_by_user_id = ${actor.userId},
+        published_by_user_id = ${publication.publishedByUserId},
+        published_at = ${publication.publishedAt}, updated_at = now()
+      WHERE id = ${courseId}
+      RETURNING id
+    `;
+    if (!rows[0]) throw new CourseContentError("NOT_FOUND");
+    await appendAudit(
+      transaction,
+      actor.userId,
+      "course.updated",
+      "course",
+      courseId,
+      context,
+    );
+  });
+}
+
+export async function deleteCourse(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  courseId: string,
+  confirmationTitle: string,
+  context: RequestAuditContext = {},
+): Promise<void> {
+  requireAdminActor(actor);
+  await sql.begin(async (transaction) => {
+    const rows = await transaction<Array<{ title: string }>>`
+      SELECT title
+      FROM courses
+      WHERE id = ${courseId}
+      FOR UPDATE
+    `;
+    const course = rows[0];
+    if (!course) throw new CourseContentError("NOT_FOUND");
+    if (course.title !== confirmationTitle) {
+      throw new CourseContentError("CONFIRMATION_MISMATCH");
+    }
+    await transaction`
+      DELETE FROM courses
+      WHERE id = ${courseId}
+    `;
+    await appendAudit(
+      transaction,
+      actor.userId,
+      "course.deleted",
+      "course",
+      courseId,
+      context,
+    );
+  });
 }
 
 export async function createSection(
@@ -256,6 +330,33 @@ export async function setSectionPublication(
   );
 }
 
+export async function updateSection(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  sectionId: string,
+  input: { slug: string; title: string; status: PublicationStatus },
+): Promise<void> {
+  requireAdminActor(actor);
+  const publication = publicationFields(input.status, actor.userId);
+  const rows = await sql<Array<{ id: string }>>`
+    UPDATE course_sections
+    SET slug = ${input.slug}, title = ${input.title}, status = ${input.status},
+      version = version + 1, updated_by_user_id = ${actor.userId},
+      published_by_user_id = ${publication.publishedByUserId},
+      published_at = ${publication.publishedAt}, updated_at = now()
+    WHERE id = ${sectionId}
+    RETURNING id
+  `;
+  if (!rows[0]) throw new CourseContentError("NOT_FOUND");
+  await appendAudit(
+    sql,
+    actor.userId,
+    "course.section.updated",
+    "course_section",
+    sectionId,
+  );
+}
+
 export async function reorderSectionMaterials(
   sql: DatabaseSql,
   actor: AuthSession,
@@ -299,6 +400,131 @@ export async function reorderSectionMaterials(
       transaction,
       actor.userId,
       "course.materials.reordered",
+      "course_section",
+      sectionId,
+      context,
+    );
+  });
+}
+
+export async function reorderCourseSections(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  courseId: string,
+  sectionIds: string[],
+  context: RequestAuditContext = {},
+): Promise<void> {
+  requireAdminActor(actor);
+  await sql.begin(async (transaction) => {
+    const rows = await transaction<Array<{ id: string; position: number }>>`
+      SELECT id, position
+      FROM course_sections
+      WHERE course_id = ${courseId}
+      ORDER BY position
+      FOR UPDATE
+    `;
+    const existingIds = rows.map((row) => row.id);
+    if (
+      existingIds.length !== sectionIds.length ||
+      new Set(sectionIds).size !== sectionIds.length ||
+      existingIds.some((id) => !sectionIds.includes(id))
+    ) {
+      throw new CourseContentError("NOT_FOUND");
+    }
+
+    const temporaryBase =
+      Math.max(-1, ...rows.map((row) => row.position)) + sectionIds.length + 1;
+    for (const [index, id] of sectionIds.entries()) {
+      await transaction`
+        UPDATE course_sections
+        SET position = ${temporaryBase + index}, updated_at = now()
+        WHERE id = ${id} AND course_id = ${courseId}
+      `;
+    }
+    for (const [position, id] of sectionIds.entries()) {
+      await transaction`
+        UPDATE course_sections
+        SET position = ${position}, version = version + 1,
+          updated_by_user_id = ${actor.userId}, updated_at = now()
+        WHERE id = ${id} AND course_id = ${courseId}
+      `;
+    }
+    await appendAudit(
+      transaction,
+      actor.userId,
+      "course.sections.reordered",
+      "course",
+      courseId,
+      context,
+    );
+  });
+}
+
+export async function deleteSection(
+  sql: DatabaseSql,
+  actor: AuthSession,
+  sectionId: string,
+  context: RequestAuditContext = {},
+): Promise<void> {
+  requireAdminActor(actor);
+  await sql.begin(async (transaction) => {
+    const sections = await transaction<
+      Array<{ course_id: string; position: number }>
+    >`
+      SELECT course_id, position
+      FROM course_sections
+      WHERE id = ${sectionId}
+      FOR UPDATE
+    `;
+    const section = sections[0];
+    if (!section) throw new CourseContentError("NOT_FOUND");
+
+    const materialRows = await transaction<Array<{ count: number }>>`
+      SELECT count(*)::int AS count
+      FROM course_materials
+      WHERE section_id = ${sectionId}
+    `;
+    if ((materialRows[0]?.count ?? 0) > 0) {
+      throw new CourseContentError("SECTION_NOT_EMPTY");
+    }
+
+    await transaction`
+      DELETE FROM course_sections
+      WHERE id = ${sectionId}
+    `;
+
+    const following = await transaction<Array<{ id: string; position: number }>>`
+      SELECT id, position
+      FROM course_sections
+      WHERE course_id = ${section.course_id}
+        AND position > ${section.position}
+      ORDER BY position
+      FOR UPDATE
+    `;
+    const temporaryBase =
+      Math.max(section.position, ...following.map((row) => row.position)) +
+      following.length +
+      1;
+    for (const [index, row] of following.entries()) {
+      await transaction`
+        UPDATE course_sections
+        SET position = ${temporaryBase + index}, updated_at = now()
+        WHERE id = ${row.id}
+      `;
+    }
+    for (const [index, row] of following.entries()) {
+      await transaction`
+        UPDATE course_sections
+        SET position = ${section.position + index}, version = version + 1,
+          updated_by_user_id = ${actor.userId}, updated_at = now()
+        WHERE id = ${row.id}
+      `;
+    }
+
+    await appendAudit(
+      transaction,
+      actor.userId,
+      "course.section.deleted",
       "course_section",
       sectionId,
       context,
@@ -475,6 +701,42 @@ export async function getStudentWorkspaceCourse(
     : null;
 }
 
+export async function getStudentCourses(
+  sql: DatabaseSql,
+  studentUserId: string,
+): Promise<StudentCourse[]> {
+  const rows = await sql<Array<{ slug: string }>>`
+    SELECT course.slug
+    FROM courses AS course
+    JOIN course_memberships AS membership
+      ON membership.course_id = course.id
+      AND membership.user_id = ${studentUserId}
+      AND membership.status = 'active'
+    WHERE course.status = 'published'
+    ORDER BY membership.granted_at, course.created_at
+  `;
+  const courses = await Promise.all(
+    rows.map(({ slug }) => getStudentCourse(sql, studentUserId, slug)),
+  );
+  return courses.filter((course): course is StudentCourse => course !== null);
+}
+
+export async function getStudentCourseCount(
+  sql: DatabaseSql,
+  studentUserId: string,
+): Promise<number> {
+  const rows = await sql<Array<{ count: number }>>`
+    SELECT count(*)::integer AS count
+    FROM courses AS course
+    JOIN course_memberships AS membership
+      ON membership.course_id = course.id
+      AND membership.user_id = ${studentUserId}
+      AND membership.status = 'active'
+    WHERE course.status = 'published'
+  `;
+  return rows[0]?.count ?? 0;
+}
+
 type StudentMaterialRow = {
   id: string;
   slug: string;
@@ -548,7 +810,7 @@ export async function getStudentMaterial(
 export async function saveMaterialProgress(
   sql: DatabaseSql,
   studentUserId: string,
-  input: { materialId: string; lastPosition?: string | null; completed: boolean },
+  input: { materialId: string; lastPosition?: string | null; completed?: boolean },
 ): Promise<void> {
   await sql.begin(async (transaction) => {
     const accessible = await transaction<Array<{ id: string }>>`
@@ -572,11 +834,15 @@ export async function saveMaterialProgress(
       )
       VALUES (
         ${input.materialId}, ${studentUserId}, ${input.lastPosition ?? null},
-        ${input.completed ? new Date() : null}
+        ${input.completed === true ? new Date() : null}
       )
       ON CONFLICT (material_id, user_id) DO UPDATE SET
         last_position = EXCLUDED.last_position,
-        completed_at = EXCLUDED.completed_at,
+        completed_at = CASE
+          WHEN ${input.completed === undefined}
+            THEN material_progress.completed_at
+          ELSE EXCLUDED.completed_at
+        END,
         updated_at = now()
     `;
   });

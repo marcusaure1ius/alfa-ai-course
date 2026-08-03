@@ -31,6 +31,7 @@ const resourceStatusLabels: Record<string, string> = {
 
 const operationLabels: Record<string, string> = {
   create_environment: "Создание среды",
+  install_environment: "Установка n8n",
   delete_environment: "Удаление среды",
 };
 
@@ -56,7 +57,7 @@ export default async function EnvironmentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const environment = await getToolEnvironmentDetail(getDatabase(), id);
+  const environment = await getToolEnvironmentDetail(getDatabase(), "n8n", id);
   if (!environment) notFound();
   const monthlyRoubles = environment.resources.reduce(
     (total, resource) => total + resource.monthlyRoubles,
@@ -82,13 +83,22 @@ export default async function EnvironmentDetailPage({
             </span>
           </div>
         </div>
-        {environment.publicUrl ? (
+        {environment.publicUrl && environment.managedGatewayVerified ? (
           <Button asChild>
-            <a href={environment.publicUrl} target="_blank" rel="noreferrer">
+            <a
+              href={`/api/admin/tools/n8n/launch?environmentId=${encodeURIComponent(environment.id)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
               Открыть среду
               <ExternalLink aria-hidden="true" />
             </a>
           </Button>
+        ) : environment.publicUrl ? (
+          <p className="max-w-xs text-sm text-muted-foreground" role="status">
+            Безопасный вход ещё настраивается. Ссылка появится после проверки
+            шлюза.
+          </p>
         ) : null}
       </div>
 

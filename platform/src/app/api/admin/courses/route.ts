@@ -59,7 +59,7 @@ export async function POST(request: Request): Promise<Response> {
     !isBoundedText(body.title, 2, 120) ||
     (body.description !== undefined && !isBoundedText(body.description, 0, 500))
   ) {
-    return courseError(400, "INVALID_INPUT", "Проверьте название, slug и описание.");
+    return courseError(400, "INVALID_INPUT", "Проверьте название, адрес и описание курса.");
   }
   try {
     const id = await createCourse(getDatabase(), access.session, {

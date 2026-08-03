@@ -17,7 +17,7 @@ fail() { printf 'not ok - %s\n' "$1" >&2; exit 1; }
 
 for guide in "${GUIDES[@]}"; do
   [[ -s "$guide" ]] || fail "missing guide: $guide"
-  grep -Eq 'Проверено[^0-9]*20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$guide" ||
+  grep -Eq '([Пп]роверено|[Пп]роверка)[^0-9]*20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$guide" ||
     fail "missing check date: $guide"
 done
 ok "five onboarding guides exist and state an ISO check date"
@@ -47,6 +47,14 @@ if grep -Eq 'git archive|sha256sum -c|(^|[[:space:]])scp[[:space:]]' "$ROOT/docs
 fi
 ok "Quick Start defines the published one-command domainless path"
 
+for guide in "$ROOT/docs/quick-start.md" "$ROOT/docs/timeweb-cloud.md" "$ROOT/docs/timeweb-clean-install.md" "$ROOT/docs/yandex-cloud.md"; do
+  grep -q '```powershell' "$guide" || fail "Windows PowerShell path missing: $guide"
+  grep -q 'Get-Command ssh, ssh-keygen' "$guide" || fail "Windows OpenSSH preflight missing: $guide"
+  grep -q 'Read-Host.*IPv4' "$guide" || fail "Windows interactive IPv4 input missing: $guide"
+done
+grep -q 'learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse' "$ROOT/docs/quick-start.md"
+ok "macOS/Linux and Windows PowerShell onboarding paths are explicit"
+
 grep -q 'SSH-сес' "$ROOT/docs/timeweb-cloud.md"
 grep -q 'SSH-сес' "$ROOT/docs/yandex-cloud.md"
 grep -q 'Authoritative\|authoritative' "$ROOT/docs/domain-and-dns.md"
@@ -54,8 +62,10 @@ grep -q 'AAAA' "$ROOT/docs/domain-and-dns.md"
 grep -q 'curl -k' "$ROOT/docs/domain-and-dns.md"
 ok "DNS and SSH troubleshooting keeps safe recovery boundaries"
 
-grep -Eq 'curl -fsSL .*install\.sh.*\| sh' "$ROOT/docs/timeweb-clean-install.md"
+grep -Eq 'curl -fsSL .*install\.sh.*\| (N8N_IMAGE_SOURCE=timeweb )?sh' "$ROOT/docs/timeweb-clean-install.md"
 grep -q 'покупать домен' "$ROOT/docs/timeweb-clean-install.md"
+grep -q 'N8N_IMAGE_SOURCE=timeweb' "$ROOT/docs/timeweb-clean-install.md"
+grep -q 'N8N_IMAGE_SOURCE=timeweb' "$ROOT/docs/quick-start.md"
 if grep -q 'aimolniya.ru' "${GUIDES[@]}"; then
   fail "instructor domain leaked into participant onboarding"
 fi

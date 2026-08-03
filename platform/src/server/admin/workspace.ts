@@ -29,16 +29,25 @@ export type AdminOverview = {
 
 const actionLabels: Record<string, string> = {
   "course.created": "Создан курс",
+  "course.updated": "Обновлён курс",
+  "course.deleted": "Удалён курс",
   "course.section.created": "Добавлен раздел",
+  "course.section.updated": "Обновлён раздел",
+  "course.section.deleted": "Удалён раздел",
+  "course.sections.reordered": "Изменён порядок разделов",
   "course.material.created": "Создан материал",
   "course.material.updated": "Обновлён материал",
   "course.publication.changed": "Изменена публикация курса",
   "course.section.publication.changed": "Изменена публикация раздела",
   "course.access.granted": "Открыт доступ ученику",
   "course.access.revoked": "Отозван доступ ученика",
+  "tool.access.granted": "Открыт доступ к n8n",
+  "tool.access.revoked": "Отозван доступ к n8n",
 };
 
-export async function getAdminOverview(sql: DatabaseSql): Promise<AdminOverview> {
+export async function getAdminOverview(
+  sql: DatabaseSql,
+): Promise<AdminOverview> {
   const [counts, activity] = await Promise.all([
     sql<
       Array<{
@@ -128,9 +137,9 @@ export async function getAdminOverview(sql: DatabaseSql): Promise<AdminOverview>
   if (row.draft_materials > 0) {
     attention.push({
       key: "materials",
-      title: "Черновики материалов",
+      title: "Черновики заданий",
       detail: "Можно проверить и опубликовать.",
-      href: "/admin/content",
+      href: "/admin/program",
       count: row.draft_materials,
       tone: "neutral",
     });
@@ -231,15 +240,63 @@ export type AdminCourseOption = {
   id: string;
   title: string;
   status: "draft" | "published";
+  publishedMaterialCount?: number;
+};
+
+export type AdminCourseItem = AdminCourseOption & {
+  slug: string;
+  description: string;
 };
 
 export async function getAdminCourses(
   sql: DatabaseSql,
-): Promise<AdminCourseOption[]> {
-  return sql<AdminCourseOption[]>`
-    SELECT id, title, status
-    FROM courses
-    ORDER BY created_at
+): Promise<AdminCourseItem[]> {
+  return sql<AdminCourseItem[]>`
+    SELECT
+      course.id, course.slug, course.title, course.description, course.status,
+      count(material.id) FILTER (WHERE material.status = 'published')::int
+        AS "publishedMaterialCount"
+    FROM courses AS course
+    LEFT JOIN course_materials AS material ON material.course_id = course.id
+    GROUP BY course.id
+    ORDER BY course.created_at
+  `;
+}
+
+export type AdminSectionOption = {
+  id: string;
+  slug: string;
+  title: string;
+  courseId: string;
+  courseTitle: string;
+  position: number;
+  status: "draft" | "published";
+  nextMaterialPosition: number;
+};
+
+export async function getAdminSections(
+  sql: DatabaseSql,
+): Promise<AdminSectionOption[]> {
+  return sql<AdminSectionOption[]>`
+    SELECT
+      section.id,
+      section.slug,
+      section.title,
+      section.course_id AS "courseId",
+      course.title AS "courseTitle",
+      section.position,
+      section.status,
+      coalesce(
+        (
+          SELECT max(material.position) + 1
+          FROM course_materials AS material
+          WHERE material.section_id = section.id
+        ),
+        0
+      )::int AS "nextMaterialPosition"
+    FROM course_sections AS section
+    JOIN courses AS course ON course.id = section.course_id
+    ORDER BY course.created_at, section.position
   `;
 }
 

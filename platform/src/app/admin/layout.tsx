@@ -10,9 +10,9 @@ export default async function AdminLayout({
 
   return (
     <SidebarProvider className="bg-background">
-      <AdminSidebar email={session.email} />
+      <AdminSidebar />
       <SidebarInset className="min-w-0 bg-background">
-        <AdminHeader />
+        <AdminHeader email={session.email} />
         {children}
       </SidebarInset>
     </SidebarProvider>

