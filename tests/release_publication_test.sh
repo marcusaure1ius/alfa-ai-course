@@ -3,8 +3,8 @@
 set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+RELEASE_DOC="$ROOT/docs/release-publication.md"
 STABLE_URL='https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh'
-VERSIONED_URL='https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.1/install.sh'
 COUNT=0
 
 ok() { COUNT=$((COUNT + 1)); printf 'ok %d - %s\n' "$COUNT" "$1"; }
@@ -24,11 +24,18 @@ for file in \
   "$ROOT/docs/quick-start.md" \
   "$ROOT/docs/installation.md" \
   "$ROOT/docs/timeweb-clean-install.md" \
-  "$ROOT/docs/release-publication.md"; do
+  "$RELEASE_DOC"; do
   grep -Fq "$STABLE_URL" "$file" || fail "stable install URL missing: ${file#"$ROOT/"}"
 done
-grep -Fq "$VERSIONED_URL" "$ROOT/docs/release-publication.md" \
-  || fail 'immutable v0.1.1 URL is missing'
+
+# The pinned release moves with every published installer, so the documented
+# version is read here instead of duplicated as a constant that silently rots.
+PINNED_VERSION="$(sed -nE 's/^- immutable (v[0-9]+\.[0-9]+\.[0-9]+) installer: .*/\1/p' "$RELEASE_DOC")"
+[[ "$(printf '%s\n' "$PINNED_VERSION" | grep -c .)" == '1' ]] \
+  || fail 'exactly one immutable installer version must be documented'
+grep -Fq "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/${PINNED_VERSION}/install.sh" \
+  "$RELEASE_DOC" \
+  || fail "immutable ${PINNED_VERSION} URL does not match the documented version"
 ok 'stable and immutable GitHub Release URLs are documented'
 
 if git -C "$ROOT" grep -nE 'RELEASE-HOST\.example|REAL-STABLE-HOST' -- '*.md'; then

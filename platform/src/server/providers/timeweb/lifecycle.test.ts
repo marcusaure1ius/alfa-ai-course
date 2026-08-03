@@ -15,11 +15,13 @@ import {
 } from "./lifecycle";
 import { TimewebProviderError } from "./read-only";
 import {
+  bootstrappingInstallStep,
   reserveIpStep,
   resolveDnsAmbiguityStep,
   resolvePublicIpAmbiguityStep,
   resolveServerAmbiguityStep,
 } from "@/workflows/infrastructure/steps";
+import { STARTER_KIT_BOOTSTRAP_PROFILE } from "./bootstrap-profile";
 
 describe("production Timeweb lifecycle gate", () => {
   it("fails closed instead of selecting fake when the provider credential disappears", () => {
@@ -337,6 +339,27 @@ describe("production Timeweb lifecycle gate", () => {
         }
       ).maxRetries,
     ).toBe(9);
+  });
+
+  it("bounds bootstrap observation to the systemd service timeout", () => {
+    expect(STARTER_KIT_BOOTSTRAP_PROFILE.observationSeconds).toBeGreaterThan(
+      STARTER_KIT_BOOTSTRAP_PROFILE.serviceTimeoutSeconds,
+    );
+    expect(STARTER_KIT_BOOTSTRAP_PROFILE.observationSeconds).toBeLessThanOrEqual(
+      3600,
+    );
+    expect(
+      (
+        bootstrappingInstallStep as typeof bootstrappingInstallStep & {
+          maxRetries?: number;
+        }
+      ).maxRetries,
+    ).toBe(
+      Math.ceil(
+        STARTER_KIT_BOOTSTRAP_PROFILE.observationSeconds /
+          STARTER_KIT_BOOTSTRAP_PROFILE.probeIntervalSeconds,
+      ) - 1,
+    );
   });
 
   it("clears a DNS marker only for a definitive fresh-POST rejection", async () => {

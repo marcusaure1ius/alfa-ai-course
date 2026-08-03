@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StudentCourseAccess } from "@/components/admin/student-course-access";
+import { StudentN8nAccessControl } from "@/components/admin/student-n8n-access";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +11,11 @@ import {
   getAdminStudent,
 } from "@/server/admin/workspace";
 import { getDatabase } from "@/server/db/client";
+import {
+  getN8nAccessDateDefaults,
+  getAdminStudentN8nAccess,
+  getN8nStudentAccessLicenseGate,
+} from "@/server/tools/student-access";
 
 export default async function StudentDetailPage({
   params,
@@ -18,9 +24,10 @@ export default async function StudentDetailPage({
 }) {
   const { id } = await params;
   const sql = getDatabase();
-  const [student, courses] = await Promise.all([
+  const [student, courses, n8nAccess] = await Promise.all([
     getAdminStudent(sql, id),
     getAdminCourses(sql),
+    getAdminStudentN8nAccess(sql, id),
   ]);
   if (!student) notFound();
 
@@ -32,9 +39,11 @@ export default async function StudentDetailPage({
           Ученики
         </Link>
       </Button>
-      <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-page-title">{student.email}</h1>
+      <div className="mt-6 flex min-w-0 flex-wrap items-start justify-between gap-4">
+        <div className="w-full min-w-0 sm:w-auto sm:flex-1">
+          <h1 className="font-display break-all text-page-title sm:break-normal">
+            {student.email}
+          </h1>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Badge variant={student.status === "active" ? "success" : "destructive"}>
               {student.status === "active" ? "Активен" : "Заблокирован"}
@@ -53,16 +62,35 @@ export default async function StudentDetailPage({
 
       <section className="mt-10 max-w-3xl" aria-labelledby="access-title">
         <h2 id="access-title" className="font-display text-xl">
-          Доступ к курсу
+          Доступ к курсам
         </h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Изменение применяется сразу к кабинету ученика.
+          Назначайте ученику один или несколько курсов. Изменения применяются
+          сразу.
         </p>
         <div className="mt-4">
           <StudentCourseAccess
             studentId={student.id}
             currentCourseIds={student.courseIds}
             courses={courses}
+          />
+        </div>
+      </section>
+
+      <section className="mt-10 max-w-3xl" aria-labelledby="tools-access-title">
+        <h2 id="tools-access-title" className="font-display text-xl">
+          Доступ к инструментам
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Инструменты назначаются отдельно. Для каждого можно задать свой срок
+          доступа.
+        </p>
+        <div className="mt-4">
+          <StudentN8nAccessControl
+            studentId={student.id}
+            access={n8nAccess}
+            licenseGate={getN8nStudentAccessLicenseGate()}
+            expiryDates={getN8nAccessDateDefaults()}
           />
         </div>
       </section>

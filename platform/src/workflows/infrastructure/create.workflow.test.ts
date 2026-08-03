@@ -88,6 +88,7 @@ describe("Vercel Workflow orchestration", () => {
         method: "POST",
         headers,
         body: JSON.stringify({
+          toolType: "n8n",
           name: "API среда",
           idempotencyKey: "proxy-create-key-0001",
           providerResourceId: "54321",
@@ -106,6 +107,7 @@ describe("Vercel Workflow orchestration", () => {
           method: "DELETE",
           headers,
           body: JSON.stringify({
+            toolType: "n8n",
             confirmationName: "API среда",
             idempotencyKey: "proxy-delete-key-0001",
             providerResourceId: "54321",
@@ -126,6 +128,7 @@ describe("Vercel Workflow orchestration", () => {
           method: "DELETE",
           headers,
           body: JSON.stringify({
+            toolType: "n8n",
             confirmationName: "API среда",
             idempotencyKey: "missing-loss-confirmation-01",
           }),
@@ -145,6 +148,7 @@ describe("Vercel Workflow orchestration", () => {
           method: "POST",
           headers,
           body: JSON.stringify({
+            toolType: "n8n",
             confirmationName: "API среда",
             confirmedLoss: true,
             idempotencyKey: "proxy-install-key-0001",
@@ -179,6 +183,7 @@ describe("Vercel Workflow orchestration", () => {
           "x-csrf-token": csrf.token,
         },
         body: JSON.stringify({
+          toolType: "n8n",
           name: "API среда",
           idempotencyKey: "api-create-idempotency-01",
           simulation: "success",
@@ -253,6 +258,7 @@ describe("Vercel Workflow orchestration", () => {
         method: "POST",
         headers,
         body: JSON.stringify({
+          toolType: "n8n",
           name: "Install среда",
           idempotencyKey: "install-create-idempotency-01",
           simulation: "success",
@@ -280,6 +286,7 @@ describe("Vercel Workflow orchestration", () => {
           method: "POST",
           headers,
           body: JSON.stringify({
+            toolType: "n8n",
             confirmationName: "Install среда",
             confirmedLoss: true,
             idempotencyKey: "install-operation-idempotency-01",
@@ -357,6 +364,7 @@ describe("Vercel Workflow orchestration", () => {
           method: "DELETE",
           headers,
           body: JSON.stringify({
+            toolType: "n8n",
             confirmationName: "Install среда",
             confirmedLoss: true,
             idempotencyKey: "install-cleanup-idempotency-01",

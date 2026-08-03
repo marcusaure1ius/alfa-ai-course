@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSql } from "../../db/client";
 import type { FakeScenario } from "../../operations/contracts";
 import type { OwnedProviderResource, TimewebResourceKind } from "./contracts";
+import { STARTER_KIT_BOOTSTRAP_PROFILE } from "./bootstrap-profile";
 
 export class FakeProviderError extends Error {
   constructor(
@@ -166,16 +167,18 @@ export class FakeTimewebAdapter {
         INSERT INTO software_installations (
           id, environment_id, profile_name, profile_version,
           software_version, status, health_status, installed_at,
-          last_checked_at
+          last_checked_at, managed_gateway_verified_at
         )
         VALUES (
           ${randomUUID()}, ${this.environmentId}, 'starter-kit',
-          'starter-kit-v0.1.0', '2.29.10',
-          'ready_owner_setup_required', 'healthy', now(), now()
+          ${STARTER_KIT_BOOTSTRAP_PROFILE.version},
+          ${STARTER_KIT_BOOTSTRAP_PROFILE.n8nVersion},
+          'ready_owner_setup_required', 'healthy', now(), now(), now()
         )
         ON CONFLICT (environment_id, profile_name) DO UPDATE SET
           status = EXCLUDED.status,
           health_status = EXCLUDED.health_status,
+          managed_gateway_verified_at = EXCLUDED.managed_gateway_verified_at,
           installed_at = COALESCE(
             software_installations.installed_at,
             EXCLUDED.installed_at

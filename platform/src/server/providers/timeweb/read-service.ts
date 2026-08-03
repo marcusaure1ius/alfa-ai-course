@@ -17,6 +17,40 @@ import {
 
 type ServerEnvironment = Readonly<Record<string, string | undefined>>;
 
+const PUBLISHED_PRICE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
+const PUBLISHED_PRICE_FUTURE_TOLERANCE_MS = 5 * 60 * 1_000;
+
+export function readDocumentedPublicIpMonthlyRoubles(
+  environment: ServerEnvironment,
+  now = new Date(),
+): number | null {
+  const rawPrice = environment.TIMEWEB_PUBLIC_IPV4_MONTHLY_ROUBLES?.trim();
+  const rawVerifiedAt = environment.TIMEWEB_PUBLIC_IPV4_PRICE_VERIFIED_AT?.trim();
+  if (
+    !rawPrice ||
+    !/^\d{1,5}(?:\.\d{1,2})?$/.test(rawPrice) ||
+    !rawVerifiedAt
+  ) {
+    return null;
+  }
+
+  const price = Number(rawPrice);
+  const verifiedAt = Date.parse(rawVerifiedAt);
+  const ageMs = now.getTime() - verifiedAt;
+  if (
+    !Number.isFinite(price) ||
+    price <= 0 ||
+    price > 10_000 ||
+    !Number.isFinite(verifiedAt) ||
+    ageMs < -PUBLISHED_PRICE_FUTURE_TOLERANCE_MS ||
+    ageMs > PUBLISHED_PRICE_MAX_AGE_MS
+  ) {
+    return null;
+  }
+
+  return price;
+}
+
 export function createTimewebReadAdapter(
   environment: ServerEnvironment = process.env,
   fetchImpl: typeof fetch = fetch,
@@ -33,7 +67,12 @@ export function createTimewebReadAdapter(
   }
   return {
     runtime,
-    adapter: new TimewebReadOnlyAdapter(environment.TIMEWEB_API_TOKEN ?? "", fetchImpl),
+    adapter: new TimewebReadOnlyAdapter(
+      environment.TIMEWEB_API_TOKEN ?? "",
+      fetchImpl,
+      8_000,
+      readDocumentedPublicIpMonthlyRoubles(environment),
+    ),
   };
 }
 

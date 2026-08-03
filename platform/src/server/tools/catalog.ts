@@ -8,29 +8,67 @@ import {
 import type { DatabaseSql } from "@/server/db/client";
 
 export async function getToolCatalog(sql: DatabaseSql): Promise<ToolCatalogItem[]> {
-  const rows = await sql<
-    Array<{
-      id: string;
-      name: string;
-      status: string;
-      public_url: string | null;
-      updated_at: Date;
-    }>
-  >`
-    SELECT id, name, status, public_url, updated_at
-    FROM environments
-    WHERE status <> 'deleted'
-    ORDER BY created_at
-  `;
+  const [rows, serviceRows] = await Promise.all([
+    sql<
+      Array<{
+        id: string;
+        name: string;
+        status: string;
+        public_url: string | null;
+        updated_at: Date;
+        access_count: number;
+        tool_type: string;
+      }>
+    >`
+      SELECT
+        environment.id, environment.name, environment.status,
+        environment.public_url, environment.updated_at, environment.tool_type,
+        (
+          SELECT count(*)::int
+          FROM tool_access AS access
+          WHERE access.environment_id = environment.id
+            AND access.status = 'active'
+            AND access.expires_at > now()
+        ) AS access_count
+      FROM environments AS environment
+      WHERE environment.status <> 'deleted'
+      ORDER BY environment.created_at
+    `,
+    sql<
+      Array<{
+        tool_type: string;
+        student_access_enabled: boolean;
+        active_access_count: number;
+      }>
+    >`
+      SELECT
+        coalesce(setting.tool_type, access.tool_type) AS tool_type,
+        coalesce(setting.student_access_enabled, true) AS student_access_enabled,
+        coalesce(access.active_access_count, 0)::int AS active_access_count
+      FROM tool_service_settings AS setting
+      FULL OUTER JOIN (
+        SELECT tool_type, count(*)::int AS active_access_count
+        FROM tool_access
+        WHERE status = 'active' AND expires_at > now()
+        GROUP BY tool_type
+      ) AS access ON access.tool_type = setting.tool_type
+    `,
+  ]);
   return composeToolCatalog(
     toolDefinitions,
     rows.map((row) => ({
       id: row.id,
-      toolType: "n8n",
+      toolType: row.tool_type,
       name: row.name,
       status: row.status,
       publicUrl: row.public_url,
       updatedAt: row.updated_at.toISOString(),
+      accessCount: row.access_count,
+    })),
+    serviceRows.map((row) => ({
+      toolType: row.tool_type,
+      studentAccessEnabled: row.student_access_enabled,
+      activeAccessCount: row.active_access_count,
     })),
   );
 }
@@ -40,6 +78,7 @@ export type ToolEnvironmentDetail = {
   name: string;
   status: string;
   publicUrl: string | null;
+  managedGatewayVerified: boolean;
   updatedAt: string;
   provider: string | null;
   region: string | null;
@@ -62,8 +101,23 @@ export type ToolEnvironmentDetail = {
   }>;
 };
 
+export async function environmentBelongsToTool(
+  sql: DatabaseSql,
+  toolType: string,
+  environmentId: string,
+): Promise<boolean> {
+  const rows = await sql<Array<{ present: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1 FROM environments
+      WHERE id = ${environmentId} AND tool_type = ${toolType}
+    ) AS present
+  `;
+  return rows[0]?.present ?? false;
+}
+
 export async function getToolEnvironmentDetail(
   sql: DatabaseSql,
+  toolType: string,
   environmentId: string,
 ): Promise<ToolEnvironmentDetail | null> {
   const rows = await sql<
@@ -78,17 +132,25 @@ export async function getToolEnvironmentDetail(
       zone_id: string | null;
       preset_id: string | null;
       image_id: string | null;
+      managed_gateway_verified: boolean;
     }>
   >`
     SELECT
       environment.id, environment.name, environment.status,
       environment.public_url, environment.updated_at,
       profile.provider, profile.region_id, profile.zone_id,
-      profile.preset_id, profile.image_id
+      profile.preset_id, profile.image_id,
+      EXISTS (
+        SELECT 1 FROM software_installations AS installation
+        WHERE installation.environment_id = environment.id
+          AND installation.profile_name = 'starter-kit'
+          AND installation.managed_gateway_verified_at IS NOT NULL
+      ) AS managed_gateway_verified
     FROM environments AS environment
     LEFT JOIN infrastructure_profiles AS profile
       ON profile.id = environment.profile_id
     WHERE environment.id = ${environmentId}
+      AND environment.tool_type = ${toolType}
       AND environment.status <> 'deleted'
     LIMIT 1
   `;
@@ -138,6 +200,7 @@ export async function getToolEnvironmentDetail(
     name: environment.name,
     status: environment.status,
     publicUrl: environment.public_url,
+    managedGatewayVerified: environment.managed_gateway_verified,
     updatedAt: environment.updated_at.toISOString(),
     provider: environment.provider,
     region: environment.region_id,

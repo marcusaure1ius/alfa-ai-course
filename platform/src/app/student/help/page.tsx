@@ -1,25 +1,86 @@
-import { CircleHelp } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 
-const topics = [
+import {
+  StudentHelpTopics,
+  type StudentHelpTopic,
+} from "@/components/student/student-help-topics";
+import { StudentSupportContact } from "@/components/student/student-support-contact";
+import { requirePageSession } from "@/server/auth/page-access";
+import { getStudentWorkspaceCourse } from "@/server/course/repository";
+import { getDatabase } from "@/server/db/client";
+
+const topics: StudentHelpTopic[] = [
   {
-    title: "Не открывается n8n",
-    description: "Проверьте состояние доступа и сообщите, что видите на экране.",
+    id: "course-access",
+    title: "Курс ещё не открылся",
+    description: "В разделе «Мои курсы» нет нужного курса.",
+    steps: [
+      "Обновите страницу «Мои курсы» один раз и проверьте, что вошли под адресом, на который получили приглашение.",
+      "Если доступ выдавали недавно, выйдите из Neurokurs, войдите снова и откройте список курсов.",
+    ],
+    expected: "В списке появится карточка курса, из которой можно открыть программу.",
+    fallback:
+      "Подготовьте адрес аккаунта и название курса. Не присылайте пароль, код входа или cookie.",
+    action: { href: "/student", label: "Проверить мои курсы" },
   },
   {
-    title: "Не получается выполнить шаг",
-    description: "Укажите материал и место, на котором возник вопрос.",
+    id: "tool-expired",
+    title: "Срок доступа к инструменту завершён",
+    description: "Инструмент показывает состояние «Срок доступа завершён».",
+    steps: [
+      "Откройте каталог инструментов и ещё раз проверьте текст состояния нужного сервиса.",
+      "Сохраните только собственные учебные результаты, которые доступны без передачи логинов или ключей.",
+    ],
+    expected:
+      "После продления преподавателем карточка покажет новое состояние и доступное действие.",
+    fallback:
+      "Сообщите преподавателю название курса, инструмента и видимый текст состояния. Перенос среды не выполняется автоматически.",
+    action: { href: "/student/tools", label: "Открыть инструменты" },
   },
   {
-    title: "Материал пропал из программы",
-    description: "Доступ или публикация могли измениться — это проверит преподаватель.",
+    id: "tool-problem",
+    title: "Инструмент не открывается или сообщает об ошибке",
+    description: "Ссылка недоступна, загрузка не заканчивается или сервис показывает ошибку.",
+    steps: [
+      "Вернитесь в карточку инструмента и запомните точный текст его состояния в Neurokurs.",
+      "Повторите открытие один раз. Запишите последний успешный шаг и точный текст ошибки без секретов.",
+    ],
+    expected: "Инструмент откроется в отдельной вкладке или покажет понятное состояние ожидания.",
+    fallback:
+      "Используйте «Сообщить о проблеме» в карточке: диалог подготовит безопасное описание для известного канала преподавателя.",
+    action: { href: "/student/tools", label: "Вернуться к инструментам" },
   },
   {
-    title: "Другой вопрос",
-    description: "Опишите ожидаемый результат и то, что уже попробовали.",
+    id: "material-help",
+    title: "Не получается выполнить шаг материала",
+    description: "Инструкция непонятна или результат отличается от ожидаемого.",
+    steps: [
+      "Откройте программу и скопируйте точное название материала.",
+      "Запишите заголовок раздела, ожидаемый результат и последний шаг, который сработал.",
+    ],
+    expected: "После повторения шага результат совпадёт с описанием в материале.",
+    fallback:
+      "Передайте преподавателю название материала и безопасное описание результата без рабочих данных и персональной информации.",
+    action: { href: "/student/program", label: "Открыть программу" },
+  },
+  {
+    id: "student-error",
+    title: "Neurokurs не загрузил страницу",
+    description: "Появился экран «Не удалось загрузить данные» или ошибка повторяется.",
+    steps: [
+      "Нажмите «Повторить» один раз и дождитесь результата.",
+      "Если ошибка осталась, запишите название экрана, точный текст и примерное время появления.",
+    ],
+    expected: "Страница загрузится без изменения вашего доступа и прогресса.",
+    fallback:
+      "Сообщите подготовленные данные преподавателю. Не прикладывайте cookie, токены, ключи или снимки с персональными данными.",
+    action: { href: "/student", label: "Вернуться к моим курсам" },
   },
 ];
 
-export default function StudentHelpPage() {
+export default async function StudentHelpPage() {
+  const session = await requirePageSession();
+  const course = await getStudentWorkspaceCourse(getDatabase(), session.userId);
   return (
     <div className="px-5 py-8 sm:px-8 sm:py-12 xl:px-12">
       <div className="mx-auto max-w-5xl">
@@ -30,31 +91,35 @@ export default function StudentHelpPage() {
         <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">
           Короткая памятка: что проверить и какую информацию подготовить.
         </p>
-        <div className="mt-9 overflow-hidden rounded-2xl border bg-card">
-          {topics.map((topic, index) => (
-            <div
-              key={topic.title}
-              className={
-                "flex min-h-24 items-center gap-4 px-5 py-5 sm:px-7 " +
-                (index > 0 ? "border-t" : "")
-              }
-            >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted">
-                <CircleHelp className="size-5" aria-hidden="true" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="font-display block text-lg">{topic.title}</span>
-                <span className="mt-1 block text-sm leading-6 text-muted-foreground">
-                  {topic.description}
-                </span>
-              </span>
-            </div>
-          ))}
+        <div className="mt-8 flex max-w-3xl items-start gap-3 rounded-xl bg-brand-soft p-5">
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
+          <div>
+            <h2 className="font-semibold">Перед отправкой сообщения</h2>
+            <p className="mt-1 text-base leading-7 text-muted-foreground">
+              Не прикладывайте пароли, коды входа, API‑ключи, cookie, документы
+              с персональными данными или рабочую информацию клиентов. Для
+              диагностики достаточно названия экрана, видимого состояния и
+              точного текста ошибки.
+            </p>
+          </div>
         </div>
-        <p className="mt-6 text-sm leading-6 text-muted-foreground">
-          Если нужна помощь, свяжитесь с преподавателем тем способом, который
-          указан для вашего курса.
-        </p>
+
+        <div className="mt-6">
+          <StudentSupportContact
+            courseTitle={course?.title ?? null}
+            configuredContact={null}
+          />
+        </div>
+
+        <div className="mt-8">
+          <h2 className="font-display text-2xl">Выберите ситуацию</h2>
+          <p className="mt-2 max-w-2xl text-base leading-7 text-muted-foreground">
+            Откройте подходящую тему и выполните шаги по порядку.
+          </p>
+          <div className="mt-5">
+            <StudentHelpTopics topics={topics} />
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { start } from "@workflow/core/runtime";
 import { requireFreshAdmin } from "@/server/auth/access";
 import { verifyCsrfRequest } from "@/server/auth/csrf";
 import { getDatabase } from "@/server/db/client";
+import { environmentBelongsToTool } from "@/server/tools/catalog";
 import {
   fakeScenario,
   hasOnlyInputKeys,
@@ -30,11 +31,13 @@ export async function DELETE(
     !body ||
     !hasOnlyInputKeys(body, [
       "confirmationName",
+      "toolType",
       "confirmedLoss",
       "idempotencyKey",
       "simulation",
     ]) ||
     typeof body.confirmationName !== "string" ||
+    typeof body.toolType !== "string" ||
     body.confirmedLoss !== true ||
     typeof body.idempotencyKey !== "string" ||
     body.idempotencyKey.length < 16 ||
@@ -45,6 +48,9 @@ export async function DELETE(
   const { id } = await context.params;
   const scenario = fakeScenario(body.simulation);
   try {
+    if (!(await environmentBelongsToTool(getDatabase(), body.toolType, id))) {
+      return operationError(409, "TOOL_ENVIRONMENT_MISMATCH", "Среда сервиса не найдена.");
+    }
     const reserved = await reserveDeleteOperation(getDatabase(), access.session, {
       environmentId: id,
       confirmationName: body.confirmationName,

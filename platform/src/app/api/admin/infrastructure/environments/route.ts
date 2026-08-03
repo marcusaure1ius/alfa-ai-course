@@ -23,6 +23,10 @@ export const runtime = "nodejs";
 export async function GET(request: Request): Promise<Response> {
   const access = await requireAdmin(request);
   if (!access.ok) return access.response;
+  const toolType = new URL(request.url).searchParams.get("toolType");
+  if (!toolType || !/^[a-z][a-z0-9_-]{1,63}$/.test(toolType)) {
+    return operationError(400, "INVALID_TOOL_TYPE", "Проверьте тип сервиса.");
+  }
   const rows = await getDatabase()<
     {
       id: string;
@@ -31,6 +35,7 @@ export async function GET(request: Request): Promise<Response> {
       updated_at: Date;
       public_url: string | null;
       installation_status: string | null;
+      managed_gateway_verified: boolean;
       current_operation: {
         id: string;
         kind: string;
@@ -61,6 +66,13 @@ export async function GET(request: Request): Promise<Response> {
           AND software_installations.profile_name = 'starter-kit'
         LIMIT 1
       ) AS installation_status,
+      EXISTS (
+        SELECT 1
+        FROM software_installations
+        WHERE software_installations.environment_id = environments.id
+          AND software_installations.profile_name = 'starter-kit'
+          AND software_installations.managed_gateway_verified_at IS NOT NULL
+      ) AS managed_gateway_verified,
       (
         SELECT jsonb_build_object(
           'id', operations.id,
@@ -138,6 +150,7 @@ export async function GET(request: Request): Promise<Response> {
           AND provider_resources.lifecycle_status <> 'deleted'
       ), '[]'::jsonb) AS owned_resources
     FROM environments
+    WHERE environments.tool_type = ${toolType}
     ORDER BY environments.created_at DESC
   `;
   return Response.json(
@@ -151,6 +164,8 @@ export async function GET(request: Request): Promise<Response> {
         publicUrl: row.status === "deleted" ? null : row.public_url,
         installationStatus:
           row.status === "deleted" ? "deleted" : row.installation_status,
+        managedGatewayVerified:
+          row.status === "deleted" ? false : row.managed_gateway_verified,
         currentOperation: row.current_operation,
         publicIp: row.public_ip,
         monthlyRoubles: row.monthly_roubles,
@@ -177,11 +192,13 @@ export async function POST(request: Request): Promise<Response> {
     !body ||
     !hasOnlyInputKeys(body, [
       "name",
+      "toolType",
       "idempotencyKey",
       "simulation",
       "deployment",
     ]) ||
     typeof body.name !== "string" ||
+    body.toolType !== "n8n" ||
     body.name.trim().length < 2 ||
     body.name.length > 80 ||
     typeof body.idempotencyKey !== "string" ||

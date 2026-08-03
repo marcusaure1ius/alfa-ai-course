@@ -658,6 +658,65 @@ export async function reserveDeleteOperation(
           created: false,
         };
       }
+      const activeOperations = await transaction<
+        { id: string; kind: string }[]
+      >`
+        SELECT id, kind
+        FROM operations
+        WHERE environment_id = ${input.environmentId}
+          AND status IN ('queued', 'running')
+          AND kind IN (
+            'create_environment',
+            'install_environment',
+            'delete_environment'
+          )
+        FOR UPDATE
+      `;
+      const activeOperation = activeOperations[0];
+      if (activeOperation) {
+        if (activeOperation.kind !== "install_environment") {
+          throw new OperationConflictError("INVALID_STATE");
+        }
+        const resumable = await transaction<{ resumable: boolean }[]>`
+          SELECT COALESCE((
+            SELECT
+              operation_steps.status = 'failed'
+              AND operation_steps.retry_class = 'transient'
+              AND operation_steps.execution_token IS NULL
+              AND operation_steps.lease_expires_at IS NULL
+              AND operation_steps.updated_at < now() - interval '2 minutes'
+            FROM operation_steps
+            WHERE operation_steps.operation_id = ${activeOperation.id}
+              AND operation_steps.status <> 'succeeded'
+            ORDER BY operation_steps.step_order DESC
+            LIMIT 1
+          ), false) AS resumable
+        `;
+        if (!resumable[0]?.resumable) {
+          throw new OperationConflictError("INVALID_STATE");
+        }
+        await transaction`
+          UPDATE operations
+          SET status = 'cancelled', error_code = 'CLEANUP_REQUESTED',
+              error_message_redacted =
+                'Прерванная установка отменена перед удалением среды.',
+              finished_at = now(), state_version = state_version + 1,
+              updated_at = now()
+          WHERE id = ${activeOperation.id}
+            AND status = 'running'
+        `;
+        await transaction`
+          INSERT INTO audit_events (
+            id, actor_user_id, action, subject_type, subject_id, outcome, metadata
+          )
+          VALUES (
+            ${randomUUID()}, ${actor.userId},
+            'operation.install_n8n.cancelled_for_delete', 'operation',
+            ${activeOperation.id}, 'success',
+            ${transaction.json({ environmentId: input.environmentId })}
+          )
+        `;
+      }
       const rows = await transaction<{ id: string }[]>`
         UPDATE environments
         SET status = 'deleting', updated_at = now()

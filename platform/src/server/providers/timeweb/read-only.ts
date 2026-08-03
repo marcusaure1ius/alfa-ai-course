@@ -210,6 +210,7 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
     token: string,
     private readonly fetchImpl: FetchLike = fetch,
     private readonly timeoutMs = 8_000,
+    private readonly documentedPublicIpMonthlyRoubles: number | null = null,
   ) {
     if (token.length < 8) {
       throw new TimewebProviderError(
@@ -371,7 +372,9 @@ export class TimewebReadOnlyAdapter implements TimewebReadAdapter {
       operatingSystems,
       locations,
       floatingIps,
-      publicIpMonthlyRoubles: publicIpMonthlyPrice(serviceCostsPayload),
+      publicIpMonthlyRoubles:
+        publicIpMonthlyPrice(serviceCostsPayload) ??
+        this.documentedPublicIpMonthlyRoubles,
       projects,
       sshKeys,
       capabilities: {

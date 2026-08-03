@@ -61,6 +61,35 @@ describe("LoginForm", () => {
     expect(password.readOnly).toBe(false);
   });
 
+  it("shows and hides the password without changing its value", () => {
+    render(<LoginForm />);
+    const password = screen.getByLabelText("Пароль") as HTMLInputElement;
+    fireEvent.focus(password);
+    fireEvent.change(password, { target: { value: "twelve-characters" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать пароль" }));
+    expect(password.type).toBe("text");
+    expect(password.value).toBe("twelve-characters");
+
+    fireEvent.click(screen.getByRole("button", { name: "Скрыть пароль" }));
+    expect(password.type).toBe("password");
+    expect(password.value).toBe("twelve-characters");
+  });
+
+  it("announces inline validation and focuses the first invalid field", () => {
+    render(<LoginForm />);
+    const password = screen.getByLabelText("Пароль") as HTMLInputElement;
+    fireEvent.focus(password);
+    fireEvent.change(password, { target: { value: "short" } });
+    fireEvent.click(screen.getByRole("button", { name: "Войти" }));
+
+    const email = screen.getByLabelText("Email") as HTMLInputElement;
+    expect(document.activeElement).toBe(email);
+    expect(email.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByText("Введите email.").getAttribute("role")).toBe("alert");
+    expect(password.getAttribute("aria-invalid")).toBe("true");
+  });
+
   it.each([false, true])(
     "has no automated accessibility violations (inverse=%s)",
     async (inverse) => {

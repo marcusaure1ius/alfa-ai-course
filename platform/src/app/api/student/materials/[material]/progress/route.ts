@@ -21,12 +21,16 @@ export async function PUT(
   const access = await requireSession(request);
   if (!access.ok) return access.response;
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const hasLastPosition = body
+    ? Object.prototype.hasOwnProperty.call(body, "lastPosition")
+    : false;
   if (
     !body ||
     !hasExactKeys(body, ["lastPosition", "completed"]) ||
+    !hasLastPosition ||
     (body.lastPosition !== null &&
       (typeof body.lastPosition !== "string" || body.lastPosition.length > 160)) ||
-    typeof body.completed !== "boolean"
+    (body.completed !== undefined && typeof body.completed !== "boolean")
   ) {
     return courseError(400, "INVALID_INPUT", "Проверьте прогресс материала.");
   }
@@ -35,7 +39,7 @@ export async function PUT(
     await saveMaterialProgress(getDatabase(), access.session.userId, {
       materialId,
       lastPosition: body.lastPosition as string | null,
-      completed: body.completed,
+      completed: body.completed as boolean | undefined,
     });
     return noStoreJson({ version: "course-v1", materialId });
   } catch (error) {
