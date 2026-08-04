@@ -13,6 +13,31 @@ Releases.
 - Реальные Generic/Yandex/GigaChat, Telegram, email и CRM provider smokes
   остаются external-unverified, если для конкретного provider не указано иное.
 
+## [0.1.4] - 2026-08-04
+
+Первый релиз из консолидированного репозитория
+`marcusaure1ius/alfa-ai-course`. Канал установки переехал туда же.
+
+### Added
+
+- Обход Docker Hub `429` через официальный proxy Timeweb в основной ветке.
+- Технический E2E публичной установки на чистом VPS как отдельное evidence.
+
+### Changed
+
+- Payload one-command installer больше не содержит исходники Course Control
+  Plane: границы distributable заданы в `.gitattributes` и закреплены тестом.
+- Провижининг платформы указывает на новый installer; версия bootstrap-профиля
+  поднята до `starter-kit-v0.1.5`, поэтому сохранённый план со старым
+  установщиком отвергается как `INVALID_INSTALL_PLAN`.
+- Разведена коллизия трёх ADR-0012.
+
+### Прочее
+
+Релизы `0.1.2` и `0.1.3` публиковались из релизной ветки и отдельных записей
+здесь не получили. Они остаются доступны в заархивированном репозитории
+`n8n-entrepreneur-starter-kit` как путь отката.
+
 ## [0.1.1] - 2026-07-31
 
 ### Added
