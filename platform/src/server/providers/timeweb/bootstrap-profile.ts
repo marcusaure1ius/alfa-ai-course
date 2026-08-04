@@ -10,13 +10,13 @@ export const COURSE_DNS_TTL_SECONDS = 600 as const;
 export const COURSE_PLATFORM_ORIGIN = "https://neurokurs.ru" as const;
 
 export const STARTER_KIT_BOOTSTRAP_PROFILE = Object.freeze({
-  version: "starter-kit-v0.1.4",
-  release: "v0.1.3",
+  version: "starter-kit-v0.1.5",
+  release: "v0.1.4",
   installerUrl:
     "https://github.com/marcusaure1ius/" +
-    "n8n-entrepreneur-starter-kit/releases/download/v0.1.3/install.sh",
+    "alfa-ai-course/releases/download/v0.1.4/install.sh",
   installerSha256:
-    "2aa1a2192aa50214bf5af38c565561fa5674e4f1ddbbf39fb0309b5c985687ec",
+    "e5fea8a802b219a0f3283e5ba411b1a7eba14caeb4376209592c9d9750d27d72",
   n8nVersion: "2.29.10",
   timezone: "Europe/Moscow",
   networkWaitSeconds: 1200,

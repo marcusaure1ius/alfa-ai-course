@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 RELEASE_DOC="$ROOT/docs/release-publication.md"
-STABLE_URL='https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh'
+STABLE_URL='https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh'
 COUNT=0
 
 ok() { COUNT=$((COUNT + 1)); printf 'ok %d - %s\n' "$COUNT" "$1"; }
@@ -33,7 +33,7 @@ done
 PINNED_VERSION="$(sed -nE 's/^- immutable (v[0-9]+\.[0-9]+\.[0-9]+) installer: .*/\1/p' "$RELEASE_DOC")"
 [[ "$(printf '%s\n' "$PINNED_VERSION" | grep -c .)" == '1' ]] \
   || fail 'exactly one immutable installer version must be documented'
-grep -Fq "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/${PINNED_VERSION}/install.sh" \
+grep -Fq "https://github.com/marcusaure1ius/alfa-ai-course/releases/download/${PINNED_VERSION}/install.sh" \
   "$RELEASE_DOC" \
   || fail "immutable ${PINNED_VERSION} URL does not match the documented version"
 ok 'stable and immutable GitHub Release URLs are documented'
