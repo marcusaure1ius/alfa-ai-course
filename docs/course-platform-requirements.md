@@ -53,7 +53,7 @@ server-side окружении. Второй фактор, если он тре�
 - Vercel Cron вызывает Function endpoint только в production; endpoint должен проверять `CRON_SECRET` ([Vercel Cron Jobs](https://vercel.com/docs/cron-jobs));
 - текущий starter kit поддерживает только Ubuntu 24.04 LTS x86_64, использует Caddy, PostgreSQL и закреплённый n8n; `.env` имеет права `0600`, а `N8N_ENCRYPTION_KEY` генерируется и хранится постоянно.
 
-Цены и идентификаторы тарифов/образов запрещено фиксировать в коде: они читаются из актуального API. Для цены отдельного IPv4 действует узкое исключение ADR-0012: endpoint стоимости показывает только активные сервисы, поэтому при нулевом baseline разрешена несекретная production-конфигурация, подтверждённая не более семи суток назад по официальной публикации Timeweb. Отсутствующее, некорректное или просроченное подтверждение блокирует paid mutation. Разрешён versioned product-policy allowlist поддерживаемых region/zone, текущих product tags и resource shapes, потому что публичный catalog не содержит отдельного `orderable` flag и включает legacy presets. Перед реализацией provider adapter исполнитель должен сверить DTO и доступные операции с текущей официальной спецификацией/SDK Timeweb. Этот документ не является свидетельством реального вызова Timeweb API, покупки VPS или выпуска сертификата.
+Цены и идентификаторы тарифов/образов запрещено фиксировать в коде: они читаются из актуального API. Для цены отдельного IPv4 действует узкое исключение ADR-0014: endpoint стоимости показывает только активные сервисы, поэтому при нулевом baseline разрешена несекретная production-конфигурация, подтверждённая не более семи суток назад по официальной публикации Timeweb. Отсутствующее, некорректное или просроченное подтверждение блокирует paid mutation. Разрешён versioned product-policy allowlist поддерживаемых region/zone, текущих product tags и resource shapes, потому что публичный catalog не содержит отдельного `orderable` flag и включает legacy presets. Перед реализацией provider adapter исполнитель должен сверить DTO и доступные операции с текущей официальной спецификацией/SDK Timeweb. Этот документ не является свидетельством реального вызова Timeweb API, покупки VPS или выпуска сертификата.
 
 Отдельный release gate — модель владения n8n. Официальное разъяснение n8n,
 повторно проверенное 2026-07-31, различает помощь клиенту с его собственным
@@ -344,7 +344,7 @@ Environment открывается из конкретного инструме�
 
 `PROV-04` Provider adapter находится только на сервере и имеет versioned internal interface. Browser никогда не обращается к Timeweb напрямую.
 
-`PROV-05` Идентификаторы preset, OS, project, SSH key и region/zone, а также цены тарифов загружаются из API. Цена IPv4 берётся из active-service cost API, а при отсутствии активного IP — только из датированного не более чем семью сутками официального provider evidence согласно ADR-0012; значение не фиксируется в коде. Project и SSH key выбираются детерминированно из live catalog без environment IDs и сохраняются только в versioned provider plan snapshot. Пустой список возвращает отдельную catalog/plan ошибку. При недоступности provider UI показывает cached data как устаревшие и запрещает платные mutation, если безопасный preview невозможен.
+`PROV-05` Идентификаторы preset, OS, project, SSH key и region/zone, а также цены тарифов загружаются из API. Цена IPv4 берётся из active-service cost API, а при отсутствии активного IP — только из датированного не более чем семью сутками официального provider evidence согласно ADR-0014; значение не фиксируется в коде. Project и SSH key выбираются детерминированно из live catalog без environment IDs и сохраняются только в versioned provider plan snapshot. Пустой список возвращает отдельную catalog/plan ошибку. При недоступности provider UI показывает cached data как устаревшие и запрещает платные mutation, если безопасный preview невозможен.
 
 `PROV-06` Preview и development deployments Vercel не получают production Timeweb tokens. Реальный provider smoke разрешён только из production deployment после явного подтверждения владельца. Клиентский денежный cap не применяется: актуальные provider price, balance и `monthly_fee` показываются как телеметрия, а решение принять или отклонить mutation остаётся за Timeweb.
 
@@ -657,7 +657,7 @@ Append-only audit фиксирует:
 
 ### 9.4. Стоимость и лимиты
 
-- UI получает цену и баланс из Timeweb API, когда API их предоставляет. Для нового IPv4 при нулевом baseline допускается только свежее официальное provider evidence по ADR-0012; иначе UI показывает «нет актуальных данных» и не разрешает paid create.
+- UI получает цену и баланс из Timeweb API, когда API их предоставляет. Для нового IPv4 при нулевом baseline допускается только свежее официальное provider evidence по ADR-0014; иначе UI показывает «нет актуальных данных» и не разрешает paid create.
 - Для n8n действует hard limit `1` незавершённая или активная среда этого типа. Ограничение индексируется по `tool_type` и не блокирует среды других сервисов. Денежный warning/critical budget и максимальная стоимость create preview не используются.
 - При превышении resource hard limit новые create блокируются; health, cleanup и delete остаются доступны.
 - Платформа учитывает публичный IP как отдельный ресурс.
