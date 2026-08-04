@@ -20,18 +20,20 @@
 
 ## Browser security headers Neurokurs
 
-Проверено 2026-08-04 на production-сборке платформы. Раздел описывает
-`platform/`, а не VPS ученика.
+Проверено 2026-08-04 на `https://neurokurs.ru` после выкатки; фактический
+capture и скан логов — в
+[отчёте](reports/t0104-security-headers-production-2026-08-04.md). Раздел
+описывает `platform/`, а не VPS ученика.
 
-Ко всем ответам, включая API, применяются статические заголовки из
-`platform/src/security-headers.ts`:
+Заголовки задаются в `platform/src/security-headers.ts`:
 
-| Заголовок | Значение |
-|---|---|
-| `X-Content-Type-Options` | `nosniff` |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` |
-| `X-Frame-Options` | `DENY` |
-| `Permissions-Policy` | `accelerometer`, `camera`, `display-capture`, `geolocation`, `gyroscope`, `magnetometer`, `microphone`, `payment`, `usb` — все `()` |
+| Заголовок | Значение | Где применяется |
+|---|---|---|
+| `X-Content-Type-Options` | `nosniff` | все ответы, включая API |
+| `X-Frame-Options` | `DENY` | все ответы, включая API |
+| `Permissions-Policy` | `accelerometer`, `camera`, `display-capture`, `geolocation`, `gyroscope`, `magnetometer`, `microphone`, `payment`, `usb` — все `()` | все ответы, включая API |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | все, кроме gateway-путей |
+| `Referrer-Policy` | `no-referrer` | только gateway-пути |
 
 `Strict-Transport-Security` выдаёт платформа хостинга и здесь не дублируется.
 
