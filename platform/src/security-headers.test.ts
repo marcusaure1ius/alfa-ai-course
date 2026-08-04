@@ -7,6 +7,7 @@ import {
   UNCONDITIONAL_SECURITY_HEADERS,
   buildDocumentContentSecurityPolicy,
   buildSecurityHeaderRules,
+  createNonce,
   ruleMatches,
 } from "./security-headers";
 
@@ -150,11 +151,16 @@ describe("правила next.config", () => {
   });
 
   it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)(
-    "не перекрывает собственные CSP и referrer-policy роута %s",
+    "не перекрывает собственный CSP роута %s",
     (route) => {
       const applied = headersFor(route);
+      // Политику этой страницы задаёт сам роут: у неё свой nonce и form-action
+      // на origin инструмента.
       expect(applied.has("content-security-policy")).toBe(false);
-      expect(applied.has("referrer-policy")).toBe(false);
+      // Общий Referrer-Policy сюда не попадает — он бы ослабил no-referrer.
+      expect(applied.get("referrer-policy")).not.toBe(
+        DEFAULT_REFERRER_POLICY.value,
+      );
       // Заголовки, которые роут не задаёт сам, остаются применёнными.
       expect(applied.get("x-frame-options")).toBe("DENY");
     },
@@ -165,5 +171,38 @@ describe("правила next.config", () => {
     expect(neighbour.get("content-security-policy")).toBe(
       API_CONTENT_SECURITY_POLICY,
     );
+  });
+
+  it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)(
+    "не распространяет исключение на подпуть %s/…",
+    (route) => {
+      // Совпадение по префиксу молча лишило бы будущий подпуть политики.
+      const applied = headersFor(`${route}/status`);
+      expect(applied.get("content-security-policy")).toBe(
+        API_CONTENT_SECURITY_POLICY,
+      );
+      expect(applied.get("referrer-policy")).toBe(DEFAULT_REFERRER_POLICY.value);
+    },
+  );
+
+  it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)(
+    "задаёт no-referrer на %s, чтобы ticket не утёк в Referer",
+    (route) => {
+      // Роут ставит no-referrer только на успешном пути; ответы-ошибки
+      // получают его отсюда.
+      expect(headersFor(route).get("referrer-policy")).toBe("no-referrer");
+    },
+  );
+});
+
+describe("nonce", () => {
+  it("содержит 128 бит энтропии", () => {
+    const decoded = atob(createNonce());
+    expect(decoded.length).toBe(16);
+  });
+
+  it("не повторяется", () => {
+    const values = new Set(Array.from({ length: 50 }, () => createNonce()));
+    expect(values.size).toBe(50);
   });
 });

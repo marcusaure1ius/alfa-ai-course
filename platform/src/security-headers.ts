@@ -16,14 +16,26 @@ export const ROUTES_WITH_OWN_SECURITY_HEADERS = [
   "/api/tool-gateway/n8n/exchange",
 ] as const;
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Источник, покрывающий всё под `prefix`, кроме точных путей из списка.
+ *
+ * Lookahead якорится на конец пути: иначе будущий подпуть вида
+ * `/api/admin/tools/n8n/launch/status` молча потерял бы политику, потому что
+ * совпал бы с исключением по префиксу.
+ */
 function excludingOwnHeaderRoutes(prefix: "" | "/api"): string {
   const alternatives = ROUTES_WITH_OWN_SECURITY_HEADERS.filter((route) =>
-    route.startsWith(prefix),
+    route.startsWith(`${prefix}/`),
   )
-    .map((route) => route.slice(prefix.length + 1))
+    .map((route) => escapeRegExp(route.slice(prefix.length + 1)))
     .join("|");
-  return `${prefix}/((?!${alternatives}).*)`;
+  return `${prefix}/((?!(?:${alternatives})$).*)`;
 }
+
 
 /**
  * Заголовки, которые не конфликтуют ни с одним роутом: их либо никто не ставит
@@ -59,6 +71,16 @@ export const DEFAULT_REFERRER_POLICY: SecurityHeader = {
 };
 
 /**
+ * Gateway-роуты отвечают `no-referrer` на успешном пути, чтобы ticket не попал
+ * в `Referer` при переходе в n8n. То же значение задаётся здесь, чтобы его
+ * получили и ответы-ошибки этих роутов, которые заголовок сами не ставят.
+ */
+export const GATEWAY_REFERRER_POLICY: SecurityHeader = {
+  key: "Referrer-Policy",
+  value: "no-referrer",
+};
+
+/**
  * API отвечает только JSON и никогда не является документом, поэтому ему
  * подходит политика, запрещающая любую загрузку и любое встраивание.
  */
@@ -80,6 +102,12 @@ export function buildSecurityHeaderRules(): SecurityHeaderRule[] {
       source: excludingOwnHeaderRoutes(""),
       headers: [DEFAULT_REFERRER_POLICY],
     },
+    // По одному правилу на путь: Next.js принимает в `source` только
+    // path-подобное выражение и отвергает верхнеуровневую группу `/(?:a|b)`.
+    ...ROUTES_WITH_OWN_SECURITY_HEADERS.map((route) => ({
+      source: route,
+      headers: [GATEWAY_REFERRER_POLICY],
+    })),
     {
       source: excludingOwnHeaderRoutes("/api"),
       headers: [
@@ -92,6 +120,15 @@ export function buildSecurityHeaderRules(): SecurityHeaderRule[] {
 /** Проверяет, попадает ли путь под источник правила. */
 export function ruleMatches(source: string, pathname: string): boolean {
   return new RegExp(`^${source}$`).test(pathname);
+}
+
+/**
+ * Одноразовый nonce для политики документа. 128 бит — минимум, рекомендованный
+ * спецификацией CSP.
+ */
+export function createNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return btoa(String.fromCharCode(...bytes));
 }
 
 /**
