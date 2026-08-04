@@ -120,12 +120,14 @@ export default async function StudentMaterialPage({
               material.kind === "practice" ? (
                 <PracticeMaterialActions
                   materialId={material.id}
+                  courseSlug={material.course.slug}
                   completed={Boolean(material.completedAt)}
                   nextHref={next ? `/student/materials/${next.slug}` : null}
                 />
               ) : (
                 <CompleteMaterialButton
                   materialId={material.id}
+                  courseSlug={material.course.slug}
                   completed={Boolean(material.completedAt)}
                   nextHref={next ? `/student/materials/${next.slug}` : null}
                 />

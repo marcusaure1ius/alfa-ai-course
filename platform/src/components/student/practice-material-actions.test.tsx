@@ -31,6 +31,7 @@ describe("PracticeMaterialActions", () => {
     render(
       <PracticeMaterialActions
         materialId="practice-1"
+        courseSlug="ai-agents"
         completed={false}
         nextHref="/student/materials/next"
       />,

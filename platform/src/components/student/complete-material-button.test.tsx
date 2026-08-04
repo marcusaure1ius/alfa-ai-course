@@ -38,6 +38,7 @@ describe("CompleteMaterialButton", () => {
     render(
       <CompleteMaterialButton
         materialId="material-1"
+        courseSlug="ai-agents"
         completed={false}
         nextHref="/student/materials/next"
       />,
@@ -63,7 +64,7 @@ describe("CompleteMaterialButton", () => {
     ).toBe("/student/materials/next");
     expect(
       screen.getByRole("link", { name: "В программу" }).getAttribute("href"),
-    ).toBe("/student/program");
+    ).toBe("/student/program?course=ai-agents");
   });
 
   it("shows one program destination after the final material", async () => {
@@ -71,6 +72,7 @@ describe("CompleteMaterialButton", () => {
     render(
       <CompleteMaterialButton
         materialId="last-material"
+        courseSlug="ai-agents"
         completed={false}
         nextHref={null}
       />,
@@ -88,6 +90,32 @@ describe("CompleteMaterialButton", () => {
     ).toBeNull();
   });
 
+  it("возвращает в программу того курса, которому принадлежит материал", async () => {
+    // Без параметра курса `/student/program` открывает первый назначенный
+    // курс: ученик с несколькими курсами попал бы не туда.
+    successfulFetch();
+    render(
+      <CompleteMaterialButton
+        materialId="material-b"
+        courseSlug="второй курс/со слэшем"
+        completed={false}
+        nextHref={null}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Завершить материал" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Да, завершить" }));
+
+    expect(await screen.findByText("Материал завершён")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "В программу" }).getAttribute("href"),
+    ).toBe(
+      `/student/program?course=${encodeURIComponent("второй курс/со слэшем")}`,
+    );
+  });
+
   it("announces a failed update without closing the confirmation", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
@@ -100,6 +128,7 @@ describe("CompleteMaterialButton", () => {
     render(
       <CompleteMaterialButton
         materialId="material-1"
+        courseSlug="ai-agents"
         completed={false}
         nextHref={null}
       />,
