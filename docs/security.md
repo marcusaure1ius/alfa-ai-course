@@ -44,6 +44,34 @@ Content-Security-Policy разделён по типу ответа:
   frame-ancestors 'none'`, потому что API отвечает только JSON и никогда не
   является документом.
 
+### Роуты со своими заголовками
+
+`next.config.headers()` не дополняет, а **перекрывает** одноимённые заголовки
+ответа route handler. Это проверено на production-сборке: роут, вернувший
+`referrer-policy: no-referrer` и собственный CSP, получил в ответе значения из
+`next.config`.
+
+Поэтому пути из `ROUTES_WITH_OWN_SECURITY_HEADERS` исключены из общих правил
+`Content-Security-Policy` и `Referrer-Policy`:
+
+- `/api/student/tools/n8n/launch`;
+- `/api/admin/tools/n8n/launch`;
+- `/api/tool-gateway/n8n/exchange`.
+
+Первые два отдают HTML-страницу перехода в n8n: у неё собственный `nonce`,
+`form-action` на origin инструмента и `referrer-policy: no-referrer`, чтобы
+ticket не попал в `Referer`. Без исключения общая политика подставила бы
+`form-action 'none'`, заблокировала бы inline-скрипт автосабмита и ученик не
+смог бы открыть n8n.
+
+Безусловные заголовки (`X-Content-Type-Options`, `X-Frame-Options`,
+`Permissions-Policy`) применяются и к этим путям: их роуты либо не задают, либо
+задают тем же значением.
+
+**Добавляя роут, который сам выставляет `Content-Security-Policy` или
+`Referrer-Policy`, внесите его путь в `ROUTES_WITH_OWN_SECURITY_HEADERS`** —
+иначе общее правило молча перекроет его политику.
+
 `X-Frame-Options: DENY` согласован с `frame-ancestors 'none'`: встраивание
 запрещено обоими механизмами одинаково.
 
@@ -61,8 +89,13 @@ Content-Security-Policy разделён по типу ответа:
 ### Что фактически проверено
 
 Автоматические тесты `platform/src/security-headers.test.ts` фиксируют состав
-заголовков, согласованность `X-Frame-Options` с `frame-ancestors` и отсутствие
-`unsafe`-расширений у скриптов в production.
+заголовков, согласованность `X-Frame-Options` с `frame-ancestors`, отсутствие
+`unsafe`-расширений у скриптов в production и то, какие правила фактически
+попадают на конкретный путь — включая проверку, что gateway-роуты не теряют
+свои `Content-Security-Policy` и `Referrer-Policy`.
+
+Механизм исключения проверен на production-сборке двумя пробными роутами:
+путь вне списка получил значения из `next.config`, путь в списке сохранил свои.
 
 Проверка в браузере на production-сборке подтвердила:
 

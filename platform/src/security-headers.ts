@@ -1,13 +1,37 @@
 export type SecurityHeader = { key: string; value: string };
+export type SecurityHeaderRule = { source: string; headers: SecurityHeader[] };
 
 /**
- * Заголовки, не зависящие от запроса. Применяются ко всем ответам, включая API.
- * `X-Frame-Options: DENY` намеренно согласован с `frame-ancestors 'none'`:
- * встраивание Neurokurs в чужую страницу запрещено полностью.
+ * Роуты, которые сами выставляют security-заголовки под свой сценарий.
+ *
+ * `next.config.headers()` не дополняет, а ПЕРЕКРЫВАЕТ одноимённые заголовки
+ * ответа роута — проверено на production-сборке. Поэтому такие пути
+ * исключаются из общих правил: иначе страница входа в n8n получила бы
+ * `form-action 'none'` вместо origin инструмента, её inline-скрипт
+ * автосабмита оказался бы заблокирован, и ученик не смог бы открыть n8n.
  */
-export const STATIC_SECURITY_HEADERS: SecurityHeader[] = [
+export const ROUTES_WITH_OWN_SECURITY_HEADERS = [
+  "/api/student/tools/n8n/launch",
+  "/api/admin/tools/n8n/launch",
+  "/api/tool-gateway/n8n/exchange",
+] as const;
+
+function excludingOwnHeaderRoutes(prefix: "" | "/api"): string {
+  const alternatives = ROUTES_WITH_OWN_SECURITY_HEADERS.filter((route) =>
+    route.startsWith(prefix),
+  )
+    .map((route) => route.slice(prefix.length + 1))
+    .join("|");
+  return `${prefix}/((?!${alternatives}).*)`;
+}
+
+/**
+ * Заголовки, которые не конфликтуют ни с одним роутом: их либо никто не ставит
+ * сам, либо ставит с тем же значением. `X-Frame-Options: DENY` намеренно
+ * согласован с `frame-ancestors 'none'` политики документа.
+ */
+export const UNCONDITIONAL_SECURITY_HEADERS: SecurityHeader[] = [
   { key: "X-Content-Type-Options", value: "nosniff" },
-  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "X-Frame-Options", value: "DENY" },
   {
     key: "Permissions-Policy",
@@ -26,6 +50,15 @@ export const STATIC_SECURITY_HEADERS: SecurityHeader[] = [
 ];
 
 /**
+ * Referrer-Policy вынесен отдельно: gateway-роуты сознательно отвечают
+ * `no-referrer`, чтобы ticket не утёк в Referer при переходе в n8n.
+ */
+export const DEFAULT_REFERRER_POLICY: SecurityHeader = {
+  key: "Referrer-Policy",
+  value: "strict-origin-when-cross-origin",
+};
+
+/**
  * API отвечает только JSON и никогда не является документом, поэтому ему
  * подходит политика, запрещающая любую загрузку и любое встраивание.
  */
@@ -35,6 +68,31 @@ export const API_CONTENT_SECURITY_POLICY = [
   "form-action 'none'",
   "frame-ancestors 'none'",
 ].join("; ");
+
+/**
+ * Правила для `next.config.headers()`. Источники записаны как регулярные
+ * выражения, поэтому их можно проверить тестом через `ruleMatches`.
+ */
+export function buildSecurityHeaderRules(): SecurityHeaderRule[] {
+  return [
+    { source: "/(.*)", headers: UNCONDITIONAL_SECURITY_HEADERS },
+    {
+      source: excludingOwnHeaderRoutes(""),
+      headers: [DEFAULT_REFERRER_POLICY],
+    },
+    {
+      source: excludingOwnHeaderRoutes("/api"),
+      headers: [
+        { key: "Content-Security-Policy", value: API_CONTENT_SECURITY_POLICY },
+      ],
+    },
+  ];
+}
+
+/** Проверяет, попадает ли путь под источник правила. */
+export function ruleMatches(source: string, pathname: string): boolean {
+  return new RegExp(`^${source}$`).test(pathname);
+}
 
 /**
  * Политика для документов. Nonce проставляет Next.js: он читает его из

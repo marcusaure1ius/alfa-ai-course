@@ -2,14 +2,30 @@ import { describe, expect, it } from "vitest";
 
 import {
   API_CONTENT_SECURITY_POLICY,
-  STATIC_SECURITY_HEADERS,
+  DEFAULT_REFERRER_POLICY,
+  ROUTES_WITH_OWN_SECURITY_HEADERS,
+  UNCONDITIONAL_SECURITY_HEADERS,
   buildDocumentContentSecurityPolicy,
+  buildSecurityHeaderRules,
+  ruleMatches,
 } from "./security-headers";
 
 function headerValue(key: string): string | undefined {
-  return STATIC_SECURITY_HEADERS.find(
-    (header) => header.key.toLowerCase() === key.toLowerCase(),
-  )?.value;
+  const all = [...UNCONDITIONAL_SECURITY_HEADERS, DEFAULT_REFERRER_POLICY];
+  return all.find((header) => header.key.toLowerCase() === key.toLowerCase())
+    ?.value;
+}
+
+/** Заголовки, которые фактически получит путь по всем правилам next.config. */
+function headersFor(pathname: string): Map<string, string> {
+  const applied = new Map<string, string>();
+  for (const rule of buildSecurityHeaderRules()) {
+    if (!ruleMatches(rule.source, pathname)) continue;
+    for (const header of rule.headers) {
+      applied.set(header.key.toLowerCase(), header.value);
+    }
+  }
+  return applied;
 }
 
 function directive(policy: string, name: string): string | undefined {
@@ -108,6 +124,46 @@ describe("политика API", () => {
     );
     expect(directive(API_CONTENT_SECURITY_POLICY, "frame-ancestors")).toBe(
       "frame-ancestors 'none'",
+    );
+  });
+});
+
+describe("правила next.config", () => {
+  // next.config.headers() перекрывает одноимённые заголовки ответа роута,
+  // поэтому важно не то, какие правила объявлены, а какие из них попадают
+  // на конкретный путь.
+  it("накрывает обычный API-роут политикой и referrer-policy", () => {
+    const applied = headersFor("/api/auth/csrf");
+    expect(applied.get("content-security-policy")).toBe(
+      API_CONTENT_SECURITY_POLICY,
+    );
+    expect(applied.get("referrer-policy")).toBe(DEFAULT_REFERRER_POLICY.value);
+    expect(applied.get("x-content-type-options")).toBe("nosniff");
+  });
+
+  it("накрывает документ статическими заголовками", () => {
+    const applied = headersFor("/login");
+    expect(applied.get("x-frame-options")).toBe("DENY");
+    expect(applied.get("referrer-policy")).toBe(DEFAULT_REFERRER_POLICY.value);
+    // Политику документа выдаёт proxy, а не next.config.
+    expect(applied.has("content-security-policy")).toBe(false);
+  });
+
+  it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)(
+    "не перекрывает собственные CSP и referrer-policy роута %s",
+    (route) => {
+      const applied = headersFor(route);
+      expect(applied.has("content-security-policy")).toBe(false);
+      expect(applied.has("referrer-policy")).toBe(false);
+      // Заголовки, которые роут не задаёт сам, остаются применёнными.
+      expect(applied.get("x-frame-options")).toBe("DENY");
+    },
+  );
+
+  it("оставляет исключение узким: соседние пути под правила попадают", () => {
+    const neighbour = headersFor("/api/student/tools/n8n");
+    expect(neighbour.get("content-security-policy")).toBe(
+      API_CONTENT_SECURITY_POLICY,
     );
   });
 });
