@@ -7,10 +7,12 @@ import { PracticeSubmissionDialog } from "@/components/student/practice-submissi
 
 export function PracticeMaterialActions({
   materialId,
+  courseSlug,
   completed,
   nextHref,
 }: {
   materialId: string;
+  courseSlug: string;
   completed: boolean;
   nextHref: string | null;
 }) {
@@ -26,6 +28,7 @@ export function PracticeMaterialActions({
       />
       <CompleteMaterialButton
         materialId={materialId}
+        courseSlug={courseSlug}
         completed={completed}
         nextHref={nextHref}
         triggerVariant={draftPrepared ? "default" : "outline"}

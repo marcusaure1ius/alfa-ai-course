@@ -6,7 +6,7 @@ import {
 } from "@/components/student/student-help-topics";
 import { StudentSupportContact } from "@/components/student/student-support-contact";
 import { requirePageSession } from "@/server/auth/page-access";
-import { getStudentWorkspaceCourse } from "@/server/course/repository";
+import { getStudentCourses } from "@/server/course/repository";
 import { getDatabase } from "@/server/db/client";
 
 const topics: StudentHelpTopic[] = [
@@ -61,7 +61,7 @@ const topics: StudentHelpTopic[] = [
     expected: "После повторения шага результат совпадёт с описанием в материале.",
     fallback:
       "Передайте преподавателю название материала и безопасное описание результата без рабочих данных и персональной информации.",
-    action: { href: "/student/program", label: "Открыть программу" },
+    action: { href: "/student", label: "Открыть мои курсы" },
   },
   {
     id: "student-error",
@@ -80,7 +80,10 @@ const topics: StudentHelpTopic[] = [
 
 export default async function StudentHelpPage() {
   const session = await requirePageSession();
-  const course = await getStudentWorkspaceCourse(getDatabase(), session.userId);
+  // Название курса в контакте поддержки уместно только когда курс один:
+  // при нескольких назначенных курсах любой выбранный вводил бы в заблуждение.
+  const courses = await getStudentCourses(getDatabase(), session.userId);
+  const courseTitle = courses.length === 1 ? courses[0].title : null;
   return (
     <div className="px-5 py-8 sm:px-8 sm:py-12 xl:px-12">
       <div className="mx-auto max-w-5xl">
@@ -106,7 +109,7 @@ export default async function StudentHelpPage() {
 
         <div className="mt-6">
           <StudentSupportContact
-            courseTitle={course?.title ?? null}
+            courseTitle={courseTitle}
             configuredContact={null}
           />
         </div>

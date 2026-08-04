@@ -20,17 +20,21 @@ import { FieldError } from "@/components/ui/field";
 
 export function CompleteMaterialButton({
   materialId,
+  courseSlug,
   completed,
   nextHref,
   triggerVariant = "default",
   triggerLabel = "Завершить материал",
 }: {
   materialId: string;
+  /** Курс материала: без него возврат «В программу» увёл бы в первый курс. */
+  courseSlug: string;
   completed: boolean;
   nextHref: string | null;
   triggerVariant?: "default" | "outline";
   triggerLabel?: string;
 }) {
+  const programHref = `/student/program?course=${encodeURIComponent(courseSlug)}`;
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -125,7 +129,7 @@ export function CompleteMaterialButton({
               {nextHref ? (
                 <>
                   <Button asChild variant="outline">
-                    <Link href="/student/program">В программу</Link>
+                    <Link href={programHref}>В программу</Link>
                   </Button>
                   <Button asChild>
                     <Link href={nextHref}>
@@ -136,7 +140,7 @@ export function CompleteMaterialButton({
                 </>
               ) : (
                 <Button asChild>
-                  <Link href="/student/program">
+                  <Link href={programHref}>
                     В программу
                     <ArrowRight aria-hidden="true" />
                   </Link>
