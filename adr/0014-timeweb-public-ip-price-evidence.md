@@ -1,4 +1,4 @@
-# ADR-0012: Датированное provider evidence для цены IPv4 при нулевом baseline
+# ADR-0014: Датированное provider evidence для цены IPv4 при нулевом baseline
 
 - Статус: Accepted
 - Дата: 2026-08-01
