@@ -1,11 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { buildDocumentContentSecurityPolicy } from "@/security-headers";
+import {
+  buildDocumentContentSecurityPolicy,
+  createNonce,
+} from "@/security-headers";
 import { requireAdmin } from "@/server/auth/access";
-
-function createNonce(): string {
-  return btoa(crypto.randomUUID());
-}
 
 export async function proxy(request: NextRequest): Promise<Response> {
   const nonce = createNonce();
