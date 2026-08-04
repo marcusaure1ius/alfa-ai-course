@@ -34,6 +34,21 @@ if grep -Eq '(latest|releases/latest)' "$artifact"; then
 fi
 ok 'artifact pins commit and SHA-256 without latest'
 
+# Payload установщика — это ровно `git archive` того же ref, поэтому границы
+# distributable проверяются на нём. Course Control Plane и дизайн-артефакты
+# на VPS участника не попадают.
+archive_entries="$(git -C "$ROOT" archive --format=tar HEAD | tar -tf -)"
+grep -q '^scripts/install.sh$' <<<"$archive_entries" \
+  || fail 'release archive lost the starter kit installer'
+grep -q '^docker-compose.platform.yml$' <<<"$archive_entries" \
+  || fail 'release archive lost the managed n8n profile'
+for excluded in platform .impeccable design-concepts design-system; do
+  if grep -q "^${excluded}/" <<<"$archive_entries"; then
+    fail "release archive ships non-distributable directory: $excluded"
+  fi
+done
+ok 'release archive carries the starter kit without the control plane'
+
 verify_output="$(N8N_BOOTSTRAP_VERIFY_ONLY=1 sh "$artifact")"
 [[ "$verify_output" == *'Release '*' проверен по SHA-256'* ]] \
   || fail 'embedded archive verification did not pass'

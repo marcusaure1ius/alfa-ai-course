@@ -1,0 +1,13 @@
+# Границы distributable starter kit.
+#
+# `git archive` собирает payload one-command installer, который распаковывается
+# на VPS участника. Course Control Plane и дизайн-артефакты — отдельные
+# продукты этого multi-product репозитория и на VPS не попадают.
+#
+# Managed-профиль n8n (`docker-compose.platform.yml`, `config/Caddyfile.platform`)
+# лежит в корне и намеренно остаётся в архиве: он нужен установке из платформы.
+
+platform/ export-ignore
+.impeccable/ export-ignore
+design-concepts/ export-ignore
+design-system/ export-ignore
