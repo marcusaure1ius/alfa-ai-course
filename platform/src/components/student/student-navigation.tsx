@@ -12,6 +12,7 @@ import { useState } from "react";
 
 import { LogoutButton } from "@/components/auth/logout-button";
 import { NeurokursBrand } from "@/components/brand/neurokurs-brand";
+import { NAV_ITEM_FOCUS_CLASSES } from "@/components/nav-item-styles";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -87,7 +88,8 @@ export function StudentNavigation({
               href={href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-11 items-center gap-3 rounded-lg px-3 text-[0.9375rem] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
+                "flex min-h-11 items-center gap-3 rounded-lg px-3 text-[0.9375rem] font-medium transition-colors",
+                NAV_ITEM_FOCUS_CLASSES,
                 active
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 
+import { NAV_ITEM_FOCUS_CLASSES } from "@/components/nav-item-styles";
 import {
   SidebarMenuButton,
   SidebarMenuSubButton,
@@ -47,7 +48,7 @@ export function NavLink({
       asChild
       isActive={active}
       tooltip={label}
-      className="min-h-11 gap-3 rounded-lg px-3 text-[0.9375rem] font-medium transition-colors hover:bg-accent hover:text-foreground data-[active=true]:bg-foreground data-[active=true]:text-background [&>svg]:size-[1.05rem]"
+      className={`min-h-11 gap-3 rounded-lg px-3 text-[0.9375rem] font-medium transition-colors hover:bg-accent hover:text-foreground data-[active=true]:bg-foreground data-[active=true]:text-background [&>svg]:size-[1.05rem] ${NAV_ITEM_FOCUS_CLASSES}`}
     >
       {link}
     </SidebarMenuButton>
