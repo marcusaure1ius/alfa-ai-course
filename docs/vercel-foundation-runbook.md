@@ -8,6 +8,37 @@
 - Neon resource: `alfa-ai-course-platform-db`
   (`store_4g5YKEC5u4zeYG3j`, Frankfurt)
 
+## Как выкатывается production
+
+Проверено 2026-08-04.
+
+Production **не выкатывается автоматически**. `platform/vercel.json` содержит
+`git.deploymentEnabled: {"main": false}`, поэтому merge в `main` не создаёт
+production deployment. Выкатка — явное действие:
+
+```bash
+cd platform
+vercel --prod
+```
+
+Preview для остальных веток остаются включёнными, поэтому PR получает
+deployment и связь коммита с сборкой.
+
+Откат — на предыдущий READY deployment:
+
+```bash
+vercel rollback <previous-deployment-id-or-url>
+```
+
+Чтобы узнать, что сейчас в production, нельзя полагаться на git-историю:
+сверяйте `meta.githubCommitSha` последнего production deployment с `main`.
+
+История вопроса: до 2026-08-04 project был привязан к репозиторию-зеркалу
+`n8n-entrepreneur-starter-kit`, где нет каталога `platform/`. Единственная
+git-триггерная production-сборка 2026-07-31 упала с
+`NOW_SANDBOX_WORKER_ROOTDIR_NOT_EXIST`, а push в рабочий репозиторий не
+запускал ничего. Привязка переведена на `alfa-ai-course`.
+
 ## Архитектурный контракт
 
 Создаётся один Vercel project с Root Directory `platform/`. Starter-kit root,
