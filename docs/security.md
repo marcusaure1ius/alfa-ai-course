@@ -18,6 +18,69 @@
 
 Образы PostgreSQL и Caddy используют собственные root entrypoints для инициализации volumes и привязки low ports. Поэтому baseline не добавляет непроверенный глобальный `cap_drop: ALL`, который может сломать официальный image lifecycle. Вместо этого запрещены дополнительные capabilities и `privileged`, а `no-new-privileges` обязателен для каждого сервиса. Более строгий capability allowlist требует отдельного runtime rehearsal и ADR.
 
+## Browser security headers Neurokurs
+
+Проверено 2026-08-04 на production-сборке платформы. Раздел описывает
+`platform/`, а не VPS ученика.
+
+Ко всем ответам, включая API, применяются статические заголовки из
+`platform/src/security-headers.ts`:
+
+| Заголовок | Значение |
+|---|---|
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `X-Frame-Options` | `DENY` |
+| `Permissions-Policy` | `accelerometer`, `camera`, `display-capture`, `geolocation`, `gyroscope`, `magnetometer`, `microphone`, `payment`, `usb` — все `()` |
+
+`Strict-Transport-Security` выдаёт платформа хостинга и здесь не дублируется.
+
+Content-Security-Policy разделён по типу ответа:
+
+- **документы** — политика с одноразовым `nonce`, который выдаёт
+  `platform/src/proxy.ts` на каждый запрос. Next.js сам проставляет этот
+  `nonce` framework-скриптам и собственным inline-вставкам;
+- **`/api/**`** — `default-src 'none'; base-uri 'none'; form-action 'none';
+  frame-ancestors 'none'`, потому что API отвечает только JSON и никогда не
+  является документом.
+
+`X-Frame-Options: DENY` согласован с `frame-ancestors 'none'`: встраивание
+запрещено обоими механизмами одинаково.
+
+### Осознанные послабления
+
+`style-src` содержит `'unsafe-inline'`. Это не недосмотр: прогресс курса и
+отступы оглавления задаются атрибутом `style`, а Radix UI позиционирует
+всплывающие слои тем же способом в runtime. На скрипты послабление не
+распространяется — `script-src` не содержит ни `'unsafe-inline'`, ни
+`'unsafe-eval'` в production.
+
+`'unsafe-eval'` добавляется только в development, где React использует `eval`
+для восстановления стека серверной ошибки в браузере.
+
+### Что фактически проверено
+
+Автоматические тесты `platform/src/security-headers.test.ts` фиксируют состав
+заголовков, согласованность `X-Frame-Options` с `frame-ancestors` и отсутствие
+`unsafe`-расширений у скриптов в production.
+
+Проверка в браузере на production-сборке подтвердила:
+
+- все 17 скриптов страницы получают `nonce`, внешние бандлы загружаются,
+  React-гидрация проходит;
+- inline-обработчик события и `javascript:`-URL блокируются;
+- запрос на чужой origin блокируется, свой — проходит;
+- `/admin` без сессии отвечает `401` в том числе на prefetch-запрос.
+
+Последний пункт — причина, по которой matcher `proxy.ts` намеренно **не**
+исключает prefetch, хотя документация Next.js это предлагает: тот же proxy
+закрывает `/admin`, и исключение отдало бы RSC-данные админки без проверки
+доступа.
+
+Тесты и локальная проверка не доказывают состояние production-домена. Такое
+утверждение допустимо только с evidence реального прогона на `neurokurs.ru`
+после выкатки.
+
 ## Execution retention
 
 Execution payloads могут содержать персональные данные и provider responses. Default сохраняет успешные, ошибочные и manual executions для учебной диагностики, но удаляет их после `168` часов или при превышении `10000` записей.
