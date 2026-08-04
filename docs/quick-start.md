@@ -129,13 +129,13 @@ macOS и Linux.
 образов:
 
 ```bash
-curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | N8N_IMAGE_SOURCE=timeweb sh
+curl -fsSL "https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh" | N8N_IMAGE_SOURCE=timeweb sh
 ```
 
 ### Другой провайдер
 
 ```bash
-curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | sh
+curl -fsSL "https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh" | sh
 ```
 
 Скопируйте выбранную строку целиком, вставьте в SSH-сессию и нажмите Enter.

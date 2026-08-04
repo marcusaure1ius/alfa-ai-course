@@ -20,7 +20,7 @@ image tags и не удаляйте созданный `.env` или volumes.
 **Решение:** на Timeweb повторите опубликованную команду с явным source:
 
 ```bash
-curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | N8N_IMAGE_SOURCE=timeweb sh
+curl -fsSL "https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh" | N8N_IMAGE_SOURCE=timeweb sh
 ```
 
 Installer использует [официальный proxy Timeweb](https://dockerhub.timeweb.cloud/),

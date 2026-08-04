@@ -40,7 +40,7 @@ ok "minimum test sizing is separated from working recommendation"
 
 grep -Eq 'curl -fsSL .*install\.sh.*\| sh' "$ROOT/docs/quick-start.md"
 grep -q 'sslip.io' "$ROOT/docs/quick-start.md"
-grep -q 'github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh' "$ROOT/docs/quick-start.md"
+grep -q 'github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh' "$ROOT/docs/quick-start.md"
 grep -q '/opt/n8n-entrepreneur-starter-kit' "$ROOT/docs/quick-start.md"
 if grep -Eq 'git archive|sha256sum -c|(^|[[:space:]])scp[[:space:]]' "$ROOT/docs/quick-start.md"; then
   fail "legacy multi-command transfer path found in Quick Start"

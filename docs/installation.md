@@ -21,14 +21,14 @@
 Для VPS у любого провайдера, кроме Timeweb:
 
 ```bash
-curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | sh
+curl -fsSL "https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh" | sh
 ```
 
 Для Timeweb VPS используйте их официальный Docker Hub proxy в той же
 one-command форме:
 
 ```bash
-curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | N8N_IMAGE_SOURCE=timeweb sh
+curl -fsSL "https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh" | N8N_IMAGE_SOURCE=timeweb sh
 ```
 
 Stable URL перенаправляет на asset последнего GitHub Release. Каждый release сохраняет immutable versioned URL, checksum самого `install.sh` и exact Git commit; embedded archive дополнительно проверяется до любых системных изменений.

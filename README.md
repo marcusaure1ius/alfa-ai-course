@@ -11,7 +11,7 @@ Foundation/onboarding, official research и architecture gate завершены
 На чистой Ubuntu 24.04 LTS x86_64 выполните от `root` или пользователя с `sudo`:
 
 ```bash
-curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | sh
+curl -fsSL "https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh" | sh
 ```
 
 Собственный домен, ручная DNS-запись, `git clone` и передача archive не нужны. Installer опубликован в GitHub Releases; immutable checksum и exact commit доступны в конкретном release.

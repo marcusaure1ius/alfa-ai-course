@@ -108,7 +108,7 @@ ssh -i $VpsKey "root@$VpsIp"
 официальный proxy Timeweb с теми же exact image tags:
 
 ```bash
-curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | N8N_IMAGE_SOURCE=timeweb sh
+curl -fsSL "https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh" | N8N_IMAGE_SOURCE=timeweb sh
 ```
 
 URL принадлежит публичному GitHub-репозиторию starter kit и ведёт на asset последнего release. Не заменяйте его адресом преподавательского n8n, IP VPS или временной ссылкой.

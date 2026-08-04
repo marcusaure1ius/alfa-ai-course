@@ -6,9 +6,9 @@
 
 Оригинальные файлы проекта лицензированы по Apache-2.0, а исходники опубликованы в публичном репозитории:
 
-- repository: `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit`;
-- stable installer: `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh`;
-- immutable v0.1.3 installer: `https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.3/install.sh`;
+- repository: `https://github.com/marcusaure1ius/alfa-ai-course`;
+- stable installer: `https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh`;
+- immutable v0.1.4 installer: `https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.4/install.sh`;
 - checksum: соседний asset `install.sh.sha256` в том же versioned release.
 
 Public download, checksum, embedded archive и verify-only подтверждены для
@@ -58,7 +58,7 @@ GitHub Releases реализует stable channel через `/releases/latest/d
 Сначала asset проверяется без установки:
 
 ```bash
-release_url="https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.3"
+release_url="https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.4"
 curl -fsSLO "$release_url/install.sh"
 curl -fsSLO "$release_url/install.sh.sha256"
 sha256sum -c install.sh.sha256
@@ -66,7 +66,7 @@ N8N_BOOTSTRAP_VERIFY_ONLY=1 sh install.sh
 ```
 
 Ожидаемый SHA-256 `install.sh`:
-`2aa1a2192aa50214bf5af38c565561fa5674e4f1ddbbf39fb0309b5c985687ec`.
+`e5fea8a802b219a0f3283e5ba411b1a7eba14caeb4376209592c9d9750d27d72`.
 На macOS вместо `sha256sum -c` можно выполнить
 `shasum -a 256 install.sh` и сравнить строку с ожидаемым значением.
 
@@ -91,7 +91,7 @@ assets, проверяет sidecar, извлекает payload без запус
 set -Eeuo pipefail
 
 audit_dir="$(mktemp -d "${TMPDIR:-/tmp}/n8n-release-audit.XXXXXX")"
-release_url="https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/download/v0.1.3"
+release_url="https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.4"
 
 if command -v sha256sum >/dev/null 2>&1; then
   checksum=(sha256sum)
@@ -143,7 +143,7 @@ backups, logs, Docker volumes или `.git`. Дополнительно к scann
 В пользовательской документации остаётся одна команда:
 
 ```bash
-curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | sh
+curl -fsSL "https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh" | sh
 ```
 
 Никакие checksum, Git, archive, домен или DNS участник вручную не настраивает. Технические проверки остаются внутри артефакта и release process.

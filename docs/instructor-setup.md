@@ -52,7 +52,7 @@
 Скопируйте всю строку целиком, вставьте в консоль и нажмите Enter:
 
 ```bash
-curl -fsSL "https://github.com/marcusaure1ius/n8n-entrepreneur-starter-kit/releases/latest/download/install.sh" | N8N_HOST=n8n.neurokurs.ru TIMEZONE=Europe/Moscow sh
+curl -fsSL "https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh" | N8N_HOST=n8n.neurokurs.ru TIMEZONE=Europe/Moscow sh
 ```
 
 Больше ничего вводить не нужно. Не закрывайте окно, пока не появится сообщение «Установка завершена» и адрес `https://n8n.neurokurs.ru`.
