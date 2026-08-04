@@ -4,6 +4,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 
+import { NAV_ITEM_FOCUS_CLASSES } from "@/components/nav-item-styles";
+
 import { StudentNavigation } from "./student-navigation";
 
 let pathname = "/student";
@@ -31,6 +33,10 @@ describe("StudentNavigation", () => {
     expect(courses.getAttribute("aria-current")).toBe("page");
     expect(screen.queryByRole("link", { name: "Обзор" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Программа" })).toBeNull();
+    // Тот же focus-treatment, что у admin: источник один на оба меню.
+    for (const focusClass of NAV_ITEM_FOCUS_CLASSES.split(" ")) {
+      expect(courses.className).toContain(focusClass);
+    }
   });
 
   it("uses my courses as the stable parent entry on course and material routes", () => {

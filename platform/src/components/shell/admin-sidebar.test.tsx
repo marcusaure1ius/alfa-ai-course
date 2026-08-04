@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { axe } from "vitest-axe";
 
+import { NAV_ITEM_FOCUS_CLASSES } from "@/components/nav-item-styles";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AdminSidebar } from "./admin-sidebar";
 
@@ -97,6 +98,11 @@ describe("AdminSidebar collapsed navigation", () => {
       expect(link.className).toContain("min-h-11");
       expect(link.className).toContain("rounded-lg");
       expect(link.className).toContain("px-3");
+      // Focus обязан совпадать со student-плашками. Без общей константы
+      // admin наследовал кольцо снаружи, а student рисовал контур внутри.
+      for (const focusClass of NAV_ITEM_FOCUS_CLASSES.split(" ")) {
+        expect(link.className).toContain(focusClass);
+      }
     }
     expect(screen.getByRole("link", { name: "Инструменты" }).className).toContain(
       "data-[active=true]:bg-foreground",
