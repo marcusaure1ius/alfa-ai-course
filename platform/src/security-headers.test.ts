@@ -17,6 +17,15 @@ function headerValue(key: string): string | undefined {
     ?.value;
 }
 
+/**
+ * Список исключений сейчас пуст, а `it.each([])` падает сам по себе. Кейсы
+ * остаются описанными и оживают, как только в список добавят маршрут.
+ */
+const eachOwnHeaderRoute =
+  ROUTES_WITH_OWN_SECURITY_HEADERS.length > 0
+    ? it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)
+    : (name: string) => it.skip(name, () => {});
+
 /** Заголовки, которые фактически получит путь по всем правилам next.config. */
 function headersFor(pathname: string): Map<string, string> {
   const applied = new Map<string, string>();
@@ -150,7 +159,7 @@ describe("правила next.config", () => {
     expect(applied.has("content-security-policy")).toBe(false);
   });
 
-  it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)(
+  eachOwnHeaderRoute(
     "не перекрывает собственный CSP роута %s",
     (route) => {
       const applied = headersFor(route);
@@ -173,7 +182,7 @@ describe("правила next.config", () => {
     );
   });
 
-  it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)(
+  eachOwnHeaderRoute(
     "не распространяет исключение на подпуть %s/…",
     (route) => {
       // Совпадение по префиксу молча лишило бы будущий подпуть политики.
@@ -185,7 +194,7 @@ describe("правила next.config", () => {
     },
   );
 
-  it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)(
+  eachOwnHeaderRoute(
     "задаёт no-referrer на %s, чтобы ticket не утёк в Referer",
     (route) => {
       // Роут ставит no-referrer только на успешном пути; ответы-ошибки

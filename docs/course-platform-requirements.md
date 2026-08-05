@@ -408,24 +408,32 @@ Environment открывается из конкретного инструме�
 
 `N8N-05` Первый этап не использует исходящий SSH из Vercel: bootstrap выполняется только через provider-side reinstall с `cloud-init`, исходный SSH key после reimage проверяется и повторно прикрепляется через typed Timeweb API, а готовность подтверждается Timeweb status/OS и внешними HTTPS/health checks. Добавление remote execution требует отдельного ADR с egress/network policy и уникальным ED25519 key; один общий root key запрещён.
 
-`N8N-06` `ready_owner_setup_required` доступен только доверенному admin через
-обязательный gateway. Student не получает прямой URL или owner setup. После
-создания owner и состояния `ready` одно действие grant автоматически находит
-или приглашает отдельного n8n Member с тем же email через официальный Public
-API; owner/admin identity и несовпадение email отклоняются.
+`N8N-06` В состоянии `ready_owner_setup_required` адрес среды показывается
+только admin: ученик получает его после того, как owner setup завершён и
+среда перешла в `ready`. Одно действие grant автоматически находит или
+приглашает отдельного n8n Member с тем же email через официальный Public API;
+owner/admin identity и несовпадение email отклоняются. Пересмотрено в
+[ADR-0016](../adr/0016-direct-n8n-student-accounts.md).
 
 `N8N-07` До выдачи production-среды ученику сохраняется evidence выбранного основания: собственный instance ученика, коммерческое соглашение n8n, иное письменное разрешение либо явное принятие риска владельцем продукта. Принятие риска хранится и отображается отдельно и не заявляется как разрешение n8n. Наличие технически работающего VPS само по себе не снимает этот gate.
 
-`N8N-08` Управляемая среда запускается с platform Caddy profile. Editor/API
-одноразовый launch ticket передаётся только в POST body, без URL. Editor/API
-запросы требуют короткоживущую gateway session, привязанную к неизменяемому
-поколению назначения, и на каждом запросе повторно проверяют active
-user/membership, identity binding, assignment, expiry, license decision,
-global service gate и health. Revoke, expiry, renewal и global off-on блокируют
-сохранённый origin и существующую n8n session. Public health/webhook/form имеют
-явный allowlist. Оператор задаёт только scoped management API key; внутренний
-gateway secret выводится из `AUTH_SECRET`, автоматически синхронизируется при
-managed install и никогда не показывается в UI.
+`N8N-08` Управляемая среда запускается с platform Caddy profile. Аутентификацию
+ученика выполняет сам n8n: он входит по собственному аккаунту, платформа вход
+не проксирует. Пересмотрено в
+[ADR-0016](../adr/0016-direct-n8n-student-accounts.md) — прежняя модель с
+одноразовым ticket, gateway session и привязкой к поколению назначения
+отменена.
+
+Платформа продолжает проверять active user/membership, identity binding,
+assignment, expiry, license decision и global service gate перед тем, как
+показать адрес и выдать назначение. **Отзыв при этом не мгновенный**: он
+скрывает адрес и запрещает новые выдачи, но уже открытая n8n session
+продолжает работать, пока account не отключат в самом n8n.
+
+Public health/webhook/form имеют явный allowlist. Оператор задаёт только scoped
+management API key; внутренний secret управления выводится из `AUTH_SECRET`,
+автоматически синхронизируется при managed install и никогда не показывается в
+UI — без него платформа не может создавать приглашения.
 
 ### 7.4. DNS и TLS
 

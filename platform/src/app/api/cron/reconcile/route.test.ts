@@ -11,7 +11,7 @@ vi.mock("@/server/cron/reconcile", () => ({
   reconcileOrphanedFakeWorkflows,
 }));
 vi.mock("@/server/db/client", () => ({ getDatabase }));
-vi.mock("@/server/tools/n8n-gateway", () => ({ cleanupExpiredN8nInvites }));
+vi.mock("@/server/tools/n8n-invite", () => ({ cleanupExpiredN8nInvites }));
 
 import { GET } from "./route";
 

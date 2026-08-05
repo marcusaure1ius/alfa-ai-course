@@ -129,7 +129,8 @@ describe("student n8n tool access", () => {
       displayName: "n8n",
       state: "ready",
       canLaunch: true,
-      launchUrl: "/api/student/tools/n8n/launch",
+      // ADR-0016: ученик получает настоящий адрес инструмента.
+      launchUrl: "https://n8n.example.test",
       expiresAt: expiresAt.toISOString(),
     });
     expect(Object.keys(access).sort()).toEqual([
@@ -140,6 +141,14 @@ describe("student n8n tool access", () => {
       "state",
       "tool",
     ]);
+    // Адрес отдаётся ученику напрямую, поэтому он обязан остаться голым
+    // https-origin: без учётных данных, пути и query.
+    const url = new URL(access.launchUrl as string);
+    expect(url.protocol).toBe("https:");
+    expect(url.username).toBe("");
+    expect(url.password).toBe("");
+    expect(url.search).toBe("");
+    expect(access.launchUrl).toBe(url.origin);
   });
 
   it("не показывает запуск до подтверждения managed gateway", async () => {
@@ -252,7 +261,8 @@ describe("student n8n tool access", () => {
     ).resolves.toMatchObject({
       state: "ready",
       canLaunch: true,
-      launchUrl: "/api/student/tools/n8n/launch",
+      // ADR-0016: ученик получает настоящий адрес инструмента.
+      launchUrl: "https://n8n.example.test",
       expiresAt: expiresAt.toISOString(),
     });
     await expect(

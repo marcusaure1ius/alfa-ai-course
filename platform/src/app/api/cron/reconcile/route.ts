@@ -4,7 +4,7 @@ import {
 } from "@/server/cron/auth";
 import { reconcileOrphanedFakeWorkflows } from "@/server/cron/reconcile";
 import { getDatabase } from "@/server/db/client";
-import { cleanupExpiredN8nInvites } from "@/server/tools/n8n-gateway";
+import { cleanupExpiredN8nInvites } from "@/server/tools/n8n-invite";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

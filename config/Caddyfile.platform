@@ -20,22 +20,10 @@
 		}
 	}
 
-	handle /__neurokurs/exchange {
-		request_body {
-			max_size 1KB
-		}
-		uri query -ticket
-		rewrite * /api/tool-gateway/n8n/exchange
-		reverse_proxy {$PLATFORM_GATE_ORIGIN} {
-			header_up X-Neurokurs-Gateway {$N8N_GATE_MANAGEMENT_SECRET}
-		}
-	}
-
+	# ADR-0016: ученик входит в n8n по собственному аккаунту, поэтому
+	# forward_auth и обмен ticket убраны. Аутентификацию выполняет сам n8n.
+	# Канал управления выше сохранён: без него платформа не создаёт приглашения.
 	handle {
-		forward_auth {$PLATFORM_GATE_ORIGIN} {
-			uri /api/tool-gateway/n8n/authorize
-			header_up X-Neurokurs-Gateway {$N8N_GATE_MANAGEMENT_SECRET}
-		}
 		reverse_proxy n8n:5678 {
 			health_uri /healthz
 			health_interval 30s

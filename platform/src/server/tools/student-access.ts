@@ -219,7 +219,9 @@ export async function getStudentN8nAccess(
       displayName: "n8n",
       state: "ready",
       canLaunch: true,
-      launchUrl: "/api/student/tools/n8n/launch",
+      // ADR-0016: ученик заходит в инструмент по собственному аккаунту, поэтому
+      // получает его настоящий адрес, а не внутренний launch платформы.
+      launchUrl,
       expiresAt,
     };
   }
