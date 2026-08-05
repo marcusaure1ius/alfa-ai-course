@@ -69,10 +69,9 @@ describe("starter kit bootstrap profile", () => {
     );
     expect(cloudInit).toContain("phase=configuring_managed_gateway");
     expect(cloudInit).toContain("docker-compose.platform.yml");
-    expect(cloudInit).toContain(
-      "printf 'PLATFORM_GATE_ORIGIN=%s\\n' 'https://neurokurs.ru'",
-    );
     expect(cloudInit).toContain("N8N_GATE_MANAGEMENT_SECRET=");
+    // ADR-0016: forward_auth убран, поэтому origin платформы на VPS не пишется.
+    expect(cloudInit).not.toContain("PLATFORM_GATE_ORIGIN");
     expect(cloudInit).not.toContain(process.env.AUTH_SECRET!);
   });
 
@@ -132,7 +131,7 @@ describe("starter kit bootstrap profile", () => {
   it("recovers only a pinned installer image-pull rate limit through a pinned mirror", () => {
     const cloudInit = buildStarterKitCloudInit();
 
-    expect(STARTER_KIT_BOOTSTRAP_PROFILE.version).toBe("starter-kit-v0.1.5");
+    expect(STARTER_KIT_BOOTSTRAP_PROFILE.version).toBe("starter-kit-v0.1.6");
     expect(cloudInit).toContain('if [ "$installer_code" -ne 23 ]');
     expect(cloudInit).toContain("grep -Fq '429 Too Many Requests'");
     expect(cloudInit).toContain("phase=recovering_registry_rate_limit");

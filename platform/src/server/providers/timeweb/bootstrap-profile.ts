@@ -7,10 +7,9 @@ export const COURSE_SERVER_HOSTNAME = "n8n-neurokurs-ru" as const;
 export const COURSE_DNS_ZONE = "neurokurs.ru" as const;
 export const COURSE_DNS_LABEL = "n8n" as const;
 export const COURSE_DNS_TTL_SECONDS = 600 as const;
-export const COURSE_PLATFORM_ORIGIN = "https://neurokurs.ru" as const;
 
 export const STARTER_KIT_BOOTSTRAP_PROFILE = Object.freeze({
-  version: "starter-kit-v0.1.5",
+  version: "starter-kit-v0.1.6",
   release: "v0.1.4",
   installerUrl:
     "https://github.com/marcusaure1ius/" +
@@ -198,7 +197,6 @@ test -r "$project_dir/.env"
 test -r "$project_dir/docker-compose.platform.yml"
 test -r "$project_dir/config/Caddyfile.platform"
 {
-  printf 'PLATFORM_GATE_ORIGIN=%s\\n' ${shellSingleQuoted(COURSE_PLATFORM_ORIGIN)}
   printf 'N8N_GATE_MANAGEMENT_SECRET=%s\\n' ${shellSingleQuoted(gatewaySecret)}
 } > "$managed_env_next"
 chmod 0600 "$managed_env_next"

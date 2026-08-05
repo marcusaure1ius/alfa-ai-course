@@ -26,10 +26,15 @@ function escapeRegExp(value: string): string {
  * `/api/admin/tools/n8n/launch/status` молча потерял бы политику, потому что
  * совпал бы с исключением по префиксу.
  */
-function excludingOwnHeaderRoutes(prefix: "" | "/api"): string {
-  const alternatives = ROUTES_WITH_OWN_SECURITY_HEADERS.filter((route) =>
-    route.startsWith(`${prefix}/`),
-  ).map((route) => escapeRegExp(route.slice(prefix.length + 1)));
+export function excludingOwnHeaderRoutes(
+  prefix: "" | "/api",
+  // Список параметризован, чтобы якорение и экранирование оставались покрытыми
+  // тестами даже когда исключений нет.
+  routes: readonly string[] = ROUTES_WITH_OWN_SECURITY_HEADERS,
+): string {
+  const alternatives = routes
+    .filter((route) => route.startsWith(`${prefix}/`))
+    .map((route) => escapeRegExp(route.slice(prefix.length + 1)));
   // Пустой список даёт `(?!()$)` — это уже другое выражение, а не «исключить
   // ничего». Поэтому исключающая обёртка добавляется только при наличии путей.
   return alternatives.length === 0
