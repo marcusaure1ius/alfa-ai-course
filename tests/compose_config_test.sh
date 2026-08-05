@@ -47,28 +47,30 @@ jq -e '
 ' "$tmp/compose.json" >/dev/null || fail "Pinned platform/private network assertions failed"
 ok "platform and private database/n8n topology are pinned"
 
-PLATFORM_GATE_ORIGIN=https://course.example.test \
 N8N_GATE_MANAGEMENT_SECRET=synthetic-gateway-management-secret-32-bytes \
   docker compose --project-directory "$ROOT" --env-file "$ENV_FILE" \
     -f "$ROOT/docker-compose.yml" -f "$ROOT/docker-compose.platform.yml" \
     config --format json > "$tmp/platform-compose.json"
 jq -e '
-  .services.caddy.environment.PLATFORM_GATE_ORIGIN == "https://course.example.test" and
   .services.caddy.environment.N8N_GATE_MANAGEMENT_SECRET == "synthetic-gateway-management-secret-32-bytes" and
+  (.services.caddy.environment | has("PLATFORM_GATE_ORIGIN") | not) and
   any(.services.caddy.volumes[]; .target == "/etc/caddy/Caddyfile" and (.source | endswith("/config/Caddyfile.platform")))
-' "$tmp/platform-compose.json" >/dev/null || fail "Managed gateway override is incomplete"
-ok "managed profile replaces Caddy with the fail-closed gateway configuration"
+' "$tmp/platform-compose.json" >/dev/null || fail "Managed profile override is incomplete"
+ok "managed profile replaces Caddy and keeps only the management secret"
 
-grep -Fq 'forward_auth {$PLATFORM_GATE_ORIGIN}' "$ROOT/config/Caddyfile.platform" \
-  || fail "Student editor gateway is not enforced"
+# ADR-0016: ученик входит в n8n сам, поэтому канал управления остаётся, а
+# ticket-модель должна отсутствовать. Негативные проверки не дают вернуть её
+# незаметно.
 grep -Fq 'header X-Neurokurs-Management {$N8N_GATE_MANAGEMENT_SECRET}' "$ROOT/config/Caddyfile.platform" \
   || fail "Management API bypass is not secret-bound"
 grep -Fq 'request>headers>Cookie delete' "$ROOT/config/Caddyfile.platform" \
-  || fail "Gateway cookies are not redacted from access logs"
-grep -Fq 'uri query -ticket' "$ROOT/config/Caddyfile.platform" \
-  || fail "Legacy ticket query data is not stripped before upstream"
-grep -Fq 'header_up X-Neurokurs-Gateway {$N8N_GATE_MANAGEMENT_SECRET}' "$ROOT/config/Caddyfile.platform" \
-  || fail "Ticket exchange is not bound to the managed Caddy profile"
-ok "platform Caddy contract gates editor/API and redacts credentials"
+  || fail "Cookies are not redacted from access logs"
+grep -Fq 'request>headers>X-N8N-API-KEY delete' "$ROOT/config/Caddyfile.platform" \
+  || fail "n8n API key is not redacted from access logs"
+if sed 's/#.*//' "$ROOT/config/Caddyfile.platform" |
+  grep -Eq 'forward_auth|__neurokurs/exchange|uri query -ticket'; then
+  fail "Removed ticket gateway reappeared in the managed Caddy profile"
+fi
+ok "platform Caddy keeps the management channel without the removed ticket gateway"
 
 printf '1..%d\n' "$COUNT"

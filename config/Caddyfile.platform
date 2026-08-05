@@ -20,8 +20,8 @@
 		}
 	}
 
-	# ADR-0016: ученик входит в n8n по собственному аккаунту, поэтому
-	# forward_auth и обмен ticket убраны. Аутентификацию выполняет сам n8n.
+	# ADR-0016: ученик входит в n8n по собственному аккаунту, поэтому слой
+	# промежуточной авторизации убран — аутентификацию выполняет сам n8n.
 	# Канал управления выше сохранён: без него платформа не создаёт приглашения.
 	handle {
 		reverse_proxy n8n:5678 {
@@ -48,7 +48,6 @@
 				request>headers>Cookie delete
 				request>headers>X-N8N-API-KEY delete
 				request>headers>X-Neurokurs-Management delete
-				request>headers>X-Neurokurs-Gateway delete
 			}
 		}
 	}
