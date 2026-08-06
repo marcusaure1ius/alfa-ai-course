@@ -12,8 +12,11 @@ import type { StudentN8nAccess } from "@/server/tools/student-access";
 export function toStudentToolEntitlement(
   access: StudentN8nAccess,
 ): StudentToolEntitlement {
+  // `invite_pending` — это уже выданный доступ, ученику осталось задать себе
+  // пароль. Каталог ведёт на страницу инструмента, где этот шаг и описан,
+  // поэтому общий для всех инструментов контракт состояний не расширяется.
   const state: StudentToolEntitlement["state"] =
-    access.state === "ready"
+    access.state === "ready" || access.state === "invite_pending"
       ? "available"
       : access.state === "owner_setup_required" || access.state === "preparing"
         ? "preparing"

@@ -8,10 +8,14 @@ import type {
   DatabaseTransactionSql,
 } from "@/server/db/client";
 import {
+  readN8nMemberIdentity,
   resolveN8nMemberIdentity,
   type N8nIdentityResolver,
 } from "@/server/tools/n8n-identity";
-import { sealN8nInvitePath } from "@/server/tools/n8n-invite";
+import {
+  openN8nInvitePath,
+  sealN8nInvitePath,
+} from "@/server/tools/n8n-invite";
 
 export type N8nLicenseEvidenceMode =
   | "written_permission"
@@ -81,13 +85,14 @@ export type StudentN8nAccessState =
   | "service_disabled"
   | "preparing"
   | "owner_setup_required"
+  | "invite_pending"
   | "ready"
   | "attention"
   | "expired";
 
 export type StudentN8nUnavailableState = Exclude<
   StudentN8nAccessState,
-  "ready"
+  "ready" | "invite_pending"
 >;
 
 type StudentN8nAccessBase = {
@@ -101,11 +106,22 @@ export type StudentN8nAccess =
       state: "ready";
       canLaunch: true;
       launchUrl: string;
+      inviteUrl: null;
+    })
+  // Аккаунт в n8n создан, но пароль ученик ещё не задал. Адрес инструмента уже
+  // виден, а приглашение — единственный способ задать пароль: Public API n8n
+  // пароли не принимает, поэтому платформа их не генерирует и не хранит.
+  | (StudentN8nAccessBase & {
+      state: "invite_pending";
+      canLaunch: true;
+      launchUrl: string;
+      inviteUrl: string;
     })
   | (StudentN8nAccessBase & {
       state: StudentN8nUnavailableState;
       canLaunch: false;
       launchUrl: null;
+      inviteUrl: null;
     });
 
 type StudentAccessRow = {
@@ -118,6 +134,7 @@ type StudentAccessRow = {
   managed_gateway_verified_at: Date | null;
   student_access_enabled: boolean;
   n8n_identity_id: string | null;
+  n8n_invite_path_ciphertext: string | null;
 };
 
 const lockedAccess: StudentN8nAccess = {
@@ -126,6 +143,7 @@ const lockedAccess: StudentN8nAccess = {
   state: "locked",
   canLaunch: false,
   launchUrl: null,
+  inviteUrl: null,
   expiresAt: null,
 };
 
@@ -139,8 +157,24 @@ function unavailableAccess(
     state,
     canLaunch: false,
     launchUrl: null,
+    inviteUrl: null,
     expiresAt,
   };
+}
+
+/**
+ * Абсолютный адрес страницы приглашения на том же инстансе. Путь уже проверен
+ * при сохранении, но origin сверяется ещё раз: ссылка уходит в браузер ученика.
+ */
+function safeInviteUrl(sealed: string | null, origin: string): string | null {
+  const path = openN8nInvitePath(sealed);
+  if (!path) return null;
+  try {
+    const url = new URL(path, origin);
+    return url.origin === origin ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getStudentN8nAccess(
@@ -158,7 +192,8 @@ export async function getStudentN8nAccess(
       installation.health_status,
       installation.managed_gateway_verified_at,
       coalesce(setting.student_access_enabled, true) AS student_access_enabled,
-      access.n8n_identity_id
+      access.n8n_identity_id,
+      access.n8n_invite_path_ciphertext
     FROM tool_access AS access
     JOIN users AS student
       ON student.id = access.user_id
@@ -214,18 +249,72 @@ export async function getStudentN8nAccess(
     row.managed_gateway_verified_at &&
     row.n8n_identity_id
   ) {
+    // ADR-0016: ученик заходит в инструмент по собственному аккаунту, поэтому
+    // получает его настоящий адрес, а не внутренний launch платформы.
+    const inviteUrl = safeInviteUrl(row.n8n_invite_path_ciphertext, launchUrl);
+    if (inviteUrl) {
+      return {
+        tool: "n8n",
+        displayName: "n8n",
+        state: "invite_pending",
+        canLaunch: true,
+        launchUrl,
+        inviteUrl,
+        expiresAt,
+      };
+    }
     return {
       tool: "n8n",
       displayName: "n8n",
       state: "ready",
       canLaunch: true,
-      // ADR-0016: ученик заходит в инструмент по собственному аккаунту, поэтому
-      // получает его настоящий адрес, а не внутренний launch платформы.
       launchUrl,
+      inviteUrl: null,
       expiresAt,
     };
   }
   return unavailableAccess("preparing", expiresAt);
+}
+
+/**
+ * Ссылка приглашения одноразовая: как только ученик задал пароль, n8n перестаёт
+ * считать аккаунт pending. Без этой очистки экран продолжал бы звать задавать
+ * пароль по уже использованной ссылке. Вызывается только со student refresh,
+ * поэтому запрос к n8n уходит лишь по действию самого ученика.
+ */
+export async function clearAcceptedN8nInvite(
+  sql: DatabaseSql,
+  studentUserId: string,
+  readIdentity = readN8nMemberIdentity,
+): Promise<boolean> {
+  const rows = await sql<Array<{ public_url: string | null; email: string }>>`
+    SELECT environment.public_url, student.email
+    FROM tool_access AS access
+    JOIN users AS student ON student.id = access.user_id
+    JOIN environments AS environment ON environment.id = access.environment_id
+    WHERE access.tool_type = 'n8n'
+      AND access.user_id = ${studentUserId}
+      AND access.status = 'active'
+      AND access.n8n_invite_path_ciphertext IS NOT NULL
+    LIMIT 1
+  `;
+  const row = rows[0];
+  const origin = safeHttpsUrl(row?.public_url ?? null);
+  if (!row || !origin) return false;
+  let identity: Awaited<ReturnType<typeof readN8nMemberIdentity>>;
+  try {
+    identity = await readIdentity(origin, row.email);
+  } catch {
+    // Недоступный инстанс не должен ломать экран: приглашение просто остаётся.
+    return false;
+  }
+  if (!identity || identity.pending) return false;
+  await sql`
+    UPDATE tool_access
+    SET n8n_invite_path_ciphertext = null, updated_at = now()
+    WHERE tool_type = 'n8n' AND user_id = ${studentUserId}
+  `;
+  return true;
 }
 
 function safeHttpsUrl(value: string | null): string | null {

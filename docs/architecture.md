@@ -129,6 +129,12 @@ approved hostname. Ученик входит в инструмент **по со
 настоящий HTTPS-origin и не проксирует вход. Ticket, gateway cookie,
 `forward_auth` и привязка сессии к поколению назначения отменены.
 
+Логин ученика — его адрес почты в Neurokurs. Пароль задаёт он сам: пока n8n
+считает аккаунт pending, пространство ученика показывает состояние «задайте
+пароль» и ведёт на одноразовое приглашение, после принятия которого платформа
+стирает сохранённую ссылку. Другого пути нет — Public API n8n пароли не
+принимает, а SMTP в managed-профиле не настроен.
+
 Выдача адреса fail-closed объединяет active student, course membership,
 индивидуальный n8n Member binding, expiry, license decision, общий service
 gate, environment, installation health и подтверждённую внешним probe отметку

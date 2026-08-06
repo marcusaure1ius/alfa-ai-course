@@ -1,22 +1,14 @@
-import { AlertTriangle, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { StudentN8nAccessCard } from "@/components/student/student-n8n-access";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { requirePageSession } from "@/server/auth/page-access";
 import { getDatabase } from "@/server/db/client";
 import { getStudentN8nAccess } from "@/server/tools/student-access";
 
-export default async function StudentN8nPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ notice?: string }>;
-}) {
+export default async function StudentN8nPage() {
   const session = await requirePageSession();
-  const [access, query] = await Promise.all([
-    getStudentN8nAccess(getDatabase(), session.userId),
-    searchParams,
-  ]);
+  const access = await getStudentN8nAccess(getDatabase(), session.userId);
   return (
     <div className="px-5 py-8 sm:px-8 sm:py-12 xl:px-12">
       <div className="mx-auto max-w-5xl">
@@ -37,19 +29,9 @@ export default async function StudentN8nPage({
             </span>
             <h1 className="font-display mt-6 text-4xl">n8n</h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-              Учебная среда для практики. Возможность входа зависит от текущего
-              состояния доступа.
+              Учебная среда для практики. Аккаунт в ней ваш собственный, а
+              состояние доступа определяет, открыт ли он сейчас.
             </p>
-            {query.notice === "launch-unavailable" ? (
-              <Alert className="mt-6" aria-live="polite">
-                <AlertTriangle aria-hidden="true" />
-                <AlertTitle>Вход больше недоступен</AlertTitle>
-                <AlertDescription>
-                  Состояние изменилось до открытия новой вкладки. Проверьте его
-                  ещё раз или подготовьте сообщение о проблеме.
-                </AlertDescription>
-              </Alert>
-            ) : null}
             <div className="mt-8">
               <StudentN8nAccessCard access={access} />
             </div>
@@ -59,8 +41,8 @@ export default async function StudentN8nPage({
               Перед началом
             </p>
             <p className="mt-3 text-base leading-7 text-muted-foreground">
-              Входите только через Neurokurs. Не добавляйте пароли, токены или
-              ключи в сообщение о проблеме.
+              Пароль от n8n вы задаёте сами и никому его не передаёте. Не
+              добавляйте пароли, токены или ключи в сообщение о проблеме.
             </p>
           </aside>
         </div>
