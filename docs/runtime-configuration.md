@@ -37,7 +37,6 @@ The encryption key must never change during update. Losing it makes stored n8n c
 `-f docker-compose.platform.yml`. При установке из Course Platform bootstrap
 автоматически создаёт `.env.platform` с mode `0600`:
 
-- `PLATFORM_GATE_ORIGIN` — HTTPS origin Course Platform без path;
 - внутренний `N8N_GATE_MANAGEMENT_SECRET` — HMAC, производный от обязательного
   `AUTH_SECRET`; оператор его не создаёт и не переносит вручную.
 

@@ -56,7 +56,7 @@ describe("getStudentToolCatalog", () => {
             displayName: "n8n",
             state,
             canLaunch: true,
-            launchUrl: "/api/student/tools/n8n/launch",
+            launchUrl: "https://n8n.example.test",
             expiresAt: null,
           }
         : {

@@ -24,7 +24,7 @@ function access(state: StudentN8nAccessState): StudentN8nAccess {
       displayName: "n8n",
       state,
       canLaunch: true,
-      launchUrl: "/api/student/tools/n8n/launch",
+      launchUrl: "https://n8n.example.test",
       expiresAt: "2026-08-30T20:59:59.000Z",
     };
   }
@@ -78,7 +78,7 @@ describe("StudentN8nAccessCard", () => {
     render(<StudentN8nAccessCard access={access("ready")} />);
     expect(
       screen.getByRole("link", { name: "Открыть n8n" }).getAttribute("href"),
-    ).toBe("/api/student/tools/n8n/launch");
+    ).toBe("https://n8n.example.test");
   });
 
   it("оставляет owner setup администратору и не показывает запуск", () => {

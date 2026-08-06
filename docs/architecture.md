@@ -123,36 +123,35 @@ Caddy выбран для базового профиля из-за неболь
 
 Standalone starter kit продолжает использовать обычный reverse proxy. Среда,
 которую Neurokurs выдаёт ученикам, обязана запускаться с
-`docker-compose.platform.yml`: `config/Caddyfile.platform` становится
-единственной фактической границей editor/API. Прямой URL никогда не входит в
-student DTO. Same-origin launch выдаёт одноразовый ticket только в POST form
-body, без token в URL и стандартных access logs. После обмена Caddy
-проверяет host-only gateway cookie через platform `forward_auth` на каждом
-запросе.
+`docker-compose.platform.yml`: `config/Caddyfile.platform` публикует n8n по
+approved hostname. Ученик входит в инструмент **по собственному аккаунту**
+([ADR-0016](../adr/0016-direct-n8n-student-accounts.md)): платформа отдаёт
+настоящий HTTPS-origin и не проксирует вход. Ticket, gateway cookie,
+`forward_auth` и привязка сессии к поколению назначения отменены.
 
-Authorizer fail-closed объединяет active student, course membership,
-индивидуальный n8n Member binding, точное поколение assignment, expiry,
-license decision, общий
-service gate, environment, installation health и доказанную внешним probe
-отметку `managed_gateway_verified_at`. Probe требует открытый health endpoint,
-закрытый без cookie editor и достижимый через Caddy exchange-маршрут. Поэтому
-статус обычного standalone n8n не может считаться готовностью managed gateway,
-а revoke, expiry и
-global off действуют на сохранённый URL и уже существующую n8n login session.
-Owner setup проходит только через admin ticket. Public webhook/form и health
-остаются отдельными allowlisted маршрутами. Внешняя конфигурация требует только
-scoped `N8N_MANAGEMENT_API_KEY`: grant сам находит или приглашает Member, а
-внутренний Caddy secret выводится из `AUTH_SECRET` и синхронизируется bootstrap.
-Тем же secret Caddy аутентифицирует и exchange, и каждый forward-auth запрос;
-Course Platform использует закреплённый профильный hostname вместо переписываемых
-CDN-заголовков `X-Forwarded-Host`.
+Выдача адреса fail-closed объединяет active student, course membership,
+индивидуальный n8n Member binding, expiry, license decision, общий service
+gate, environment, installation health и подтверждённую внешним probe отметку
+`managed_gateway_verified_at`. Probe требует открытый health endpoint,
+отвечающий редактор и закрытый без ключа Public API.
+
+**Отзыв доступа не мгновенный.** Он скрывает адрес и запрещает новые выдачи,
+но уже открытая n8n login session продолжает работать, пока account не
+отключат в самом n8n.
+
+Public webhook/form и health остаются отдельными allowlisted маршрутами.
+Внешняя конфигурация требует только scoped `N8N_MANAGEMENT_API_KEY`: grant сам
+находит или приглашает Member, а внутренний Caddy secret выводится из
+`AUTH_SECRET` и синхронизируется bootstrap. Этим secret Caddy помечает
+управляющие запросы и снимает служебный заголовок перед проксированием;
+ограничение доступа к Public API обеспечивает сам n8n.
 Если n8n не отправил invitation email, same-origin invite path хранится только
-в зашифрованном виде в назначении, не копируется в launch tickets, атомарно
-удаляется первым gateway exchange или revoke и очищается после expiry ежедневным
-reconciliation. Boundary
-зафиксирован в [ADR-0015](../adr/0015-n8n-student-identity-and-revocable-gateway.md),
-упрощённый configuration/invite flow — в
-[ADR-0013](../adr/0013-one-click-n8n-student-access.md).
+в зашифрованном виде в назначении, удаляется при revoke и очищается после
+expiry ежедневным reconciliation. Текущая модель зафиксирована в
+[ADR-0016](../adr/0016-direct-n8n-student-accounts.md); он отменяет
+[ADR-0013](../adr/0013-one-click-n8n-student-access.md) и часть
+[ADR-0015](../adr/0015-n8n-student-identity-and-revocable-gateway.md),
+которые описывали снятый ticket-слой.
 
 ## Установка
 

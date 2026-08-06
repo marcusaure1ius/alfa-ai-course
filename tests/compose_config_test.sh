@@ -58,11 +58,13 @@ jq -e '
 ' "$tmp/platform-compose.json" >/dev/null || fail "Managed profile override is incomplete"
 ok "managed profile replaces Caddy and keeps only the management secret"
 
-# ADR-0016: ученик входит в n8n сам, поэтому канал управления остаётся, а
-# ticket-модель должна отсутствовать. Негативные проверки не дают вернуть её
-# незаметно.
+# ADR-0016: ученик входит в n8n сам, поэтому ticket-модель должна
+# отсутствовать, а матчер управления остаётся. Он больше не ограничивает
+# доступ — после снятия forward_auth запрос без заголовка всё равно доходит до
+# n8n, — но снимает служебный заголовок перед проксированием. Негативные
+# проверки не дают вернуть удалённый слой незаметно.
 grep -Fq 'header X-Neurokurs-Management {$N8N_GATE_MANAGEMENT_SECRET}' "$ROOT/config/Caddyfile.platform" \
-  || fail "Management API bypass is not secret-bound"
+  || fail "Management header matcher is missing"
 grep -Fq 'request>headers>Cookie delete' "$ROOT/config/Caddyfile.platform" \
   || fail "Cookies are not redacted from access logs"
 grep -Fq 'request>headers>X-N8N-API-KEY delete' "$ROOT/config/Caddyfile.platform" \
