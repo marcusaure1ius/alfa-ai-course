@@ -5,16 +5,15 @@ export type SecurityHeaderRule = { source: string; headers: SecurityHeader[] };
  * Роуты, которые сами выставляют security-заголовки под свой сценарий.
  *
  * `next.config.headers()` не дополняет, а ПЕРЕКРЫВАЕТ одноимённые заголовки
- * ответа роута — проверено на production-сборке. Поэтому такие пути
- * исключаются из общих правил: иначе страница входа в n8n получила бы
- * `form-action 'none'` вместо origin инструмента, её inline-скрипт
- * автосабмита оказался бы заблокирован, и ученик не смог бы открыть n8n.
+ * ответа роута — проверено на production-сборке. Поэтому такие пути должны
+ * исключаться из общих правил, иначе роут молча теряет свою политику.
+ *
+ * Сейчас список пуст: gateway-маршруты удалены вместе с ticket-моделью
+ * (ADR-0016). Механизм оставлен намеренно — он закрывает ловушку, из-за
+ * которой однажды чуть не сломался вход ученика в n8n. Новый роут со своими
+ * `Content-Security-Policy` или `Referrer-Policy` обязан попасть сюда.
  */
-export const ROUTES_WITH_OWN_SECURITY_HEADERS = [
-  "/api/student/tools/n8n/launch",
-  "/api/admin/tools/n8n/launch",
-  "/api/tool-gateway/n8n/exchange",
-] as const;
+export const ROUTES_WITH_OWN_SECURITY_HEADERS: readonly string[] = [];
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -27,13 +26,20 @@ function escapeRegExp(value: string): string {
  * `/api/admin/tools/n8n/launch/status` молча потерял бы политику, потому что
  * совпал бы с исключением по префиксу.
  */
-function excludingOwnHeaderRoutes(prefix: "" | "/api"): string {
-  const alternatives = ROUTES_WITH_OWN_SECURITY_HEADERS.filter((route) =>
-    route.startsWith(`${prefix}/`),
-  )
-    .map((route) => escapeRegExp(route.slice(prefix.length + 1)))
-    .join("|");
-  return `${prefix}/((?!(?:${alternatives})$).*)`;
+export function excludingOwnHeaderRoutes(
+  prefix: "" | "/api",
+  // Список параметризован, чтобы якорение и экранирование оставались покрытыми
+  // тестами даже когда исключений нет.
+  routes: readonly string[] = ROUTES_WITH_OWN_SECURITY_HEADERS,
+): string {
+  const alternatives = routes
+    .filter((route) => route.startsWith(`${prefix}/`))
+    .map((route) => escapeRegExp(route.slice(prefix.length + 1)));
+  // Пустой список даёт `(?!()$)` — это уже другое выражение, а не «исключить
+  // ничего». Поэтому исключающая обёртка добавляется только при наличии путей.
+  return alternatives.length === 0
+    ? `${prefix}/(.*)`
+    : `${prefix}/((?!(?:${alternatives.join("|")})$).*)`;
 }
 
 

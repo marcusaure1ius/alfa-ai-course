@@ -19,7 +19,7 @@ import type {
 type StateContent = {
   title: string;
   description: string;
-  action: "help-access" | "refresh" | "launch" | "help-expired";
+  action: "help-access" | "refresh" | "launch" | "invite" | "help-expired";
   autoRefresh?: boolean;
 };
 
@@ -33,7 +33,7 @@ const copy: Record<StudentN8nAccessState, StateContent> = {
   license_blocked: {
     title: "Выдача доступа не завершена",
     description:
-      "Запуск закрыт обязательной проверкой условий доступа. Это состояние нельзя обойти входом по сохранённой ссылке.",
+      "Доступ закрыт обязательной проверкой условий. Пока она не пройдена, аккаунт в инструменте не выдаётся.",
     action: "help-access",
   },
   service_disabled: {
@@ -56,16 +56,22 @@ const copy: Record<StudentN8nAccessState, StateContent> = {
     action: "refresh",
     autoRefresh: true,
   },
+  invite_pending: {
+    title: "Аккаунт создан — задайте пароль",
+    description:
+      "Логин — тот же адрес почты, под которым вы вошли в Neurokurs. Пароль вы придумываете сами на странице приглашения: платформа его не задаёт, не хранит и не показывает. Ссылка одноразовая, после неё входите в n8n напрямую.",
+    action: "invite",
+  },
   ready: {
     title: "n8n готов к работе",
     description:
-      "Безопасный вход откроется в новой вкладке. Доступ проверяется заново при каждом запросе.",
+      "Вход в новой вкладке по вашему аккаунту n8n: логин — адрес почты, пароль вы задали сами. Платформа вход не выполняет и пароль не хранит.",
     action: "launch",
   },
   attention: {
     title: "Среду сейчас нельзя открыть",
     description:
-      "Проверка состояния не пройдена, поэтому ссылка скрыта. Попробуйте проверить ещё раз или подготовьте сообщение о проблеме.",
+      "Проверка состояния не пройдена, поэтому адрес инструмента пока не показан. Попробуйте проверить ещё раз или подготовьте сообщение о проблеме.",
     action: "refresh",
     autoRefresh: true,
   },
@@ -77,11 +83,19 @@ const copy: Record<StudentN8nAccessState, StateContent> = {
   },
 };
 
+function safeHost(url: string): string | null {
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+}
+
 function StateIcon({ state }: { state: StudentN8nAccessState }) {
   const Icon =
     state === "ready"
       ? ExternalLink
-      : state === "owner_setup_required"
+      : state === "invite_pending" || state === "owner_setup_required"
         ? KeyRound
         : state === "preparing"
           ? ServerCog
@@ -100,6 +114,21 @@ function PrimaryAction({
   access: StudentN8nAccess;
   content: StateContent;
 }) {
+  // Пароль задаётся один раз по одноразовому приглашению, поэтому рядом остаётся
+  // проверка состояния: ученик возвращается сюда уже с рабочим аккаунтом.
+  if (access.state === "invite_pending") {
+    return (
+      <>
+        <Button asChild>
+          <a href={access.inviteUrl} target="_blank" rel="noreferrer">
+            <KeyRound aria-hidden="true" />
+            Задать пароль
+          </a>
+        </Button>
+        <N8nAccessRefresh state={access.state} />
+      </>
+    );
+  }
   if (access.canLaunch) {
     return (
       <Button asChild>
@@ -131,6 +160,9 @@ export function StudentN8nAccessCard({
   access: StudentN8nAccess;
 }) {
   const content = copy[access.state];
+  // Адрес показывается текстом, а не только ссылкой на кнопке: ученик должен
+  // узнавать инструмент по его настоящему хосту.
+  const toolHost = access.launchUrl ? safeHost(access.launchUrl) : null;
   const formattedExpiry = access.expiresAt
     ? new Intl.DateTimeFormat("ru-RU", {
         dateStyle: "long",
@@ -149,6 +181,19 @@ export function StudentN8nAccessCard({
           <p className="mt-2 text-base leading-7 text-muted-foreground">
             {content.description}
           </p>
+          {toolHost ? (
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Адрес инструмента:{" "}
+              <a
+                className="font-medium text-foreground underline underline-offset-4"
+                href={access.launchUrl ?? undefined}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {toolHost}
+              </a>
+            </p>
+          ) : null}
           {access.expiresAt && formattedExpiry ? (
             <p className="mt-3 text-sm font-medium text-muted-foreground">
               {access.state === "expired" ? "Действовал до" : "Доступ до"}{" "}

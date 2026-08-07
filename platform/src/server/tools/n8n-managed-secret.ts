@@ -5,6 +5,9 @@ import { sha256 } from "@noble/hashes/sha2.js";
 
 import { getAuthSecret } from "@/server/auth/config";
 
+// Строку менять нельзя, несмотря на устаревшее слово gateway в названии:
+// это domain-контекст HMAC, из которого выводится секрет управления. Любая
+// правка изменит секрет и разорвёт канал к уже развёрнутому VPS.
 const GATEWAY_SECRET_CONTEXT = "neurokurs:n8n-gateway-management:v1";
 const BASE64URL =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";

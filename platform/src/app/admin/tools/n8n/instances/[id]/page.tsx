@@ -86,7 +86,7 @@ export default async function EnvironmentDetailPage({
         {environment.publicUrl && environment.managedGatewayVerified ? (
           <Button asChild>
             <a
-              href={`/api/admin/tools/n8n/launch?environmentId=${encodeURIComponent(environment.id)}`}
+              href={environment.publicUrl}
               target="_blank"
               rel="noreferrer"
             >

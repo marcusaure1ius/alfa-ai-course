@@ -8,6 +8,7 @@ import {
 } from "node:crypto";
 
 import { getAuthSecret } from "@/server/auth/config";
+import type { DatabaseSql } from "@/server/db/client";
 
 const INVITE_KEY_CONTEXT = "neurokurs:n8n-invite:v1";
 
@@ -87,4 +88,26 @@ export function openN8nInvitePath(
   } catch {
     return null;
   }
+}
+
+/**
+ * Одноразовые данные приглашения живут не дольше срока назначения.
+ * Вызывается ежедневным reconciliation.
+ */
+export async function cleanupExpiredN8nInvites(
+  sql: DatabaseSql,
+  now = new Date(),
+): Promise<number> {
+  const rows = await sql<Array<{ cleared: number }>>`
+    WITH cleared AS (
+      UPDATE tool_access
+      SET n8n_invite_path_ciphertext = null, updated_at = ${now}
+      WHERE tool_type = 'n8n'
+        AND expires_at <= ${now}
+        AND n8n_invite_path_ciphertext IS NOT NULL
+      RETURNING 1
+    )
+    SELECT count(*)::int AS cleared FROM cleared
+  `;
+  return rows[0]?.cleared ?? 0;
 }

@@ -7,6 +7,7 @@ import { createDatabaseClient, type DatabaseSql } from "@/server/db/client";
 import { runMigrations } from "@/server/db/migrate";
 
 import {
+  clearAcceptedN8nInvite,
   getAdminStudentN8nAccess,
   getStudentN8nAccess,
   setStudentN8nAccess,
@@ -27,6 +28,15 @@ const identityResolver = async (_origin: string, email: string) => ({
   email,
   pending: false,
   invitePath: null,
+});
+
+// Пока ученик не принял приглашение, n8n отдаёт его как pending и возвращает
+// одноразовый signup-путь.
+const pendingIdentityResolver = async (_origin: string, email: string) => ({
+  id: `n8n:${email}`,
+  email,
+  pending: true,
+  invitePath: "/signup?token=invite-token",
 });
 
 let sql: DatabaseSql;
@@ -129,17 +139,111 @@ describe("student n8n tool access", () => {
       displayName: "n8n",
       state: "ready",
       canLaunch: true,
-      launchUrl: "/api/student/tools/n8n/launch",
+      // ADR-0016: ученик получает настоящий адрес инструмента.
+      launchUrl: "https://n8n.example.test",
+      inviteUrl: null,
       expiresAt: expiresAt.toISOString(),
     });
     expect(Object.keys(access).sort()).toEqual([
       "canLaunch",
       "displayName",
       "expiresAt",
+      "inviteUrl",
       "launchUrl",
       "state",
       "tool",
     ]);
+    // Адрес отдаётся ученику напрямую, поэтому он обязан остаться голым
+    // https-origin: без учётных данных, пути и query.
+    const url = new URL(access.launchUrl as string);
+    expect(url.protocol).toBe("https:");
+    expect(url.username).toBe("");
+    expect(url.password).toBe("");
+    expect(url.search).toBe("");
+    expect(access.launchUrl).toBe(url.origin);
+  });
+
+  it("доводит ученика до приглашения, пока он не задал себе пароль", async () => {
+    const expiresAt = new Date("2026-08-30T23:59:59.000Z");
+    await setStudentN8nAccess(
+      sql,
+      admin,
+      { studentUserId: studentId, environmentId, granted: true, expiresAt },
+      {},
+      new Date("2026-07-31T12:00:00.000Z"),
+      licenseGate,
+      pendingIdentityResolver,
+    );
+
+    const access = await getStudentN8nAccess(
+      sql,
+      studentId,
+      new Date("2026-07-31T12:00:00.000Z"),
+      licenseGate,
+    );
+    expect(access).toMatchObject({
+      state: "invite_pending",
+      canLaunch: true,
+      launchUrl: "https://n8n.example.test",
+      inviteUrl: "https://n8n.example.test/signup?token=invite-token",
+    });
+    // Приглашение живёт на том же инстансе, что и сам инструмент.
+    expect(new URL(access.inviteUrl as string).origin).toBe(access.launchUrl);
+  });
+
+  it("снимает приглашение, как только n8n перестал считать аккаунт pending", async () => {
+    const expiresAt = new Date("2026-08-30T23:59:59.000Z");
+    await setStudentN8nAccess(
+      sql,
+      admin,
+      { studentUserId: studentId, environmentId, granted: true, expiresAt },
+      {},
+      new Date("2026-07-31T12:00:00.000Z"),
+      licenseGate,
+      pendingIdentityResolver,
+    );
+
+    // Инстанс недоступен — приглашение обязано остаться, иначе ученик потеряет
+    // единственный способ задать пароль.
+    await expect(
+      clearAcceptedN8nInvite(sql, studentId, async () => {
+        throw new Error("provider_unavailable");
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      getStudentN8nAccess(
+        sql,
+        studentId,
+        new Date("2026-07-31T12:30:00.000Z"),
+        licenseGate,
+      ),
+    ).resolves.toMatchObject({ state: "invite_pending" });
+
+    // Аккаунт активирован — приглашение больше не нужно.
+    await expect(
+      clearAcceptedN8nInvite(sql, studentId, async (_origin, email) => ({
+        id: `n8n:${email}`,
+        email,
+        pending: false,
+        invitePath: null,
+      })),
+    ).resolves.toBe(true);
+    const access = await getStudentN8nAccess(
+      sql,
+      studentId,
+      new Date("2026-07-31T13:00:00.000Z"),
+      licenseGate,
+    );
+    expect(access).toMatchObject({
+      state: "ready",
+      canLaunch: true,
+      inviteUrl: null,
+    });
+    const [row] = await sql<Array<{ n8n_invite_path_ciphertext: string | null }>>`
+      SELECT n8n_invite_path_ciphertext FROM tool_access
+      WHERE tool_type = 'n8n' AND user_id = ${studentId}
+    `;
+    expect(row?.n8n_invite_path_ciphertext).toBeNull();
   });
 
   it("не показывает запуск до подтверждения managed gateway", async () => {
@@ -252,7 +356,8 @@ describe("student n8n tool access", () => {
     ).resolves.toMatchObject({
       state: "ready",
       canLaunch: true,
-      launchUrl: "/api/student/tools/n8n/launch",
+      // ADR-0016: ученик получает настоящий адрес инструмента.
+      launchUrl: "https://n8n.example.test",
       expiresAt: expiresAt.toISOString(),
     });
     await expect(

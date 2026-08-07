@@ -10,14 +10,13 @@ function verifier(overrides: Partial<ConstructorParameters<typeof ExternalEnviro
     resolveIpv4: async () => [address],
     isPortOpen: async (_address, port) => port === 80 || port === 443,
     tlsFingerprint: async () => "AA:BB",
+    // ADR-0016: редактор отвечает публично, а закрытым обязан оставаться
+    // только управляющий API.
     fetchImpl: vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const pathname = new URL(String(input)).pathname;
       if (pathname === "/healthz") return new Response("ok", { status: 200 });
-      if (pathname === "/") return new Response(null, { status: 401 });
-      return Response.json(
-        { error: "invalid ticket" },
-        { status: 401, headers: { "cache-control": "no-store" } },
-      );
+      if (pathname === "/") return new Response("editor", { status: 200 });
+      return new Response(null, { status: 401 });
     }),
     ...overrides,
   });
@@ -56,41 +55,59 @@ describe("ExternalEnvironmentVerifier", () => {
     });
   });
 
-  it("rejects a publicly reachable editor instead of accepting standalone n8n", async () => {
+  // ADR-0016: публично доступная форма входа n8n — требуемое состояние, а не
+  // ошибка. Прежние кейсы закрепляли отменённую модель и давали ложное зелёное.
+  it("принимает публично доступный редактор", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("ok", { status: 200 }))
-      .mockResolvedValueOnce(new Response("editor", { status: 200 }));
+      .mockResolvedValueOnce(new Response("editor", { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
     await expect(
       verifier({ fetchImpl }).verifyN8nHealth(),
-    ).rejects.toMatchObject({
-      code: "GATEWAY_NOT_ENFORCED",
-      retryable: false,
-    });
+    ).resolves.toBeUndefined();
     expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
       `https://${COURSE_HOSTNAME}/healthz`,
       `https://${COURSE_HOSTNAME}/`,
+      `https://${COURSE_HOSTNAME}/api/v1/users`,
     ]);
   });
 
-  it("requires the internal exchange route to reach Course Platform", async () => {
+  it("принимает редирект редиректа на страницу входа", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("ok", { status: 200 }))
-      .mockResolvedValueOnce(new Response(null, { status: 401 }))
-      .mockResolvedValueOnce(new Response("Cannot POST", { status: 404 }));
+      .mockResolvedValueOnce(
+        new Response(null, { status: 302, headers: { location: "/signin" } }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    await expect(
+      verifier({ fetchImpl }).verifyN8nHealth(),
+    ).resolves.toBeUndefined();
+  });
+
+  it("отклоняет неотвечающий редактор", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("ok", { status: 200 }))
+      .mockResolvedValueOnce(new Response("boom", { status: 502 }));
+    await expect(
+      verifier({ fetchImpl }).verifyN8nHealth(),
+    ).rejects.toMatchObject({ code: "HEALTH_NOT_READY", retryable: true });
+  });
+
+  it("отклоняет открытый управляющий API как невосстановимую ошибку", async () => {
+    // Открытый /api/v1 означает полный доступ к инструменту без учётных данных.
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("ok", { status: 200 }))
+      .mockResolvedValueOnce(new Response("editor", { status: 200 }))
+      .mockResolvedValueOnce(new Response("[]", { status: 200 }));
     await expect(
       verifier({ fetchImpl }).verifyN8nHealth(),
     ).rejects.toMatchObject({
-      code: "MANAGED_GATEWAY_NOT_READY",
-    });
-    const exchangeCall = fetchImpl.mock.calls[2];
-    expect(exchangeCall?.[0]).toBe(
-      `https://${COURSE_HOSTNAME}/__neurokurs/exchange`,
-    );
-    expect(exchangeCall?.[1]).toMatchObject({
-      method: "POST",
-      body: "ticket=managed-gateway-readiness-probe",
+      code: "MANAGEMENT_API_NOT_SECURED",
+      retryable: false,
     });
   });
 });

@@ -8,6 +8,7 @@ import {
   buildDocumentContentSecurityPolicy,
   buildSecurityHeaderRules,
   createNonce,
+  excludingOwnHeaderRoutes,
   ruleMatches,
 } from "./security-headers";
 
@@ -16,6 +17,15 @@ function headerValue(key: string): string | undefined {
   return all.find((header) => header.key.toLowerCase() === key.toLowerCase())
     ?.value;
 }
+
+/**
+ * Список исключений сейчас пуст, а `it.each([])` падает сам по себе. Кейсы
+ * остаются описанными и оживают, как только в список добавят маршрут.
+ */
+const eachOwnHeaderRoute =
+  ROUTES_WITH_OWN_SECURITY_HEADERS.length > 0
+    ? it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)
+    : (name: string) => it.skip(name, () => {});
 
 /** Заголовки, которые фактически получит путь по всем правилам next.config. */
 function headersFor(pathname: string): Map<string, string> {
@@ -150,7 +160,7 @@ describe("правила next.config", () => {
     expect(applied.has("content-security-policy")).toBe(false);
   });
 
-  it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)(
+  eachOwnHeaderRoute(
     "не перекрывает собственный CSP роута %s",
     (route) => {
       const applied = headersFor(route);
@@ -173,7 +183,7 @@ describe("правила next.config", () => {
     );
   });
 
-  it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)(
+  eachOwnHeaderRoute(
     "не распространяет исключение на подпуть %s/…",
     (route) => {
       // Совпадение по префиксу молча лишило бы будущий подпуть политики.
@@ -185,7 +195,7 @@ describe("правила next.config", () => {
     },
   );
 
-  it.each(ROUTES_WITH_OWN_SECURITY_HEADERS)(
+  eachOwnHeaderRoute(
     "задаёт no-referrer на %s, чтобы ticket не утёк в Referer",
     (route) => {
       // Роут ставит no-referrer только на успешном пути; ответы-ошибки
@@ -193,6 +203,37 @@ describe("правила next.config", () => {
       expect(headersFor(route).get("referrer-policy")).toBe("no-referrer");
     },
   );
+});
+
+describe("построение исключений", () => {
+  // Список исключений сейчас пуст, поэтому логика проверяется на подставном:
+  // иначе якорение и экранирование остались бы без покрытия.
+  const routes = ["/api/tools/launch", "/api/tools/a+b(c)"];
+
+  it("исключает точный путь", () => {
+    const source = excludingOwnHeaderRoutes("/api", routes);
+    expect(ruleMatches(source, "/api/tools/launch")).toBe(false);
+    expect(ruleMatches(source, "/api/auth/csrf")).toBe(true);
+  });
+
+  it("не захватывает подпуть исключённого маршрута", () => {
+    const source = excludingOwnHeaderRoutes("/api", routes);
+    expect(ruleMatches(source, "/api/tools/launch/status")).toBe(true);
+  });
+
+  it("экранирует метасимволы пути", () => {
+    const source = excludingOwnHeaderRoutes("/api", routes);
+    expect(ruleMatches(source, "/api/tools/a+b(c)")).toBe(false);
+    // Без экранирования `a+b(c)` стал бы группой с квантификатором и совпал бы
+    // с посторонним путём.
+    expect(ruleMatches(source, "/api/tools/aab")).toBe(true);
+  });
+
+  it("без исключений покрывает всё", () => {
+    const source = excludingOwnHeaderRoutes("/api", []);
+    expect(source).toBe("/api/(.*)");
+    expect(ruleMatches(source, "/api/tools/launch")).toBe(true);
+  });
 });
 
 describe("nonce", () => {
