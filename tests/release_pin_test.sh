@@ -41,15 +41,15 @@ git -C "$ROOT" merge-base --is-ancestor "$release^{commit}" HEAD \
   || fail "pinned release $release is not an ancestor of HEAD: it was cut from unrelated code"
 ok 'pinned release is an ancestor of the current branch'
 
-# Именно эти файлы едут на VPS ученика и определяют, поднимется ли среда.
-for path in config/Caddyfile.platform docker-compose.platform.yml; do
-  git -C "$ROOT" show "$release:$path" > "$ROOT/.release-pin-check" 2>/dev/null \
+tmp="$(mktemp -d)"
+trap 'rm -rf -- "$tmp"' EXIT
+
+# Эти файлы едут на VPS ученика и определяют, поднимется ли среда вообще.
+for path in config/Caddyfile.platform docker-compose.platform.yml docker-compose.yml config/Caddyfile scripts/install.sh scripts/doctor.sh; do
+  git -C "$ROOT" show "$release:$path" > "$tmp/pinned" 2>/dev/null \
     || fail "pinned release $release does not contain $path"
-  if ! diff -q "$ROOT/.release-pin-check" "$ROOT/$path" >/dev/null; then
-    rm -f "$ROOT/.release-pin-check"
-    fail "$path differs between pinned release $release and the working tree; re-cut the release"
-  fi
-  rm -f "$ROOT/.release-pin-check"
+  diff -q "$tmp/pinned" "$ROOT/$path" >/dev/null \
+    || fail "$path differs between pinned release $release and the working tree; re-cut the release"
   ok "$path in pinned release matches the working tree"
 done
 
