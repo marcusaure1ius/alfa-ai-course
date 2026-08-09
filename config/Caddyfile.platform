@@ -1,5 +1,22 @@
 {
 	admin 127.0.0.1:2019
+
+	# Блок log внутри сайта настраивает только access-лог. Ошибки reverse_proxy
+	# (недоступный upstream, таймаут) пишет default-логгер, и полный URI с
+	# одноразовым токеном приглашения ушёл бы туда без фильтра.
+	log default {
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					replace token REDACTED
+				}
+				request>headers>Cookie delete
+				request>headers>X-N8N-API-KEY delete
+				request>headers>X-Neurokurs-Management delete
+			}
+		}
+	}
 }
 
 {$N8N_HOST} {
@@ -47,8 +64,14 @@
 				# ADR-0016: одноразовое приглашение n8n приходит как /signup?token=...
 				# и ведёт себя как секрет — по нему задаётся пароль аккаунта. Путь
 				# не входит в allowlist, поэтому проходит общим handle и попал бы
-				# в лог целиком. Снятый ticket больше не существует и не редактируется.
-				request>uri query replace token REDACTED
+				# в лог целиком. Снятый ticket больше не существует.
+				#
+				# Только блочная форма: однострочный вариант Caddy принимает молча,
+				# но подпараметры не читает и оставляет actions пустым, то есть
+				# редакция не выполняется вообще. Проверяется по caddy adapt.
+				request>uri query {
+					replace token REDACTED
+				}
 				request>headers>Cookie delete
 				request>headers>X-N8N-API-KEY delete
 				request>headers>X-Neurokurs-Management delete
