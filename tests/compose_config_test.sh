@@ -98,6 +98,26 @@ jq -e '
 ' "$tmp/caddy.json" >/dev/null \
   || fail "n8n invite token is not redacted from both Caddy access and error logs"
 ok "managed Caddy redacts the n8n invite token from access and error logs"
+
+# T-0117: без собственного robots.txt любой неизвестный путь уходит в n8n, а тот
+# отдаёт SPA-оболочку с кодом 200 — домен выглядит как множество страниц входа
+# под чужим брендом. Проверяется адаптированный конфиг: обработчик должен
+# существовать и запрещать обход, а noindex — стоять на всех ответах сайта.
+jq -e '
+  [ .. | objects | select(.handler == "static_response")
+    | select(.body // "" | test("User-agent: \\*"))
+    | select(.body | test("Disallow: /"))
+  ] | length >= 1
+' "$tmp/caddy.json" >/dev/null \
+  || fail "Managed Caddy does not serve a disallow-all robots.txt"
+jq -e '
+  [ .. | objects | select(.handler == "headers")
+    | .response.set["X-Robots-Tag"] // empty
+    | select(any(.[]; test("noindex")))
+  ] | length >= 1
+' "$tmp/caddy.json" >/dev/null \
+  || fail "Managed Caddy does not send X-Robots-Tag noindex"
+ok "managed Caddy keeps the tool out of search indexes"
 if sed 's/#.*//' "$ROOT/config/Caddyfile.platform" |
   grep -Eq 'forward_auth|__neurokurs/exchange|uri query -ticket'; then
   fail "Removed ticket gateway reappeared in the managed Caddy profile"

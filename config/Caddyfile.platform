@@ -22,6 +22,18 @@
 {$N8N_HOST} {
 	encode zstd gzip
 
+	# Инструмент не предназначен для поисковой выдачи. Без собственного
+	# robots.txt любой неизвестный путь уходит в n8n, а тот отдаёт SPA-оболочку
+	# с кодом 200 — то есть неограниченное число URL этого домена выглядит как
+	# страница входа под брендом n8n.io. Свой robots.txt должен стоять до
+	# общего handle, иначе его перехватит проксирование.
+	handle /robots.txt {
+		header Content-Type "text/plain; charset=utf-8"
+		respond `User-agent: *
+Disallow: /
+` 200
+	}
+
 	@public_endpoints path /healthz /healthz/readiness /webhook/* /webhook-test/* /form/* /form-test/*
 	handle @public_endpoints {
 		reverse_proxy n8n:5678
@@ -49,6 +61,9 @@
 	}
 
 	header {
+		# Дублирует robots.txt на уровне заголовка: он действует и на ответы,
+		# которые робот получил не через обход корня.
+		X-Robots-Tag "noindex, nofollow"
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
