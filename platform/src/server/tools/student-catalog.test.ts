@@ -46,7 +46,7 @@ describe("getStudentToolCatalog", () => {
     ["service_disabled", "service_disabled"],
     ["preparing", "preparing"],
     ["owner_setup_required", "preparing"],
-    ["invite_pending", "available"],
+    ["invite_pending", "action_required"],
     ["ready", "available"],
     ["attention", "attention"],
     ["expired", "expired"],

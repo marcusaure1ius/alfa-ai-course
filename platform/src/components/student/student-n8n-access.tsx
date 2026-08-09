@@ -61,6 +61,10 @@ const copy: Record<StudentN8nAccessState, StateContent> = {
     description:
       "Логин — тот же адрес почты, под которым вы вошли в Neurokurs. Пароль вы придумываете сами на странице приглашения: платформа его не задаёт, не хранит и не показывает. Ссылка одноразовая, после неё входите в n8n напрямую.",
     action: "invite",
+    // Ссылка гасится в n8n сразу после установки пароля. Экран проверяет
+    // состояние сам, иначе вернувшийся ученик увидел бы главную кнопку,
+    // ведущую на уже недействительное приглашение.
+    autoRefresh: true,
   },
   ready: {
     title: "n8n готов к работе",
@@ -125,7 +129,7 @@ function PrimaryAction({
             Задать пароль
           </a>
         </Button>
-        <N8nAccessRefresh state={access.state} />
+        <N8nAccessRefresh state={access.state} auto={content.autoRefresh} />
       </>
     );
   }

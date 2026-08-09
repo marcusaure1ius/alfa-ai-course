@@ -44,7 +44,11 @@
 		format filter {
 			wrap console
 			fields {
-				request>uri query replace ticket REDACTED
+				# ADR-0016: одноразовое приглашение n8n приходит как /signup?token=...
+				# и ведёт себя как секрет — по нему задаётся пароль аккаунта. Путь
+				# не входит в allowlist, поэтому проходит общим handle и попал бы
+				# в лог целиком. Снятый ticket больше не существует и не редактируется.
+				request>uri query replace token REDACTED
 				request>headers>Cookie delete
 				request>headers>X-N8N-API-KEY delete
 				request>headers>X-Neurokurs-Management delete

@@ -67,21 +67,21 @@ export const UNCONDITIONAL_SECURITY_HEADERS: SecurityHeader[] = [
   },
 ];
 
-/**
- * Referrer-Policy вынесен отдельно: gateway-роуты сознательно отвечают
- * `no-referrer`, чтобы ticket не утёк в Referer при переходе в n8n.
- */
+/** Значение по умолчанию для всех путей, не заявивших собственную политику. */
 export const DEFAULT_REFERRER_POLICY: SecurityHeader = {
   key: "Referrer-Policy",
   value: "strict-origin-when-cross-origin",
 };
 
 /**
- * Gateway-роуты отвечают `no-referrer` на успешном пути, чтобы ticket не попал
- * в `Referer` при переходе в n8n. То же значение задаётся здесь, чтобы его
- * получили и ответы-ошибки этих роутов, которые заголовок сами не ставят.
+ * Политика для путей из `ROUTES_WITH_OWN_SECURITY_HEADERS`: они уводят браузер
+ * на внешний адрес и не должны отдавать собственный URL в `Referer`.
+ *
+ * Список сейчас пуст, поэтому значение ни на один ответ не попадает. Оно
+ * оставлено вместе с механизмом: роут, который начнёт куда-то перенаправлять,
+ * должен получать его и на ответах-ошибках, где заголовок сам не ставится.
  */
-export const GATEWAY_REFERRER_POLICY: SecurityHeader = {
+export const OWN_HEADER_ROUTES_REFERRER_POLICY: SecurityHeader = {
   key: "Referrer-Policy",
   value: "no-referrer",
 };
@@ -112,7 +112,7 @@ export function buildSecurityHeaderRules(): SecurityHeaderRule[] {
     // path-подобное выражение и отвергает верхнеуровневую группу `/(?:a|b)`.
     ...ROUTES_WITH_OWN_SECURITY_HEADERS.map((route) => ({
       source: route,
-      headers: [GATEWAY_REFERRER_POLICY],
+      headers: [OWN_HEADER_ROUTES_REFERRER_POLICY],
     })),
     {
       source: excludingOwnHeaderRoutes("/api"),

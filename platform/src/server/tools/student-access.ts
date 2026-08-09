@@ -438,21 +438,11 @@ export async function setStudentN8nAccess(
           AND user_id = ${input.studentUserId}
           AND environment_id = ${input.environmentId}
       `;
-      await transaction`
-        UPDATE tool_gateway_tickets
-        SET consumed_at = coalesce(consumed_at, now())
-        WHERE subject_role = 'student'
-          AND subject_user_id = ${input.studentUserId}
-          AND environment_id = ${input.environmentId}
-          AND consumed_at IS NULL
-      `;
-      await transaction`
-        UPDATE tool_gateway_sessions
-        SET revoked_at = now()
-        WHERE subject_user_id = ${input.studentUserId}
-          AND environment_id = ${input.environmentId}
-          AND revoked_at IS NULL
-      `;
+      // ADR-0016: гашения ticket и gateway-сессии здесь больше нет. После
+      // сноса слоя эти таблицы никем не наполняются, поэтому UPDATE был
+      // холостым и создавал впечатление, что отзыв обрывает доступ. Он его не
+      // обрывает: аккаунт отключается в самом n8n. Удаление самих таблиц —
+      // отдельной миграцией, теперь, когда код на них не ссылается.
       await appendToolAccessAudit(
         transaction,
         actor,

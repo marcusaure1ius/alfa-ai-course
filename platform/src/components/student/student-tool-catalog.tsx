@@ -4,6 +4,7 @@ import {
   Box,
   CircleCheck,
   Clock3,
+  KeyRound,
   LockKeyhole,
   PauseCircle,
   ServerCog,
@@ -44,6 +45,11 @@ const statePresentation: Record<StudentToolAccessState, StatePresentation> = {
     title: "Сервис готовится",
     description: "Доступ назначен, но инструмент пока нельзя открыть.",
     icon: ServerCog,
+  },
+  action_required: {
+    title: "Нужно ваше действие",
+    description: "Доступ открыт, но инструмент ещё не готов к работе. Откройте карточку, чтобы завершить настройку.",
+    icon: KeyRound,
   },
   available: {
     title: "Можно работать",

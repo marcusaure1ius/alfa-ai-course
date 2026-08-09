@@ -69,6 +69,11 @@ grep -Fq 'request>headers>Cookie delete' "$ROOT/config/Caddyfile.platform" \
   || fail "Cookies are not redacted from access logs"
 grep -Fq 'request>headers>X-N8N-API-KEY delete' "$ROOT/config/Caddyfile.platform" \
   || fail "n8n API key is not redacted from access logs"
+# ADR-0016: ученик задаёт пароль по одноразовому /signup?token=..., который идёт
+# общим handle. Токен даёт право завести чужой аккаунт, поэтому в лог он попасть
+# не должен. Редакция снятого ticket эту дыру не закрывала.
+grep -Fq 'request>uri query replace token REDACTED' "$ROOT/config/Caddyfile.platform" \
+  || fail "n8n invite token is not redacted from access logs"
 if sed 's/#.*//' "$ROOT/config/Caddyfile.platform" |
   grep -Eq 'forward_auth|__neurokurs/exchange|uri query -ticket'; then
   fail "Removed ticket gateway reappeared in the managed Caddy profile"

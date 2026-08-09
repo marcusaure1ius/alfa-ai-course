@@ -38,6 +38,38 @@ describe("StudentN8nAccessControl", () => {
     expect(results.violations).toEqual([]);
   });
 
+  it("называет фактическое последствие срока и не обещает блокировку сессии", () => {
+    render(
+      <StudentN8nAccessControl
+        studentId="student-1"
+        access={{
+          environmentId: "environment-1",
+          environmentName: "Основная среда",
+          environmentReady: true,
+          status: null,
+          expiresAt: null,
+        }}
+        licenseGate={{ ready: true }}
+        expiryDates={{
+          minimum: "2026-08-01",
+          recommended: "2026-08-30",
+          maximum: "2027-07-31",
+        }}
+      />,
+    );
+
+    // ADR-0016: платформа скрывает адрес, но живую сессию n8n не обрывает.
+    // Админ выбирает дату именно здесь, поэтому обещание автоматической
+    // блокировки вводило бы его в заблуждение в момент решения.
+    expect(
+      screen.getByText(/аккаунт отключается вручную в самом n8n/i),
+    ).toBeTruthy();
+    expect(screen.getByText(/пароль он задаёт себе сам/i)).toBeTruthy();
+    expect(
+      screen.queryByText(/активная сессия будут автоматически заблокированы/i),
+    ).toBeNull();
+  });
+
   it("не позволяет выдать ссылку без license evidence", () => {
     render(
       <StudentN8nAccessControl

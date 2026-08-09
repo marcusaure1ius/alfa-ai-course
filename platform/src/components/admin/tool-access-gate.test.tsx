@@ -39,9 +39,16 @@ describe("ToolAccessGate", () => {
       screen.getByRole("heading", { name: "Закрыть ученикам доступ к n8n?" }),
     ).toBeTruthy();
     expect(
-      screen.getByText(/недоступны для 1 активного назначения/),
+      screen.getByText(/скроется у 1 активного назначения/),
     ).toBeTruthy();
     expect(screen.getByText(/Назначения и среда сохранятся/)).toBeTruthy();
+    // ADR-0016: forward_auth снят, поэтому закрытие доступа не обрывает уже
+    // открытую сессию n8n. Админ принимает решение именно на этом экране, и
+    // обещание мгновенного отзыва здесь дороже, чем в любом документе.
+    expect(
+      screen.getByText(/Уже открытые сессии в n8n продолжат работать/),
+    ).toBeTruthy();
+    expect(screen.queryByText(/сразу станут недоступны/)).toBeNull();
     const results = await axe(document.body, {
       rules: { "color-contrast": { enabled: false } },
     });

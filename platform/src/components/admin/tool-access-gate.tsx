@@ -108,7 +108,9 @@ export function ToolAccessGate({
           <AlertDialogHeader>
             <AlertDialogTitle>Закрыть ученикам доступ к {displayName}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Рабочие ссылки сразу станут недоступны для {assignmentCountLabel(activeAccessCount)}.
+              Адрес инструмента сразу скроется у {assignmentCountLabel(activeAccessCount)},
+              и новые выдачи прекратятся. Уже открытые сессии в {displayName} продолжат
+              работать: их закрывает отключение аккаунтов в самом {displayName}.
               Назначения и среда сохранятся, поэтому доступ можно будет вернуть одной кнопкой.
             </AlertDialogDescription>
           </AlertDialogHeader>
