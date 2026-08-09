@@ -160,28 +160,28 @@ export class ExternalEnvironmentVerifier {
         "n8n /healthz ещё не вернул 200.",
       );
     }
-    const editor = await request("/");
-    if (editor.status !== 401) {
+    // ADR-0016: ученик входит по собственному аккаунту, поэтому форма входа
+    // n8n доступна публично. Проверяем не закрытость редактора, а то, что он
+    // отвечает: `manual` нужен, потому что n8n перенаправляет корень на /signin.
+    const editor = await request("/", { redirect: "manual" });
+    const editorReachable =
+      editor.status === 200 || (editor.status >= 300 && editor.status < 400);
+    if (!editorReachable) {
       throw new ExternalHealthError(
-        "GATEWAY_NOT_ENFORCED",
-        "n8n editor доступен без подтверждённой gateway-сессии.",
-        false,
+        "HEALTH_NOT_READY",
+        "n8n editor ещё не отвечает на публичный HTTPS-запрос.",
       );
     }
 
-    const exchange = await request("/__neurokurs/exchange", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: "ticket=managed-gateway-readiness-probe",
-    });
-    if (
-      exchange.status !== 401 ||
-      !exchange.headers.get("content-type")?.startsWith("application/json") ||
-      !exchange.headers.get("cache-control")?.includes("no-store")
-    ) {
+    // Управляющий API обязан оставаться закрытым: через него платформа
+    // создаёт приглашения, и его открытость означала бы полный доступ к
+    // инструменту без учётных данных.
+    const management = await request("/api/v1/users", { redirect: "manual" });
+    if (management.status !== 401) {
       throw new ExternalHealthError(
-        "MANAGED_GATEWAY_NOT_READY",
-        "Managed gateway не подтвердил безопасный маршрут обмена.",
+        "MANAGEMENT_API_NOT_SECURED",
+        "Управляющий API n8n отвечает без обязательной авторизации.",
+        false,
       );
     }
   }

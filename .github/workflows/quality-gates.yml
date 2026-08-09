@@ -26,6 +26,9 @@ jobs:
         run: |
           docker pull docker.n8n.io/n8nio/n8n:2.29.10
           docker pull postgres:17.10-bookworm
+          # compose-config адаптирует managed profile этим же образом, чтобы
+          # проверить редакцию токена приглашения в логах по факту, а не по тексту.
+          docker pull caddy:2.11.4-alpine
 
       - name: Run quality gates
         run: make quality-ci

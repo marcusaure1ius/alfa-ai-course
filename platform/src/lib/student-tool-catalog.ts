@@ -4,6 +4,10 @@ export type StudentToolAccessState =
   | "locked"
   | "service_disabled"
   | "preparing"
+  // Доступ выдан, но без действия самого ученика инструментом не воспользоваться.
+  // Состояние общее, а не про n8n: ожидание ученика отличается и от «готовится»
+  // (ждём систему), и от «можно работать» (ничего делать не нужно).
+  | "action_required"
   | "available"
   | "attention"
   | "expired";

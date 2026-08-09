@@ -47,28 +47,61 @@ jq -e '
 ' "$tmp/compose.json" >/dev/null || fail "Pinned platform/private network assertions failed"
 ok "platform and private database/n8n topology are pinned"
 
-PLATFORM_GATE_ORIGIN=https://course.example.test \
 N8N_GATE_MANAGEMENT_SECRET=synthetic-gateway-management-secret-32-bytes \
   docker compose --project-directory "$ROOT" --env-file "$ENV_FILE" \
     -f "$ROOT/docker-compose.yml" -f "$ROOT/docker-compose.platform.yml" \
     config --format json > "$tmp/platform-compose.json"
 jq -e '
-  .services.caddy.environment.PLATFORM_GATE_ORIGIN == "https://course.example.test" and
   .services.caddy.environment.N8N_GATE_MANAGEMENT_SECRET == "synthetic-gateway-management-secret-32-bytes" and
+  (.services.caddy.environment | has("PLATFORM_GATE_ORIGIN") | not) and
   any(.services.caddy.volumes[]; .target == "/etc/caddy/Caddyfile" and (.source | endswith("/config/Caddyfile.platform")))
-' "$tmp/platform-compose.json" >/dev/null || fail "Managed gateway override is incomplete"
-ok "managed profile replaces Caddy with the fail-closed gateway configuration"
+' "$tmp/platform-compose.json" >/dev/null || fail "Managed profile override is incomplete"
+ok "managed profile replaces Caddy and keeps only the management secret"
 
-grep -Fq 'forward_auth {$PLATFORM_GATE_ORIGIN}' "$ROOT/config/Caddyfile.platform" \
-  || fail "Student editor gateway is not enforced"
+# ADR-0016: ученик входит в n8n сам, поэтому ticket-модель должна
+# отсутствовать, а матчер управления остаётся. Он больше не ограничивает
+# доступ — после снятия forward_auth запрос без заголовка всё равно доходит до
+# n8n, — но снимает служебный заголовок перед проксированием. Негативные
+# проверки не дают вернуть удалённый слой незаметно.
 grep -Fq 'header X-Neurokurs-Management {$N8N_GATE_MANAGEMENT_SECRET}' "$ROOT/config/Caddyfile.platform" \
-  || fail "Management API bypass is not secret-bound"
+  || fail "Management header matcher is missing"
 grep -Fq 'request>headers>Cookie delete' "$ROOT/config/Caddyfile.platform" \
-  || fail "Gateway cookies are not redacted from access logs"
-grep -Fq 'uri query -ticket' "$ROOT/config/Caddyfile.platform" \
-  || fail "Legacy ticket query data is not stripped before upstream"
-grep -Fq 'header_up X-Neurokurs-Gateway {$N8N_GATE_MANAGEMENT_SECRET}' "$ROOT/config/Caddyfile.platform" \
-  || fail "Ticket exchange is not bound to the managed Caddy profile"
-ok "platform Caddy contract gates editor/API and redacts credentials"
+  || fail "Cookies are not redacted from access logs"
+grep -Fq 'request>headers>X-N8N-API-KEY delete' "$ROOT/config/Caddyfile.platform" \
+  || fail "n8n API key is not redacted from access logs"
+# ADR-0016: ученик задаёт пароль по одноразовому /signup?token=..., который идёт
+# общим handle. Токен даёт право завести чужой аккаунт, поэтому в лог он попасть
+# не должен.
+#
+# Проверяется ЭФФЕКТ, а не текст конфига. Однострочную форму `query replace ...`
+# Caddy принимает молча, но подпараметры не читает и оставляет actions пустым:
+# grep по такой строке проходил бы при полностью отключённой редакции.
+#
+# Логгеров два, и оба обязательны. Блок log внутри сайта покрывает только
+# access-лог; ошибки reverse_proxy пишет default-логгер, и без его настройки
+# http.log.error печатает URI с токеном целиком — проверено живым запросом.
+docker run --rm -i \
+  -e N8N_HOST=n8n.example.test \
+  -e N8N_GATE_MANAGEMENT_SECRET=synthetic-secret-for-adapt-only \
+  caddy:2.11.4-alpine \
+  sh -c 'cat > /tmp/Caddyfile && caddy adapt --config /tmp/Caddyfile --adapter caddyfile' \
+  < "$ROOT/config/Caddyfile.platform" > "$tmp/caddy.json" 2>/dev/null \
+  || fail "Managed Caddy profile does not adapt"
+jq -e '
+  [ .logging.logs | to_entries[]
+    | select(.value.encoder.fields["request>uri"] != null)
+    | .value.encoder.fields["request>uri"]
+    | select(.filter == "query")
+    | .actions // []
+    | any(.[]; .parameter == "token" and .type == "replace")
+  ] | length == 2 and all(.[]; .)
+' "$tmp/caddy.json" >/dev/null \
+  || fail "n8n invite token is not redacted from both Caddy access and error logs"
+ok "managed Caddy redacts the n8n invite token from access and error logs"
+if sed 's/#.*//' "$ROOT/config/Caddyfile.platform" |
+  grep -Eq 'forward_auth|__neurokurs/exchange|uri query -ticket'; then
+  fail "Removed ticket gateway reappeared in the managed Caddy profile"
+fi
+ok "platform Caddy keeps the management channel without the removed ticket gateway"
 
 printf '1..%d\n' "$COUNT"

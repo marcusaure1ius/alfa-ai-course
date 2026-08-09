@@ -5,16 +5,15 @@ export type SecurityHeaderRule = { source: string; headers: SecurityHeader[] };
  * Роуты, которые сами выставляют security-заголовки под свой сценарий.
  *
  * `next.config.headers()` не дополняет, а ПЕРЕКРЫВАЕТ одноимённые заголовки
- * ответа роута — проверено на production-сборке. Поэтому такие пути
- * исключаются из общих правил: иначе страница входа в n8n получила бы
- * `form-action 'none'` вместо origin инструмента, её inline-скрипт
- * автосабмита оказался бы заблокирован, и ученик не смог бы открыть n8n.
+ * ответа роута — проверено на production-сборке. Поэтому такие пути должны
+ * исключаться из общих правил, иначе роут молча теряет свою политику.
+ *
+ * Сейчас список пуст: gateway-маршруты удалены вместе с ticket-моделью
+ * (ADR-0016). Механизм оставлен намеренно — он закрывает ловушку, из-за
+ * которой однажды чуть не сломался вход ученика в n8n. Новый роут со своими
+ * `Content-Security-Policy` или `Referrer-Policy` обязан попасть сюда.
  */
-export const ROUTES_WITH_OWN_SECURITY_HEADERS = [
-  "/api/student/tools/n8n/launch",
-  "/api/admin/tools/n8n/launch",
-  "/api/tool-gateway/n8n/exchange",
-] as const;
+export const ROUTES_WITH_OWN_SECURITY_HEADERS: readonly string[] = [];
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -27,13 +26,20 @@ function escapeRegExp(value: string): string {
  * `/api/admin/tools/n8n/launch/status` молча потерял бы политику, потому что
  * совпал бы с исключением по префиксу.
  */
-function excludingOwnHeaderRoutes(prefix: "" | "/api"): string {
-  const alternatives = ROUTES_WITH_OWN_SECURITY_HEADERS.filter((route) =>
-    route.startsWith(`${prefix}/`),
-  )
-    .map((route) => escapeRegExp(route.slice(prefix.length + 1)))
-    .join("|");
-  return `${prefix}/((?!(?:${alternatives})$).*)`;
+export function excludingOwnHeaderRoutes(
+  prefix: "" | "/api",
+  // Список параметризован, чтобы якорение и экранирование оставались покрытыми
+  // тестами даже когда исключений нет.
+  routes: readonly string[] = ROUTES_WITH_OWN_SECURITY_HEADERS,
+): string {
+  const alternatives = routes
+    .filter((route) => route.startsWith(`${prefix}/`))
+    .map((route) => escapeRegExp(route.slice(prefix.length + 1)));
+  // Пустой список даёт `(?!()$)` — это уже другое выражение, а не «исключить
+  // ничего». Поэтому исключающая обёртка добавляется только при наличии путей.
+  return alternatives.length === 0
+    ? `${prefix}/(.*)`
+    : `${prefix}/((?!(?:${alternatives.join("|")})$).*)`;
 }
 
 
@@ -61,21 +67,21 @@ export const UNCONDITIONAL_SECURITY_HEADERS: SecurityHeader[] = [
   },
 ];
 
-/**
- * Referrer-Policy вынесен отдельно: gateway-роуты сознательно отвечают
- * `no-referrer`, чтобы ticket не утёк в Referer при переходе в n8n.
- */
+/** Значение по умолчанию для всех путей, не заявивших собственную политику. */
 export const DEFAULT_REFERRER_POLICY: SecurityHeader = {
   key: "Referrer-Policy",
   value: "strict-origin-when-cross-origin",
 };
 
 /**
- * Gateway-роуты отвечают `no-referrer` на успешном пути, чтобы ticket не попал
- * в `Referer` при переходе в n8n. То же значение задаётся здесь, чтобы его
- * получили и ответы-ошибки этих роутов, которые заголовок сами не ставят.
+ * Политика для путей из `ROUTES_WITH_OWN_SECURITY_HEADERS`: они уводят браузер
+ * на внешний адрес и не должны отдавать собственный URL в `Referer`.
+ *
+ * Список сейчас пуст, поэтому значение ни на один ответ не попадает. Оно
+ * оставлено вместе с механизмом: роут, который начнёт куда-то перенаправлять,
+ * должен получать его и на ответах-ошибках, где заголовок сам не ставится.
  */
-export const GATEWAY_REFERRER_POLICY: SecurityHeader = {
+export const OWN_HEADER_ROUTES_REFERRER_POLICY: SecurityHeader = {
   key: "Referrer-Policy",
   value: "no-referrer",
 };
@@ -106,7 +112,7 @@ export function buildSecurityHeaderRules(): SecurityHeaderRule[] {
     // path-подобное выражение и отвергает верхнеуровневую группу `/(?:a|b)`.
     ...ROUTES_WITH_OWN_SECURITY_HEADERS.map((route) => ({
       source: route,
-      headers: [GATEWAY_REFERRER_POLICY],
+      headers: [OWN_HEADER_ROUTES_REFERRER_POLICY],
     })),
     {
       source: excludingOwnHeaderRoutes("/api"),

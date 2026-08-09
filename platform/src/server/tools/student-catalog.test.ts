@@ -23,6 +23,7 @@ describe("getStudentToolCatalog", () => {
       state: "service_disabled" as const,
       canLaunch: false as const,
       launchUrl: null,
+      inviteUrl: null,
       expiresAt: "2026-09-01T00:00:00.000Z",
     };
     mocks.getStudentN8nAccess.mockResolvedValue(effectiveAccess);
@@ -45,6 +46,7 @@ describe("getStudentToolCatalog", () => {
     ["service_disabled", "service_disabled"],
     ["preparing", "preparing"],
     ["owner_setup_required", "preparing"],
+    ["invite_pending", "action_required"],
     ["ready", "available"],
     ["attention", "attention"],
     ["expired", "expired"],
@@ -56,7 +58,18 @@ describe("getStudentToolCatalog", () => {
             displayName: "n8n",
             state,
             canLaunch: true,
-            launchUrl: "/api/student/tools/n8n/launch",
+            launchUrl: "https://n8n.example.test",
+            inviteUrl: null,
+            expiresAt: null,
+          }
+        : state === "invite_pending"
+        ? {
+            tool: "n8n",
+            displayName: "n8n",
+            state,
+            canLaunch: true,
+            launchUrl: "https://n8n.example.test",
+            inviteUrl: "https://n8n.example.test/signup?token=invite-token",
             expiresAt: null,
           }
         : {
@@ -65,6 +78,7 @@ describe("getStudentToolCatalog", () => {
             state,
             canLaunch: false,
             launchUrl: null,
+            inviteUrl: null,
             expiresAt: null,
           };
     expect(toStudentToolEntitlement(access)).toEqual({

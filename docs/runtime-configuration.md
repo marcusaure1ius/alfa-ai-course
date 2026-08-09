@@ -14,7 +14,7 @@
 | `.env.example` | documented variables without credential values |
 | `config/Caddyfile` | HTTPS termination, reverse proxy, active upstream health and response headers |
 | `docker-compose.platform.yml` | explicit managed-Neurokurs override; never enabled for standalone installs by accident |
-| `config/Caddyfile.platform` | revocable student/editor gateway with public endpoint allowlist |
+| `config/Caddyfile.platform` | публикация n8n по approved hostname с allowlist публичных endpoint и внутренним каналом управления |
 | `tests/fixtures/compose.env` | known fake values for static Compose validation only |
 
 Do not deploy `tests/fixtures/compose.env`. It is intentionally public, contains no usable secrets and uses the reserved `.test` domain.
@@ -37,7 +37,6 @@ The encryption key must never change during update. Losing it makes stored n8n c
 `-f docker-compose.platform.yml`. При установке из Course Platform bootstrap
 автоматически создаёт `.env.platform` с mode `0600`:
 
-- `PLATFORM_GATE_ORIGIN` — HTTPS origin Course Platform без path;
 - внутренний `N8N_GATE_MANAGEMENT_SECRET` — HMAC, производный от обязательного
   `AUTH_SECRET`; оператор его не создаёт и не переносит вручную.
 
@@ -54,19 +53,27 @@ docker compose --env-file .env \
   -f docker-compose.yml -f docker-compose.platform.yml config --quiet
 ```
 
-Gateway не является подтверждённым на VPS только по `config --quiet`: отдельно
-нужны deployment evidence, TLS, saved-URL revoke и active-session проверки.
-Course Platform записывает `managed_gateway_verified_at` только после внешнего
-fail-closed probe: health endpoint возвращает `200`, editor без gateway cookie
-возвращает `401`, а POST с заведомо недействительным ticket доходит через Caddy
-до Course Platform и возвращает JSON `401` с `cache-control: no-store`. Пока
-этой отметки нет, admin/student launch ticket не выдаётся.
+Managed profile не считается подтверждённым на VPS только по `config --quiet`:
+отдельно нужны deployment evidence и TLS. Course Platform записывает
+`managed_gateway_verified_at` только после внешнего probe: `/healthz` возвращает
+`200`, редактор отвечает на публичный HTTPS-запрос (`200` либо редирект на
+`/signin`), а управляющий `/api/v1/users` без ключа возвращает `401`. Пока этой
+отметки нет, платформа не показывает ученику адрес инструмента.
 
-Оба внутренних маршрута Course Platform (`exchange` и `authorize`) принимают
-контекст только от managed Caddy после constant-time проверки производного
-gateway secret. Целевой host закреплён профилем как `n8n.neurokurs.ru` и не
-берётся из `X-Forwarded-Host`, который CDN может переписать. Прямой внешний
-вызов authorizer без внутреннего заголовка получает `403`.
+Ученик входит в n8n по собственному аккаунту
+([ADR-0016](../adr/0016-direct-n8n-student-accounts.md)): ticket, gateway cookie
+и `forward_auth` сняты, внутренних маршрутов `exchange` и `authorize` больше
+нет. Логин — тот же адрес почты, что и в Neurokurs; пароль ученик задаёт сам,
+открыв одноразовое приглашение n8n из своего пространства. Public API n8n не
+принимает и не возвращает пароли, поэтому платформа их не генерирует, не хранит
+и не показывает.
+
+Managed Caddy сохраняет только канал управления: запрос к `/api/v1/*` с
+заголовком `X-Neurokurs-Management`, значение которого выведено из
+`AUTH_SECRET`, проксируется с удалением этого заголовка. Сам по себе матчер
+ничего не ограничивает — запрос без заголовка проваливается в общий handle и
+всё равно доходит до n8n. Доступ к Public API защищает сам n8n через
+`X-N8N-API-KEY`.
 
 `EXECUTIONS_DATA_MAX_AGE=168` and `EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000` are privacy-minded training defaults. Reduce them for sensitive/high-volume workflows after understanding the diagnostic tradeoff.
 

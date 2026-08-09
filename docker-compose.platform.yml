@@ -1,7 +1,8 @@
 services:
   caddy:
     environment:
-      PLATFORM_GATE_ORIGIN: ${PLATFORM_GATE_ORIGIN:?PLATFORM_GATE_ORIGIN must be set}
+      # PLATFORM_GATE_ORIGIN убран вместе с forward_auth (ADR-0016).
+      # Секрет управления остаётся: через него платформа создаёт приглашения.
       N8N_GATE_MANAGEMENT_SECRET: ${N8N_GATE_MANAGEMENT_SECRET:?N8N_GATE_MANAGEMENT_SECRET must be set}
     volumes:
       - ./config/Caddyfile.platform:/etc/caddy/Caddyfile:ro

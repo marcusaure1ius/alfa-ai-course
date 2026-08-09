@@ -67,16 +67,20 @@ function memberIdentity(
   };
 }
 
-export const resolveN8nMemberIdentity: N8nIdentityResolver = async (
-  instanceOrigin,
-  email,
-) => {
+/**
+ * Только чтение состояния Member. Приглашение не создаётся и состояние n8n не
+ * меняется, поэтому функцию можно звать с экрана ученика. `null` означает, что
+ * такого пользователя в инстансе ещё нет.
+ */
+export const readN8nMemberIdentity = async (
+  instanceOrigin: string,
+  email: string,
+): Promise<N8nMemberIdentity | null> => {
   const apiKey = process.env.N8N_MANAGEMENT_API_KEY;
   if (!apiKey) {
     throw new N8nIdentityError("CONFIGURATION_MISSING");
   }
   const managementSecret = getN8nGatewayManagementSecret();
-
   const normalizedEmail = normalizeEmail(email);
   let response: Response;
   try {
@@ -94,17 +98,30 @@ export const resolveN8nMemberIdentity: N8nIdentityResolver = async (
   } catch {
     throw new N8nIdentityError("PROVIDER_UNAVAILABLE");
   }
-
-  if (response.status !== 404 && !response.ok) {
+  if (response.status === 404) return null;
+  if (!response.ok) {
     throw new N8nIdentityError("PROVIDER_UNAVAILABLE");
   }
-  if (response.ok) {
-    const body = (await response.json().catch(() => null)) as N8nUserResponse | null;
-    if (!body) throw new N8nIdentityError("PROVIDER_UNAVAILABLE");
-    const existing = memberIdentity(body, normalizedEmail);
-    if (!existing.pending) return existing;
-  }
+  const body = (await response.json().catch(() => null)) as N8nUserResponse | null;
+  if (!body) throw new N8nIdentityError("PROVIDER_UNAVAILABLE");
+  return memberIdentity(body, normalizedEmail);
+};
 
+export const resolveN8nMemberIdentity: N8nIdentityResolver = async (
+  instanceOrigin,
+  email,
+) => {
+  const apiKey = process.env.N8N_MANAGEMENT_API_KEY;
+  if (!apiKey) {
+    throw new N8nIdentityError("CONFIGURATION_MISSING");
+  }
+  const managementSecret = getN8nGatewayManagementSecret();
+
+  const normalizedEmail = normalizeEmail(email);
+  const existing = await readN8nMemberIdentity(instanceOrigin, normalizedEmail);
+  if (existing && !existing.pending) return existing;
+
+  let response: Response;
   try {
     response = await fetch(`${instanceOrigin}/api/v1/users`, {
       method: "POST",

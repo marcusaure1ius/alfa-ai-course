@@ -11,7 +11,7 @@
 | Container privileges | У всех сервисов `no-new-privileges`; `privileged`, `cap_add`, devices и Docker socket отсутствуют | privilege assertion |
 | Secrets | `.env` игнорируется Git, создаётся с mode `0600`; workflow exports и fixtures не содержат credentials/tokens | tracked-artifact и workflow catalog checks |
 | n8n privacy | env/file access из workflow ограничен, diagnostics и personalization выключены, secure cookie включён | environment assertion |
-| n8n student gateway | editor/API закрыты Caddy `forward_auth`; ticket одноразовый и передаётся только POST body; cookie host-only/HttpOnly/Secure и привязана к поколению назначения; revoke/expiry/renewal/global off-on проверяются на каждом запросе | gateway integration tests + managed Compose contract |
+| n8n student access | ученик входит в n8n по собственному аккаунту (ADR-0016); платформа выдаёт адрес инструмента и учитывает срок назначения, но **не** проксирует вход. Отзыв в платформе скрывает адрес и запрещает выдачу, однако фактический доступ прекращается только отключением аккаунта в самом n8n | student-access integration tests + license gate |
 | n8n identities | owner setup только admin; grant автоматически находит/приглашает отдельного Member с совпадающим email; вручную задаётся только scoped management API key, gateway secret выводится из `AUTH_SECRET` и синхронизируется bootstrap | identity/invite/derived-secret tests + unique DB constraints |
 | TLS | Production URL всегда `https`; TLS verification не отключается; Caddy — единственная публичная точка | resolved configuration assertion |
 | Execution data | Pruning всегда включён; default age `168` часов и max count `10000` | resolved configuration assertion |
@@ -32,8 +32,7 @@ capture и скан логов — в
 | `X-Content-Type-Options` | `nosniff` | все ответы, включая API |
 | `X-Frame-Options` | `DENY` | все ответы, включая API |
 | `Permissions-Policy` | `accelerometer`, `camera`, `display-capture`, `geolocation`, `gyroscope`, `magnetometer`, `microphone`, `payment`, `usb` — все `()` | все ответы, включая API |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` | все, кроме gateway-путей |
-| `Referrer-Policy` | `no-referrer` | только gateway-пути |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | все ответы |
 
 `Strict-Transport-Security` выдаёт платформа хостинга и здесь не дублируется.
 
@@ -53,32 +52,36 @@ Content-Security-Policy разделён по типу ответа:
 `referrer-policy: no-referrer` и собственный CSP, получил в ответе значения из
 `next.config`.
 
-Поэтому пути из `ROUTES_WITH_OWN_SECURITY_HEADERS` исключены из общих правил
-`Content-Security-Policy` и `Referrer-Policy`:
+Список `ROUTES_WITH_OWN_SECURITY_HEADERS` сейчас **пуст**: страницы перехода в
+n8n удалены вместе с ticket-моделью (ADR-0016), и других роутов со своими
+политиками не осталось.
 
-- `/api/student/tools/n8n/launch`;
-- `/api/admin/tools/n8n/launch`;
-- `/api/tool-gateway/n8n/exchange`.
+## Токен приглашения n8n в логах Caddy
 
-Первые два отдают HTML-страницу перехода в n8n: у неё собственный `nonce`,
-`form-action` на origin инструмента и `referrer-policy: no-referrer`, чтобы
-ticket не попал в `Referer`. Без исключения общая политика подставила бы
-`form-action 'none'`, заблокировала бы inline-скрипт автосабмита и ученик не
-смог бы открыть n8n.
+Ученик задаёт себе пароль по одноразовой ссылке `/signup?token=...` на managed
+инстансе (ADR-0016). Токен равнозначен праву завести аккаунт ученика, поэтому
+`config/Caddyfile.platform` редактирует его в логах. Здесь есть две ловушки, и
+обе уже срабатывали:
 
-Безусловные заголовки (`X-Content-Type-Options`, `X-Frame-Options`,
-`Permissions-Policy`) применяются и к этим путям: их роуты либо не задают, либо
-задают тем же значением. `Referrer-Policy` для них задан отдельным правилом со
-значением `no-referrer` — тем же, что роут ставит на успешном пути, — чтобы его
-получили и ответы-ошибки, которые заголовок сами не выставляют.
+- фильтр `query` читает подпараметры **только** из блока `{ ... }`. Однострочную
+  форму Caddy принимает молча, оставляя `actions` пустым, — редакция не работает,
+  а `caddy validate` и grep по конфигу этого не показывают;
+- блок `log` внутри сайта настраивает только **access**-лог. Ошибки
+  `reverse_proxy` пишет default-логгер, и без его отдельной настройки
+  `http.log.error` печатает URI с токеном целиком.
 
-Исключение якорится на **точный** путь: подпуть вида
-`/api/admin/tools/n8n/launch/status` под него не попадает и получает общие
-правила. Совпадение по префиксу молча лишило бы такой маршрут политики.
+Поэтому редакция задана в обоих логгерах, а гейт `compose-config` проверяет
+результат `caddy adapt`, а не текст конфига: он требует непустой `actions` с
+заменой `token` ровно в двух логгерах.
+
+Механизм исключения сохранён намеренно. Исключение якорится на **точный** путь,
+поэтому подпуть исключённого маршрута получает общие правила: совпадение по
+префиксу молча лишило бы такой маршрут политики.
 
 **Добавляя роут, который сам выставляет `Content-Security-Policy` или
 `Referrer-Policy`, внесите его путь в `ROUTES_WITH_OWN_SECURITY_HEADERS`** —
-иначе общее правило молча перекроет его политику.
+иначе общее правило молча перекроет его политику. Именно так однажды чуть не
+сломался вход ученика в инструмент.
 
 `X-Frame-Options: DENY` согласован с `frame-ancestors 'none'`: встраивание
 запрещено обоими механизмами одинаково.
@@ -99,13 +102,12 @@ ticket не попал в `Referer`. Без исключения общая по
 Автоматические тесты `platform/src/security-headers.test.ts` фиксируют состав
 заголовков, согласованность `X-Frame-Options` с `frame-ancestors`, отсутствие
 `unsafe`-расширений у скриптов в production и то, какие правила фактически
-попадают на конкретный путь — включая проверку, что gateway-роуты не теряют
-свои `Content-Security-Policy` и `Referrer-Policy`.
+попадают на конкретный путь. Кейсы про исключения помечены как пропущенные,
+пока список пуст, и оживают при добавлении первого такого роута.
 
-Механизм исключения проверен на production-сборке двумя пробными роутами:
-путь вне списка получил значения из `next.config`, путь в списке сохранил свои.
-Отдельно проверено, что подпуть исключённого маршрута получает общие правила, а
-gateway-путь отдаёт `no-referrer` даже на ответе `401`.
+Механизм исключения был проверен на production-сборке двумя пробными роутами:
+путь вне списка получил значения из `next.config`, путь в списке сохранил свои;
+подпуть исключённого маршрута получал общие правила.
 
 Nonce использует 128 бит из `crypto.getRandomValues`.
 
