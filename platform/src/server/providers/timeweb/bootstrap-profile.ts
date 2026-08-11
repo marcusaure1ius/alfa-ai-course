@@ -22,15 +22,16 @@ export const STARTER_KIT_BOOTSTRAP_PROFILE = Object.freeze({
   // Версия обязана расти вместе с содержимым cloud-init: lifecycle сверяет
   // сохранённый план по ней, и без бампа расхождение осталось бы тихим.
   version: "starter-kit-v0.1.8",
-  // v0.1.4 был собран до ADR-0016 и нёс compose с fail-hard подстановкой
-  // PLATFORM_GATE_ORIGIN, которую больше никто не пишет: установка падала на
-  // docker compose ещё до запуска контейнеров.
-  release: "v0.1.5",
+  // v0.1.6 перевыпущен из-за T-0123: v0.1.5 нёс в общем профиле личный файл
+  // подтверждения владения, и любая посторонняя установка отдавала бы чужое
+  // доказательство. Managed-конфиги внутри артефакта обязаны совпадать с
+  // рабочим деревом — это сверяет release_pin_test.
+  release: "v0.1.6",
   installerUrl:
     "https://github.com/marcusaure1ius/" +
-    "alfa-ai-course/releases/download/v0.1.5/install.sh",
+    "alfa-ai-course/releases/download/v0.1.6/install.sh",
   installerSha256:
-    "1354724bf8a16e9d2a99e789294e5c5aee135a7eac9175b10f25049d79b431d0",
+    "ea779939b87e135d875b1e49a5fa65eb6e3c8ce09f2e8af81904e84e7ca3cf73",
   n8nVersion: "2.29.10",
   timezone: "Europe/Moscow",
   networkWaitSeconds: 1200,
