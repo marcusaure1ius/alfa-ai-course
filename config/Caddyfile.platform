@@ -53,9 +53,15 @@ Allow: /{$SITE_VERIFICATION_FILE:.site-verification-not-configured}
 	#
 	# Переменная не должна приходить ПУСТОЙ. Подстановка {$VAR:default} читает
 	# default только когда переменная не определена вовсе; определённое пустое
-	# значение оставляет матчер `/`, и обработчик перехватывает корень сайта —
-	# вход в n8n начинает отдавать 404. Проверено живым запросом; отсюда `:-` в
-	# docker-compose.platform.yml.
+	# значение оставляет матчер `/`. Живой запрос при пустой переменной:
+	# GET / отдаёт 200 с телом `google-site-verification: ` вместо редактора n8n,
+	# а robots.txt вырождается в `Disallow: /` плюс `Allow: /` — правило равной
+	# длины снимает запрет обхода, то есть заодно отменяется мера T-0117.
+	# Отсюда `:-` в docker-compose.platform.yml.
+	#
+	# Отказ тихий: код ответа остаётся 200, поэтому проверять применение надо по
+	# ТЕЛУ корня, а не по коду. Признак поломки — `google-site-verification:` в
+	# ответе на `/`.
 	handle /{$SITE_VERIFICATION_FILE:.site-verification-not-configured} {
 		header Content-Type "text/html; charset=utf-8"
 		respond "google-site-verification: {$SITE_VERIFICATION_FILE:.site-verification-not-configured}" 200
