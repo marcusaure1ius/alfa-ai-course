@@ -17,6 +17,7 @@ import {
   buildStarterKitCloudInit,
   COURSE_HOSTNAME,
   COURSE_SERVER_HOSTNAME,
+  COURSE_SITE_VERIFICATION_FILE,
   STARTER_KIT_BOOTSTRAP_PROFILE,
 } from "./bootstrap-profile";
 
@@ -70,6 +71,14 @@ describe("starter kit bootstrap profile", () => {
     expect(cloudInit).toContain("phase=configuring_managed_gateway");
     expect(cloudInit).toContain("docker-compose.platform.yml");
     expect(cloudInit).toContain("N8N_GATE_MANAGEMENT_SECRET=");
+    // T-0123: подтверждение владения привязано к аккаунту владельца, поэтому
+    // имя файла живёт здесь и попадает только на COURSE_HOSTNAME, а не в общий
+    // релизный артефакт. Пустым оно приходить не должно: пустая переменная
+    // оставляет в Caddy матчер `/` и перехватывает корень сайта.
+    expect(COURSE_SITE_VERIFICATION_FILE).not.toBe("");
+    expect(cloudInit).toContain(
+      `SITE_VERIFICATION_FILE=%s\\n' '${COURSE_SITE_VERIFICATION_FILE}'`,
+    );
     // ADR-0016: forward_auth убран, поэтому origin платформы на VPS не пишется.
     expect(cloudInit).not.toContain("PLATFORM_GATE_ORIGIN");
     expect(cloudInit).not.toContain(process.env.AUTH_SECRET!);
@@ -131,7 +140,7 @@ describe("starter kit bootstrap profile", () => {
   it("recovers only a pinned installer image-pull rate limit through a pinned mirror", () => {
     const cloudInit = buildStarterKitCloudInit();
 
-    expect(STARTER_KIT_BOOTSTRAP_PROFILE.version).toBe("starter-kit-v0.1.7");
+    expect(STARTER_KIT_BOOTSTRAP_PROFILE.version).toBe("starter-kit-v0.1.8");
     expect(cloudInit).toContain('if [ "$installer_code" -ne 23 ]');
     expect(cloudInit).toContain("grep -Fq '429 Too Many Requests'");
     expect(cloudInit).toContain("phase=recovering_registry_rate_limit");

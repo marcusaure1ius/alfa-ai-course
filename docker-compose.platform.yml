@@ -4,5 +4,14 @@ services:
       # PLATFORM_GATE_ORIGIN убран вместе с forward_auth (ADR-0016).
       # Секрет управления остаётся: через него платформа создаёт приглашения.
       N8N_GATE_MANAGEMENT_SECRET: ${N8N_GATE_MANAGEMENT_SECRET:?N8N_GATE_MANAGEMENT_SECRET must be set}
+      # Имя файла подтверждения владения в поисковой консоли. Привязано к
+      # аккаунту владельца, а не к сайту, поэтому в общий профиль не входит и
+      # задаётся на конкретном хосте (T-0123). Без него endpoint остаётся на
+      # инертном пути и чужого доказательства владения не отдаёт.
+      #
+      # `:-`, а не `-`: подстановка обязана срабатывать и на ПУСТОМ значении.
+      # Пустая переменная не откатывается к default внутри Caddyfile и оставляет
+      # матчер `/`, перехватывая корень сайта.
+      SITE_VERIFICATION_FILE: ${SITE_VERIFICATION_FILE:-.site-verification-not-configured}
     volumes:
       - ./config/Caddyfile.platform:/etc/caddy/Caddyfile:ro
