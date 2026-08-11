@@ -140,7 +140,7 @@ describe("starter kit bootstrap profile", () => {
   it("recovers only a pinned installer image-pull rate limit through a pinned mirror", () => {
     const cloudInit = buildStarterKitCloudInit();
 
-    expect(STARTER_KIT_BOOTSTRAP_PROFILE.version).toBe("starter-kit-v0.1.8");
+    expect(STARTER_KIT_BOOTSTRAP_PROFILE.version).toBe("starter-kit-v0.1.9");
     expect(cloudInit).toContain('if [ "$installer_code" -ne 23 ]');
     expect(cloudInit).toContain("grep -Fq '429 Too Many Requests'");
     expect(cloudInit).toContain("phase=recovering_registry_rate_limit");
