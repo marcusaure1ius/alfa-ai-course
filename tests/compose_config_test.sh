@@ -64,7 +64,7 @@ ok "managed profile replaces Caddy and keeps only the management secret"
 # `/`, и endpoint подтверждения перехватывает корень сайта — вход в n8n начинает
 # отдавать 404. Проверено живым запросом, поэтому в override стоит `:-`.
 N8N_GATE_MANAGEMENT_SECRET=synthetic-gateway-management-secret-32-bytes \
-SITE_VERIFICATION_FILE= \
+SITE_VERIFICATION_FILE='' \
   docker compose --project-directory "$ROOT" --env-file "$ENV_FILE" \
     -f "$ROOT/docker-compose.yml" -f "$ROOT/docker-compose.platform.yml" \
     config --format json > "$tmp/platform-compose-empty-verification.json"
