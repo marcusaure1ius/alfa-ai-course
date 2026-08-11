@@ -8,10 +8,20 @@ export const COURSE_DNS_ZONE = "neurokurs.ru" as const;
 export const COURSE_DNS_LABEL = "n8n" as const;
 export const COURSE_DNS_TTL_SECONDS = 600 as const;
 
+// Имя файла подтверждения владения n8n.neurokurs.ru в поисковой консоли.
+// Живёт здесь, а не в config/Caddyfile.platform: тот профиль едет в публичном
+// релизном артефакте и разворачивается на произвольных хостах, а подтверждение
+// привязано к аккаунту владельца — посторонняя установка отдавала бы чужое
+// доказательство владения (T-0123). buildStarterKitCloudInit не собирает
+// профиль ни для какого другого хоста, поэтому значение не покидает
+// COURSE_HOSTNAME вместе с артефактом.
+export const COURSE_SITE_VERIFICATION_FILE =
+  "googlec899775b0ad45e39.html" as const;
+
 export const STARTER_KIT_BOOTSTRAP_PROFILE = Object.freeze({
   // Версия обязана расти вместе с содержимым cloud-init: lifecycle сверяет
   // сохранённый план по ней, и без бампа расхождение осталось бы тихим.
-  version: "starter-kit-v0.1.7",
+  version: "starter-kit-v0.1.8",
   // v0.1.4 был собран до ADR-0016 и нёс compose с fail-hard подстановкой
   // PLATFORM_GATE_ORIGIN, которую больше никто не пишет: установка падала на
   // docker compose ещё до запуска контейнеров.
@@ -203,6 +213,7 @@ test -r "$project_dir/docker-compose.platform.yml"
 test -r "$project_dir/config/Caddyfile.platform"
 {
   printf 'N8N_GATE_MANAGEMENT_SECRET=%s\\n' ${shellSingleQuoted(gatewaySecret)}
+  printf 'SITE_VERIFICATION_FILE=%s\\n' ${shellSingleQuoted(COURSE_SITE_VERIFICATION_FILE)}
 } > "$managed_env_next"
 chmod 0600 "$managed_env_next"
 mv -f "$managed_env_next" "$managed_env"
