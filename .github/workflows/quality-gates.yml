@@ -16,6 +16,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # release_pin_test сверяет managed-конфиги закреплённого релиза с
+          # рабочим деревом через git show по тегу. Стандартный checkout делает
+          # shallow clone без тегов, и проверка бы не нашла закреплённый релиз.
+          fetch-depth: 0
 
       - name: Install static-analysis tools
         run: |

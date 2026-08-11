@@ -9,13 +9,18 @@ export const COURSE_DNS_LABEL = "n8n" as const;
 export const COURSE_DNS_TTL_SECONDS = 600 as const;
 
 export const STARTER_KIT_BOOTSTRAP_PROFILE = Object.freeze({
-  version: "starter-kit-v0.1.6",
-  release: "v0.1.4",
+  // Версия обязана расти вместе с содержимым cloud-init: lifecycle сверяет
+  // сохранённый план по ней, и без бампа расхождение осталось бы тихим.
+  version: "starter-kit-v0.1.7",
+  // v0.1.4 был собран до ADR-0016 и нёс compose с fail-hard подстановкой
+  // PLATFORM_GATE_ORIGIN, которую больше никто не пишет: установка падала на
+  // docker compose ещё до запуска контейнеров.
+  release: "v0.1.5",
   installerUrl:
     "https://github.com/marcusaure1ius/" +
-    "alfa-ai-course/releases/download/v0.1.4/install.sh",
+    "alfa-ai-course/releases/download/v0.1.5/install.sh",
   installerSha256:
-    "e5fea8a802b219a0f3283e5ba411b1a7eba14caeb4376209592c9d9750d27d72",
+    "1354724bf8a16e9d2a99e789294e5c5aee135a7eac9175b10f25049d79b431d0",
   n8nVersion: "2.29.10",
   timezone: "Europe/Moscow",
   networkWaitSeconds: 1200,
