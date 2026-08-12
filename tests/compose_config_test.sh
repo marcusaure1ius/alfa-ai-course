@@ -119,13 +119,53 @@ jq -e '
     | $uri.filter == "query"
     and ([ ($uri.actions // [])[] | select(.type == "replace") | .parameter ]
          | index("token") != null and index("code") != null)
-    and ($f["request>headers>Cookie"].filter == "delete")
-    and ($f["request>headers>X-N8N-API-KEY"].filter == "delete")
-    and ($f["request>headers>X-Neurokurs-Management"].filter == "delete")
+    and (($f["request>headers>Referer"] // {}) as $ref
+         | $ref.filter == "query"
+         and ([ ($ref.actions // [])[] | select(.type == "replace") | .parameter ]
+              | index("token") != null and index("code") != null))
+    and ([ $f | to_entries[] | select(.value.filter == "delete") | .key ] as $deleted
+         | ($deleted | index("request>headers>Cookie") != null)
+         and ($deleted | index("request>headers>X-Neurokurs-Management") != null)
+         and ($deleted | map(ascii_downcase) | index("request>headers>x-n8n-api-key") != null))
   ))
 ' "$tmp/caddy.json" >/dev/null \
-  || fail "Some Caddy logger does not redact the invite token, the OAuth2 code, or secret headers"
-ok "every managed Caddy logger redacts invite token, OAuth2 code and secret headers"
+  || fail "Some Caddy logger does not redact the invite token, the OAuth2 code, Referer or secret headers"
+ok "every managed Caddy logger declares redaction for query, Referer and secret headers"
+
+# T-0118, второй круг. Проверка выше смотрит на объявленные поля, и этого мало:
+# имя заголовка сравнивается с КАНОНИЧЕСКИМ именем Go, поэтому написанный as-is
+# `X-N8N-API-KEY` принимается, но не совпадает никогда и остаётся no-op. Живой
+# запрос печатал ключ управления целиком, пока обе проверки были зелёными.
+# Поэтому здесь секреты подкладываются в реальный запрос и в логе их быть не
+# должно ни в каком виде. Это единственная проверка, которая ловит расхождение
+# между «директива написана» и «редакция работает».
+cat > "$tmp/live.sh" <<'LIVE'
+#!/bin/sh
+caddy run --config /probe/Caddyfile --adapter caddyfile > /tmp/caddy.log 2>&1 &
+sleep 2
+wget -q -O /dev/null "http://127.0.0.1:8080/signup?token=PLANTED-TOKEN-1" 2>/dev/null
+wget -q -O /dev/null "http://127.0.0.1:8080/rest/oauth2-credential/callback?code=PLANTED-CODE-2&state=keepme" 2>/dev/null
+wget -q -O /dev/null --header="X-N8N-API-KEY: PLANTED-APIKEY-3" "http://127.0.0.1:8080/api/v1/users" 2>/dev/null
+wget -q -O /dev/null --header="Cookie: n8n-auth=PLANTED-COOKIE-4" "http://127.0.0.1:8080/home" 2>/dev/null
+wget -q -O /dev/null --header="X-Neurokurs-Management: PLANTED-MGMT-5" "http://127.0.0.1:8080/api/v1/users" 2>/dev/null
+wget -q -O /dev/null --header="Referer: http://127.0.0.1:8080/signup?token=PLANTED-REFERER-6" "http://127.0.0.1:8080/assets/app.js" 2>/dev/null
+sleep 1
+grep -c 'PLANTED-' /tmp/caddy.log
+grep -c 'state=keepme' /tmp/caddy.log
+LIVE
+sed 's/{\$N8N_HOST}/:8080/' "$ROOT/config/Caddyfile.platform" > "$tmp/Caddyfile"
+docker run --rm -v "$tmp":/probe \
+  -e N8N_GATE_MANAGEMENT_SECRET=synthetic-secret-for-live-only \
+  -e SITE_VERIFICATION_FILE=googl0123456789abcdef.html \
+  caddy:2.11.4-alpine sh /probe/live.sh > "$tmp/live-result" 2>/dev/null \
+  || fail "Live Caddy redaction probe did not run"
+[[ "$(sed -n 1p "$tmp/live-result")" == '0' ]] \
+  || fail "A planted secret reached the Caddy log: declared redaction does not work"
+# Обратная сторона: проверка обязана уметь видеть лог вообще, иначе ноль выше
+# ничего не значит. Несекретный state должен остаться на месте.
+[[ "$(sed -n 2p "$tmp/live-result")" != '0' ]] \
+  || fail "Live probe saw no log lines at all: the zero above proves nothing"
+ok "live request plants six secrets and none of them reaches the Caddy log"
 
 # T-0117: без собственного robots.txt любой неизвестный путь уходит в n8n, а тот
 # отдаёт SPA-оболочку с кодом 200 — домен выглядит как множество страниц входа
