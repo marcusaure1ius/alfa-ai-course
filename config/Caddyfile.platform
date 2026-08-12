@@ -4,12 +4,16 @@
 	# Блок log внутри сайта настраивает только access-лог. Ошибки reverse_proxy
 	# (недоступный upstream, таймаут) пишет default-логгер, и полный URI с
 	# одноразовым токеном приглашения ушёл бы туда без фильтра.
+	#
+	# Набор редактируемых параметров обязан совпадать со вторым логгером ниже:
+	# гейт требует одинаковую редакцию у КАЖДОГО логгера, а не у скольких-то.
 	log default {
 		format filter {
 			wrap console
 			fields {
 				request>uri query {
 					replace token REDACTED
+					replace code REDACTED
 				}
 				request>headers>Cookie delete
 				request>headers>X-N8N-API-KEY delete
@@ -114,11 +118,20 @@ Allow: /{$SITE_VERIFICATION_FILE:.site-verification-not-configured}
 				# не входит в allowlist, поэтому проходит общим handle и попал бы
 				# в лог целиком. Снятый ticket больше не существует.
 				#
+				# code — OAuth2-код n8n из /rest/oauth2-credential/callback?code=...
+				# Обменивается на токен доступа к внешнему сервису ученика, идёт тем
+				# же общим handle и до T-0118 печатался целиком в обоих логгерах.
+				#
+				# state рядом с ним НЕ редактируется намеренно: это CSRF-nonce, он
+				# бесполезен без code, а по нему сопоставляют запрос и ответ при
+				# разборе неудачной привязки credential.
+				#
 				# Только блочная форма: однострочный вариант Caddy принимает молча,
 				# но подпараметры не читает и оставляет actions пустым, то есть
 				# редакция не выполняется вообще. Проверяется по caddy adapt.
 				request>uri query {
 					replace token REDACTED
+					replace code REDACTED
 				}
 				request>headers>Cookie delete
 				request>headers>X-N8N-API-KEY delete
