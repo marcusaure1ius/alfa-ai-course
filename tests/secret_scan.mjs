@@ -69,7 +69,11 @@ const rules = [
 // TIMEWEB_API_TOKEN уже проходил мимо прежнего перечня из пяти имён (T-0132).
 // Имя участвует только как усиливающий сигнал для значений, которым не хватает
 // энтропийной формы.
-const assignmentPattern = /(?:^|[\s,{("'])([A-Za-z_][A-Za-z0-9_-]{1,63})[ \t]*[:=][ \t]*["']?([^\s"',`}]{12,})/gm;
+//
+// Ключ может быть в кавычках: {"NAME": "value"} — форма workflow JSON, то есть
+// ровно того, что репозиторий хранит больше всего (T-0134). Закрывающая
+// кавычка после имени поэтому допускается шаблоном.
+const assignmentPattern = /(?:^|[\s,{("'])([A-Za-z_][A-Za-z0-9_-]{1,63})["']?[ \t]*[:=][ \t]*["']?([^\s"',`}]{12,})/gm;
 const safeAssignmentMarkers = [
   'example',
   'fixture',
@@ -135,6 +139,8 @@ const hashNameSegments = new Set([
   'fingerprint',
   'hash',
   'commit',
+  // git tree object hash: embeddedSourceTree в release-manifest.json.
+  'tree',
 ]);
 
 // Явные точечные исключения. Каждое сужено до полного значения; неизвестное
@@ -146,6 +152,12 @@ const exactValueExceptions = new Set([
   // идентификаторы документа, а не креденшалы.
   '1RGJTeHwZ7RqbdRxxYM8iRZwLXDyWKbUpssmZbKklsdw',
   'AIroW34mh9Nzw76HhX8B2oETxv-lQF7II6puQk-cqjzonEbqej0yfsgkklWg3U_ShvJ4-apT110H2NnYEdTFDthHxGqyS7bS3xOu0PopPxU',
+  // Наш собственный id workflow-адаптера: camelCase с тремя цифрами проходит
+  // порог формы значения. Состав таких id задаёт этот репозиторий.
+  'adapterBitrix24CrmV1',
+  // fileToken дизайн-файла Pencil (main_design.pen): идентификатор
+  // Figma-импорта, не credential.
+  '51287a3f-21c0-41e3-a46b-a4af8e274688',
 ]);
 
 const opaqueValuePattern = /^[A-Za-z0-9+/=_.~-]+$/;
@@ -236,7 +248,13 @@ for (const file of [...files].sort()) {
     if (exactValueExceptions.has(value)) continue;
     if (nameSegments(name).some((segment) => hashNameSegments.has(segment)) && pureHexPattern.test(value)) continue;
     if (!assignmentLooksSecret(name, value)) continue;
-    findings.push({ rule: 'credential-assignment', file, index: match.index ?? 0 });
+    // Индекс сдвигается на начало имени: match.index указывает на boundary,
+    // которым может быть \n предыдущей строки, и номер строки уезжал бы вверх.
+    findings.push({
+      rule: 'credential-assignment',
+      file,
+      index: (match.index ?? 0) + match[0].indexOf(name),
+    });
   }
 }
 

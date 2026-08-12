@@ -70,6 +70,28 @@ for value in "$timeweb_value" "$management_value" "$auth_value"; do
 done
 ok "TIMEWEB_API_TOKEN, N8N_MANAGEMENT_API_KEY and AUTH_SECRET are detected"
 
+# Присваивание с ключом в кавычках — форма workflow JSON (T-0134). Имя
+# BLORT_GIZMO не встречается ни в одном списке сканера: находку обязана давать
+# форма значения, а не имя. Второй кейс — одинарные кавычки и JWT-префикс.
+json_value="$(printf '%s%s%s' Wq3xNv8b Km5tRz7c Pd2fLh9s)"
+printf '{\n  "BLORT_GIZMO": "%s"\n}\n' "$json_value" > "$tmp/quoted.json"
+assert_rejected credential-assignment "$tmp/quoted.json" "$json_value"
+ok "quoted JSON key with secret-shaped value is detected"
+
+jwt_value="$(printf '%s%s' eyJhbGciOiJIUzI1NiJ9. dGVzdDQyLXQwMTM0LXBheWxvYWQ)"
+printf "'FLURB_KNOB': '%s'\n" "$jwt_value" > "$tmp/quoted.yaml"
+assert_rejected credential-assignment "$tmp/quoted.yaml" "$jwt_value"
+ok "single-quoted key with JWT-shaped value is detected"
+
+# Номер строки обязан указывать на строку присваивания, даже когда boundary
+# шаблона — перевод строки предыдущей.
+printf '# comment line\nCLIENT_SECRET=%s\n' "$generic_value" > "$tmp/line-check.env"
+if "$SCANNER" --path "$tmp/line-check.env" >"$tmp/line-check.log" 2>&1; then
+  fail "line-check fixture accepted"
+fi
+grep -q 'line=2' "$tmp/line-check.log" || fail "finding does not point at the assignment line"
+ok "finding line number points at the assignment itself"
+
 # Формы, ради которых сужены эвристики: ложное срабатывание на любом из этих
 # присваиваний вернёт шум и приведёт к обходу гейта через исключения.
 cat > "$tmp/benign.txt" <<'BENIGN'
@@ -80,6 +102,9 @@ reason=EXPLICIT_UNEXPIRED_APPROVAL_REQUIRED
 integrity=sha512-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 manifestSha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 collection_path=/api/v1/ssh-keys
+{"webhookId": "c0ffee00-aaaa-4bbb-8ccc-123456789abc"}
+{"gatewayRef": "coreGenericLlmGatewayV1"}
+{"embeddedSourceTree": "6b135a83a78470d6430df7d3e85670587391abb4"}
 BENIGN
 "$SCANNER" --path "$tmp/benign.txt" >/dev/null || fail "benign assignment shapes rejected"
 ok "code-shaped assignments are accepted"
