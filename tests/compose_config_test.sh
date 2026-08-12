@@ -115,22 +115,22 @@ jq -e '
   (.logging.logs | length) >= 2
   and (.logging.logs | to_entries | all(
     .value.encoder.fields as $f
-    | ($f["request>uri"] // {}) as $uri
-    | $uri.filter == "query"
-    and ([ ($uri.actions // [])[] | select(.type == "replace") | .parameter ]
-         | index("token") != null and index("code") != null)
-    and (($f["request>headers>Referer"] // {}) as $ref
-         | $ref.filter == "query"
-         and ([ ($ref.actions // [])[] | select(.type == "replace") | .parameter ]
-              | index("token") != null and index("code") != null))
+    | ([ "request>uri", "request>headers>Referer", "resp_headers>Location" ]
+       | all(. as $k | ($f[$k] // {}).filter == "regexp"))
     and ([ $f | to_entries[] | select(.value.filter == "delete") | .key ] as $deleted
          | ($deleted | index("request>headers>Cookie") != null)
          and ($deleted | index("request>headers>X-Neurokurs-Management") != null)
          and ($deleted | map(ascii_downcase) | index("request>headers>x-n8n-api-key") != null))
   ))
 ' "$tmp/caddy.json" >/dev/null \
-  || fail "Some Caddy logger does not redact the invite token, the OAuth2 code, Referer or secret headers"
-ok "every managed Caddy logger declares redaction for query, Referer and secret headers"
+  || fail "Some Caddy logger does not strip the query from uri, Referer or Location, or keeps a secret header"
+ok "every managed Caddy logger strips query from uri, Referer, Location and drops secret headers"
+
+# log_credentials возвращает в лог заголовок Authorization целиком и не виден ни
+# в одном фильтре полей: опция живёт в блоке servers, а не в логгере.
+jq -e '[ .. | objects | select(.logs? != null) | .logs.should_log_credentials? // false ] | any | not' \
+  "$tmp/caddy.json" >/dev/null \
+  || fail "log_credentials is enabled: Authorization would be written to the log verbatim"
 
 # T-0118, второй круг. Проверка выше смотрит на объявленные поля, и этого мало:
 # имя заголовка сравнивается с КАНОНИЧЕСКИМ именем Go, поэтому написанный as-is
@@ -143,15 +143,19 @@ cat > "$tmp/live.sh" <<'LIVE'
 #!/bin/sh
 caddy run --config /probe/Caddyfile --adapter caddyfile > /tmp/caddy.log 2>&1 &
 sleep 2
-wget -q -O /dev/null "http://127.0.0.1:8080/signup?token=PLANTED-TOKEN-1" 2>/dev/null
-wget -q -O /dev/null "http://127.0.0.1:8080/rest/oauth2-credential/callback?code=PLANTED-CODE-2&state=keepme" 2>/dev/null
-wget -q -O /dev/null --header="X-N8N-API-KEY: PLANTED-APIKEY-3" "http://127.0.0.1:8080/api/v1/users" 2>/dev/null
-wget -q -O /dev/null --header="Cookie: n8n-auth=PLANTED-COOKIE-4" "http://127.0.0.1:8080/home" 2>/dev/null
-wget -q -O /dev/null --header="X-Neurokurs-Management: PLANTED-MGMT-5" "http://127.0.0.1:8080/api/v1/users" 2>/dev/null
-wget -q -O /dev/null --header="Referer: http://127.0.0.1:8080/signup?token=PLANTED-REFERER-6" "http://127.0.0.1:8080/assets/app.js" 2>/dev/null
+# Имена параметров нарочно разные, включая другой регистр и те, которых нет ни в
+# одном списке: проверяется вырезание query целиком, а не совпадение с именем.
+wget -q -O /dev/null "http://127.0.0.1:8080/probe-marker/signup?token=PLANTED-1" 2>/dev/null
+wget -q -O /dev/null "http://127.0.0.1:8080/probe-marker/rest/oauth2-credential/callback?code=PLANTED-2&state=PLANTED-3" 2>/dev/null
+wget -q -O /dev/null "http://127.0.0.1:8080/probe-marker/rest/oauth1-credential/callback?oauth_token=PLANTED-4&oauth_verifier=PLANTED-5" 2>/dev/null
+wget -q -O /dev/null "http://127.0.0.1:8080/probe-marker/x?Token=PLANTED-6&access_token=PLANTED-7&password=PLANTED-8&api_key=PLANTED-9" 2>/dev/null
+wget -q -O /dev/null --header="X-N8N-API-KEY: PLANTED-10" "http://127.0.0.1:8080/probe-marker/api/v1/users" 2>/dev/null
+wget -q -O /dev/null --header="Cookie: n8n-auth=PLANTED-11" "http://127.0.0.1:8080/probe-marker/home" 2>/dev/null
+wget -q -O /dev/null --header="X-Neurokurs-Management: PLANTED-12" "http://127.0.0.1:8080/probe-marker/api/v1/users" 2>/dev/null
+wget -q -O /dev/null --header="Referer: http://127.0.0.1:8080/signup?token=PLANTED-13" "http://127.0.0.1:8080/probe-marker/app.js" 2>/dev/null
 sleep 1
 grep -c 'PLANTED-' /tmp/caddy.log
-grep -c 'state=keepme' /tmp/caddy.log
+grep -c 'probe-marker' /tmp/caddy.log
 LIVE
 sed 's/{\$N8N_HOST}/:8080/' "$ROOT/config/Caddyfile.platform" > "$tmp/Caddyfile"
 docker run --rm -v "$tmp":/probe \
@@ -161,11 +165,11 @@ docker run --rm -v "$tmp":/probe \
   || fail "Live Caddy redaction probe did not run"
 [[ "$(sed -n 1p "$tmp/live-result")" == '0' ]] \
   || fail "A planted secret reached the Caddy log: declared redaction does not work"
-# Обратная сторона: проверка обязана уметь видеть лог вообще, иначе ноль выше
-# ничего не значит. Несекретный state должен остаться на месте.
+# Обратная сторона: ноль выше значит что-то только если лог вообще виден.
+# Маркер — часть ПУТИ, а не query: путь остаётся в логе намеренно.
 [[ "$(sed -n 2p "$tmp/live-result")" != '0' ]] \
   || fail "Live probe saw no log lines at all: the zero above proves nothing"
-ok "live request plants six secrets and none of them reaches the Caddy log"
+ok "live request plants thirteen secrets across query, headers and Referer and none reaches the log"
 
 # T-0117: без собственного robots.txt любой неизвестный путь уходит в n8n, а тот
 # отдаёт SPA-оболочку с кодом 200 — домен выглядит как множество страниц входа

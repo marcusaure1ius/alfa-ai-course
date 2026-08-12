@@ -3,31 +3,34 @@
 
 	# Блок log внутри сайта настраивает только access-лог. Ошибки reverse_proxy
 	# (недоступный upstream, таймаут) пишет default-логгер, и полный URI с
-	# одноразовым токеном приглашения ушёл бы туда без фильтра.
+	# секретом ушёл бы туда без фильтра.
 	#
-	# Набор редактируемых параметров обязан совпадать со вторым логгером ниже:
-	# гейт требует одинаковую редакцию у КАЖДОГО логгера, а не у скольких-то.
+	# Набор фильтров обязан совпадать со вторым логгером ниже: гейт требует
+	# одинаковую редакцию у КАЖДОГО логгера, а не у скольких-то.
+	#
+	# Query вырезается ЦЕЛИКОМ, а не по списку имён параметров. Список трижды
+	# оказывался неполным: сначала не было code, потом oauth_token и
+	# oauth_verifier из OAuth1-callback n8n, а сверка имён к тому же чувствительна
+	# к регистру — ?Token= не совпадал с token. Перечислять секретные имена
+	# заранее нельзя: их набор задаёт n8n и внешние провайдеры, а не мы. Поэтому
+	# в логе остаётся только путь. Диагностическая цена признана приемлемой:
+	# state и прочие несекретные параметры тоже не попадают в лог.
 	#
 	# Имена заголовков пишутся в КАНОНИЧЕСКОЙ форме Go: X-N8n-Api-Key, а не
 	# X-N8N-API-KEY. Ключ фильтра сравнивается с уже канонизированным именем, и
 	# написание as-is не совпадает никогда — директива принимается, но остаётся
 	# no-op, а ключ печатается в лог целиком. Проверено живым запросом (T-0118).
 	#
-	# Referer фильтруется тем же query: браузер шлёт полный URL предыдущей
-	# страницы на same-origin подзапросы при нашей Referrer-Policy, а n8n — SPA,
-	# поэтому /signup?token=... приезжает в заголовке следующего же запроса.
+	# Referer и Location фильтруются так же: браузер шлёт полный URL предыдущей
+	# страницы на same-origin подзапросы, а редирект от n8n может нести код в
+	# query.
 	log default {
 		format filter {
 			wrap console
 			fields {
-				request>uri query {
-					replace token REDACTED
-					replace code REDACTED
-				}
-				request>headers>Referer query {
-					replace token REDACTED
-					replace code REDACTED
-				}
+				request>uri regexp "\?.*" "?REDACTED"
+				request>headers>Referer regexp "\?.*" "?REDACTED"
+				resp_headers>Location regexp "\?.*" "?REDACTED"
 				request>headers>Cookie delete
 				request>headers>X-N8n-Api-Key delete
 				request>headers>X-Neurokurs-Management delete
@@ -142,14 +145,9 @@ Allow: /{$SITE_VERIFICATION_FILE:.site-verification-not-configured}
 				# Только блочная форма: однострочный вариант Caddy принимает молча,
 				# но подпараметры не читает и оставляет actions пустым, то есть
 				# редакция не выполняется вообще. Проверяется по caddy adapt.
-				request>uri query {
-					replace token REDACTED
-					replace code REDACTED
-				}
-				request>headers>Referer query {
-					replace token REDACTED
-					replace code REDACTED
-				}
+				request>uri regexp "\?.*" "?REDACTED"
+				request>headers>Referer regexp "\?.*" "?REDACTED"
+				resp_headers>Location regexp "\?.*" "?REDACTED"
 				request>headers>Cookie delete
 				request>headers>X-N8n-Api-Key delete
 				request>headers>X-Neurokurs-Management delete
