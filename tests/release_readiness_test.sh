@@ -30,15 +30,15 @@ const fs = require('node:fs');
 const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const expected = {
   tag: 'v0.1.1',
-  installer: '34eae99bfcf17439bb079a9355cd3697aca8a7df306f7095ddda51f9ac52d941',
-  archive: '6bd12fd976440eea398196bedc4d1d80d878212026bae02064a2cb562d773701',
-  inventory: 'e6109aab10547dfdf1e5b72881e0b3b28329e61aeb9939a1b92cd73e4bb1e048',
+  installerSha256: '34eae99bfcf17439bb079a9355cd3697aca8a7df306f7095ddda51f9ac52d941',
+  archiveSha256: '6bd12fd976440eea398196bedc4d1d80d878212026bae02064a2cb562d773701',
+  inventorySha256: 'e6109aab10547dfdf1e5b72881e0b3b28329e61aeb9939a1b92cd73e4bb1e048',
   commit: '68063340c8113d98586f71704c30adc6d1f0eb3a',
 };
 if (manifest.release.tag !== expected.tag) process.exit(1);
-if (manifest.assets.installer.sha256 !== expected.installer) process.exit(1);
-if (manifest.assets.embeddedArchive.sha256 !== expected.archive) process.exit(1);
-if (manifest.assets.embeddedArchive.sortedFileChecksumManifestSha256 !== expected.inventory) process.exit(1);
+if (manifest.assets.installer.sha256 !== expected.installerSha256) process.exit(1);
+if (manifest.assets.embeddedArchive.sha256 !== expected.archiveSha256) process.exit(1);
+if (manifest.assets.embeddedArchive.sortedFileChecksumManifestSha256 !== expected.inventorySha256) process.exit(1);
 if (manifest.assets.embeddedArchive.fileCount !== 169) process.exit(1);
 if (manifest.release.embeddedSourceCommit !== expected.commit) process.exit(1);
 if (manifest.readiness.completeMvpClaim !== 'no-go') process.exit(1);

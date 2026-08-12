@@ -35,10 +35,54 @@ printf 'TOKEN=%s\n' "$github_secret" > "$tmp/github.env"
 assert_rejected github-token "$tmp/github.env" "$github_secret"
 ok "GitHub fixture is detected with redacted output"
 
-generic_secret="live-super-secret-value-123456789"
-printf 'CLIENT_SECRET=%s\n' "$generic_secret" > "$tmp/generic.env"
-assert_rejected credential-assignment "$tmp/generic.env" "$generic_secret"
+generic_value="live-super-secret-value-123456789"
+printf 'CLIENT_SECRET=%s\n' "$generic_value" > "$tmp/generic.env"
+assert_rejected credential-assignment "$tmp/generic.env" "$generic_value"
 ok "generic credential fixture is detected with redacted output"
+
+# Ключевая негативная проверка класса: имя QUUX_FROBNICATOR не встречается ни в
+# одном списке сканера, значит находка возможна только за счёт формы значения.
+# Значения собираются из фрагментов, чтобы сам файл теста не содержал
+# секретоподобных литералов для проверки 'tracked and untracked source scan'.
+unknown_value="$(printf '%s%s%s' Zq4vRw9s TnB7kLp2 Xc6mDh8Y)"
+printf 'QUUX_FROBNICATOR=%s\n' "$unknown_value" > "$tmp/unknown.env"
+assert_rejected credential-assignment "$tmp/unknown.env" "$unknown_value"
+ok "unknown variable name with secret-shaped value is detected"
+
+hex_value="$(printf '%s%s' 9f8a7b6c5d4e3f2a 1b0c9d8e7f6a5b4c)"
+printf 'WOBBLE_GADGET=%s\n' "$hex_value" > "$tmp/unknown-hex.env"
+assert_rejected credential-assignment "$tmp/unknown-hex.env" "$hex_value"
+ok "unknown variable name with hex value is detected"
+
+# Имена из воспроизведения T-0132, которые прежний перечень пропускал.
+timeweb_value="$(printf '%s%s%s' Nb5tKw2m Rp8cQz4x Vg7dJh3s)"
+management_value="$(printf '%s%s%s' Wf6yLn9b Tk3rMv5c Zx8pGq2d)"
+auth_value="$(printf '%s%s%s' Hj4wSb7n Cd2fXm6t Yk9gPr3v)"
+printf 'TIMEWEB_API_TOKEN=%s\nN8N_MANAGEMENT_API_KEY=%s\nAUTH_SECRET=%s\n' \
+  "$timeweb_value" "$management_value" "$auth_value" > "$tmp/missed.env"
+if "$SCANNER" --path "$tmp/missed.env" >"$tmp/missed.log" 2>&1; then
+  fail "previously missed names accepted"
+fi
+[ "$(grep -c 'rule=credential-assignment' "$tmp/missed.log")" -eq 3 ] \
+  || fail "not all previously missed names are detected"
+for value in "$timeweb_value" "$management_value" "$auth_value"; do
+  ! grep -Fq -- "$value" "$tmp/missed.log" || fail "missed-name value leaked in output"
+done
+ok "TIMEWEB_API_TOKEN, N8N_MANAGEMENT_API_KEY and AUTH_SECRET are detected"
+
+# Формы, ради которых сужены эвристики: ложное срабатывание на любом из этих
+# присваиваний вернёт шум и приведёт к обходу гейта через исключения.
+cat > "$tmp/benign.txt" <<'BENIGN'
+endpoint=https://ai.api.cloud.yandex.net/v1/chat/completions
+idempotencyKey=input.idempotencyKey
+state=StudentN8nAccessState
+reason=EXPLICIT_UNEXPIRED_APPROVAL_REQUIRED
+integrity=sha512-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+manifestSha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+collection_path=/api/v1/ssh-keys
+BENIGN
+"$SCANNER" --path "$tmp/benign.txt" >/dev/null || fail "benign assignment shapes rejected"
+ok "code-shaped assignments are accepted"
 
 private_payload="MIIEfixturepayload1234567890ABCDEF"
 printf '%s%s%s\n%s\n%s%s%s\n' \
