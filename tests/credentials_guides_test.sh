@@ -33,7 +33,10 @@ ok 'provider steps cite official documentation'
 
 for guide in "${GUIDES[@]}"; do
   grep -Eqi 'Git|workflow JSON' "$guide"
-  grep -Eqi 'ротац|rotation' "$guide"
+  # T-0133: кириллица ищется явными классами, а не флагом кейс-фолдинга —
+  # без UTF-8-локали grep не сворачивает регистр многобайтных символов, и
+  # «Ротация» с заглавной ломала тест при пустых LANG/LC_ALL.
+  grep -Eq '[Рр]отац|[Rr]otation' "$guide"
 done
 ok 'every guide warns about repository/workflow secrets and covers rotation'
 

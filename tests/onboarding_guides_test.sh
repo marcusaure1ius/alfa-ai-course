@@ -34,7 +34,10 @@ ok "cloud and DNS steps link official provider documentation"
 for guide in "$ROOT/docs/quick-start.md" "$ROOT/docs/timeweb-cloud.md" "$ROOT/docs/yandex-cloud.md"; do
   grep -Eqi '2 vCPU.*2 GiB.*20 GiB|2 vCPU.*2 GiB' "$guide" || fail "recommended sizing missing: $guide"
   grep -Eqi '1 vCPU.*1 GiB.*10 GiB|1 vCPU.*1 GiB' "$guide" || fail "test minimum missing: $guide"
-  grep -Eqi 'только.*тест|тестов' "$guide" || fail "minimum not labelled test-only: $guide"
+  # T-0133: кириллица ищется явными классами — кейс-фолдинг многобайтных
+  # символов зависит от локали, и «Только минимальный тест» с заглавной
+  # ломал тест при пустых LANG/LC_ALL.
+  grep -Eq '[Тт]олько.*[Тт]ест|[Тт]естов' "$guide" || fail "minimum not labelled test-only: $guide"
 done
 ok "minimum test sizing is separated from working recommendation"
 

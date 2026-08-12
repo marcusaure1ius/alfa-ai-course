@@ -68,4 +68,32 @@ grep -Fq 'PostgreSQL' "$readme"
 grep -Fq 'DNS/HTTPS' "$readme" || fail "quality matrix incomplete"
 ok "tests README documents the gate matrix"
 
+# T-0133: кейс-фолдинг многобайтных символов зависит от локали, поэтому
+# сочетание флага i у grep с кириллицей в шаблоне запрещено целиком — такой
+# тест зеленеет или краснеет в зависимости от LANG/LC_ALL сессии. Вместо
+# флага пишутся явные классы символов. Проверка сама не зависит от локали:
+# разбор выполняет python3. Закомментированные строки пропускаются — они не
+# исполняются, и правило про них ничего не говорит.
+python3 - "$ROOT" <<'PY' || fail "grep with case-folding flag and Cyrillic pattern found; use explicit character classes"
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1])
+flag_i = re.compile(r"\bgrep\s+(-\S*\s+)*-[A-Za-z]*i[A-Za-z]*\b")
+cyrillic = re.compile("[А-яЁё]")
+bad = []
+for folder in ("tests", "scripts"):
+    for path in sorted((root / folder).glob("*.sh")):
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            if flag_i.search(line) and cyrillic.search(line):
+                bad.append(f"{path.relative_to(root)}:{number}: {line.strip()[:100]}")
+for entry in bad:
+    print(entry, file=sys.stderr)
+sys.exit(1 if bad else 0)
+PY
+ok "no gate combines grep case-folding with Cyrillic patterns"
+
 printf '1..%d\n' "$COUNT"
