@@ -81,29 +81,19 @@ ok "managed profile never passes an empty site verification file to Caddy"
 # проверки не дают вернуть удалённый слой незаметно.
 grep -Fq 'header X-Neurokurs-Management {$N8N_GATE_MANAGEMENT_SECRET}' "$ROOT/config/Caddyfile.platform" \
   || fail "Management header matcher is missing"
-# T-0118: прежние grep-проверки на 'request>headers>Cookie delete' и
-# 'request>headers>X-N8N-API-KEY delete' убраны не как лишние, а как более
-# слабые: они смотрели текст конфига и проходили, даже когда рядом появлялся
-# логгер без всякой редакции. Те же заголовки теперь требуются у КАЖДОГО
-# логгера в проверке адаптированного конфига ниже.
-# ADR-0016: ученик задаёт пароль по одноразовому /signup?token=..., который идёт
-# общим handle. Токен даёт право завести чужой аккаунт, поэтому в лог он попасть
-# не должен.
+# T-0118: grep-проверки на удаление конкретных заголовков убраны не как лишние, а
+# как более слабые — они смотрели текст конфига и проходили ровно в том сценарии,
+# который надо было поймать.
 #
-# Проверяется ЭФФЕКТ, а не текст конфига. Однострочную форму `query replace ...`
-# Caddy принимает молча, но подпараметры не читает и оставляет actions пустым:
-# grep по такой строке проходил бы при полностью отключённой редакции.
+# Проверяется ЭФФЕКТ, а не текст. Фильтр с подпараметрами Caddy принимает и в
+# однострочной форме, молча оставляя actions пустым, поэтому grep по такой строке
+# проходил бы при полностью отключённой редакции.
 #
-# Логгеров два, и оба обязательны. Блок log внутри сайта покрывает только
-# access-лог; ошибки reverse_proxy пишет default-логгер, и без его настройки
-# http.log.error печатает URI с токеном целиком — проверено живым запросом.
-#
-# T-0118: условие инвертировано. Прежняя проверка считала логгеры С редакцией и
-# требовала ровно двух, поэтому добавление третьего логгера `log extra { output
-# stdout }` оставляло гейт зелёным, а живой запрос печатал сырой токен в
-# http.log.access.extra и http.log.error.extra — воспроизведено. Теперь редакция
-# требуется у КАЖДОГО логгера из .logging.logs, то есть новый логгер без неё
-# роняет проверку.
+# Логгеров два, и оба обязательны: блок log внутри сайта покрывает только
+# access-лог, а ошибки reverse_proxy пишет default-логгер. Условие требует
+# редакции у КАЖДОГО логгера из .logging.logs — прежняя версия считала логгеры С
+# редакцией и требовала ровно двух, поэтому третий логгер без неё оставлял гейт
+# зелёным.
 docker run --rm -i \
   -e N8N_HOST=n8n.example.test \
   -e N8N_GATE_MANAGEMENT_SECRET=synthetic-secret-for-adapt-only \
@@ -123,11 +113,13 @@ jq -e '
   || fail "Some Caddy logger keeps the query, the Location query or the request headers"
 ok "every managed Caddy logger strips query from uri and Location and drops all request headers"
 
-# log_credentials возвращает в лог заголовок Authorization целиком и не виден ни
-# в одном фильтре полей: опция живёт в блоке servers, а не в логгере.
+# log_credentials снимает встроенную редакцию Caddy и не виден ни в одном фильтре
+# полей: опция живёт в блоке servers, а не в логгере. Authorization она сейчас не
+# вернёт — заголовки запроса удаляются целиком, — но Set-Cookie начнёт печататься
+# сырым, а это сессионный JWT n8n. Проверено живым запросом.
 jq -e '[ .. | objects | select(.logs? != null) | .logs.should_log_credentials? // false ] | any | not' \
   "$tmp/caddy.json" >/dev/null \
-  || fail "log_credentials is enabled: Authorization would be written to the log verbatim"
+  || fail "log_credentials is enabled: Set-Cookie with the n8n session JWT would be logged verbatim"
 
 # T-0118, второй круг. Проверка выше смотрит на объявленные поля, и этого мало:
 # имя заголовка сравнивается с КАНОНИЧЕСКИМ именем Go, поэтому написанный as-is
