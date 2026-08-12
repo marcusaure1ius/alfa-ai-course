@@ -33,7 +33,7 @@ vercel rollback <previous-deployment-id-or-url>
 ```
 
 Чтобы узнать, что сейчас в production, нельзя полагаться на git-историю:
-сверяйте `meta.githubCommitSha` последнего production deployment с `main`.
+сверяйте `meta.githubCommitSha` последнего production deployment с тем коммитом, который выкатывали.
 
 История вопроса: до 2026-08-04 project был привязан к репозиторию-зеркалу
 `n8n-entrepreneur-starter-kit`, где нет каталога `platform/`. Единственная
