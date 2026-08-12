@@ -51,6 +51,10 @@ Builder создаёт один self-contained file. В нём закрепле�
 - доступ к исходному commit и changelog для review;
 - rollback предыдущего installer URL без замены пользовательских data volumes.
 
+Обновление кода на уже развёрнутом хосте выполняется тем же опубликованным
+артефактом с флагом `N8N_BOOTSTRAP_UPDATE_CODE=1` — порядок действий и откат
+описаны в [starter-kit-code-update.md](starter-kit-code-update.md).
+
 GitHub Releases реализует stable channel через `/releases/latest/download/install.sh` и immutable channel через `/releases/download/<version>/install.sh`. Временный VPS преподавателя, IP-адрес из занятия или hostname работающего n8n не считаются distribution endpoint.
 
 ## Проверка после публикации

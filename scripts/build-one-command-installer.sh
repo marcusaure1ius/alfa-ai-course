@@ -107,8 +107,26 @@ if [ -e "$INSTALL_ROOT" ]; then
   [ -f "$INSTALL_ROOT/.release-commit" ] \
     || fail 'Существующая установка создана не one-command installer; используйте документированный migration path.'
   installed_commit="$(cat "$INSTALL_ROOT/.release-commit")"
-  [ "$installed_commit" = "$RELEASE_COMMIT" ] \
-    || fail "Установлен release $installed_commit, а bootstrap содержит $RELEASE_COMMIT. Используйте update guide; код поверх данных автоматически не заменяется."
+  if [ "$installed_commit" != "$RELEASE_COMMIT" ]; then
+    [ "${N8N_BOOTSTRAP_UPDATE_CODE:-0}" = 1 ] \
+      || fail "Установлен release $installed_commit, а bootstrap содержит $RELEASE_COMMIT. Код поверх данных автоматически не заменяется; для обновления кода запустите с N8N_BOOTSTRAP_UPDATE_CODE=1 — см. docs/starter-kit-code-update.md."
+    mkdir -p "$temporary/extract"
+    tar -xzf "$archive" -C "$temporary/extract"
+    updater="$temporary/extract/n8n-entrepreneur-starter-kit/scripts/update-code.sh"
+    [ -x "$updater" ] \
+      || fail 'Release не содержит scripts/update-code.sh; обновление кода этим артефактом невозможно.'
+    # Логика обновления едет в НОВОМ релизе, поэтому путь работает и для
+    # хостов, развёрнутых до её появления. root нужен только когда установка
+    # принадлежит root.
+    if [ -w "$INSTALL_ROOT" ] && [ -w "$(dirname -- "$INSTALL_ROOT")" ]; then
+      "$updater" --source "$temporary/extract/n8n-entrepreneur-starter-kit" \
+        --release-commit "$RELEASE_COMMIT" --install-root "$INSTALL_ROOT" --yes
+    else
+      root_run "$updater" --source "$temporary/extract/n8n-entrepreneur-starter-kit" \
+        --release-commit "$RELEASE_COMMIT" --install-root "$INSTALL_ROOT" --yes
+    fi
+    exit 0
+  fi
   printf '[INFO] Найдена существующая установка; secrets и данные будут сохранены.\n'
 else
   mkdir -p "$temporary/extract"
