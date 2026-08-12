@@ -16,24 +16,23 @@
 	# в логе остаётся только путь. Диагностическая цена признана приемлемой:
 	# state и прочие несекретные параметры тоже не попадают в лог.
 	#
-	# Имена заголовков пишутся в КАНОНИЧЕСКОЙ форме Go: X-N8n-Api-Key, а не
-	# X-N8N-API-KEY. Ключ фильтра сравнивается с уже канонизированным именем, и
-	# написание as-is не совпадает никогда — директива принимается, но остаётся
-	# no-op, а ключ печатается в лог целиком. Проверено живым запросом (T-0118).
+	# Заголовки запроса удаляются ЦЕЛИКОМ по той же причине, что и query.
+	# Перечислять имена нельзя: вебхуки n8n используют headerAuth, где имя
+	# заголовка выбирает сам ученик, а значение и есть секрет вебхука — четыре
+	# workflow репозитория так и настроены. Плюс сверка имени идёт с канонической
+	# формой Go: X-N8N-API-KEY as-is не совпадал никогда и оставался no-op.
+	# В логе остаются метод, путь, статус, длительность и remote_ip.
 	#
-	# Referer и Location фильтруются так же: браузер шлёт полный URL предыдущей
-	# страницы на same-origin подзапросы, а редирект от n8n может нести код в
-	# query.
+	# Referer отдельно не фильтруется: он входит в удаляемую карту заголовков.
+	# Location фильтруется, потому что ответные заголовки не удаляются —
+	# редирект от n8n может нести код в query.
 	log default {
 		format filter {
 			wrap console
 			fields {
 				request>uri regexp "\?.*" "?REDACTED"
-				request>headers>Referer regexp "\?.*" "?REDACTED"
 				resp_headers>Location regexp "\?.*" "?REDACTED"
-				request>headers>Cookie delete
-				request>headers>X-N8n-Api-Key delete
-				request>headers>X-Neurokurs-Management delete
+				request>headers delete
 			}
 		}
 	}
@@ -129,28 +128,13 @@ Allow: /{$SITE_VERIFICATION_FILE:.site-verification-not-configured}
 		format filter {
 			wrap console
 			fields {
-				# ADR-0016: одноразовое приглашение n8n приходит как /signup?token=...
-				# и ведёт себя как секрет — по нему задаётся пароль аккаунта. Путь
-				# не входит в allowlist, поэтому проходит общим handle и попал бы
-				# в лог целиком. Снятый ticket больше не существует.
-				#
-				# code — OAuth2-код n8n из /rest/oauth2-credential/callback?code=...
-				# Обменивается на токен доступа к внешнему сервису ученика, идёт тем
-				# же общим handle и до T-0118 печатался целиком в обоих логгерах.
-				#
-				# state рядом с ним НЕ редактируется намеренно: это CSRF-nonce, он
-				# бесполезен без code, а по нему сопоставляют запрос и ответ при
-				# разборе неудачной привязки credential.
-				#
-				# Только блочная форма: однострочный вариант Caddy принимает молча,
-				# но подпараметры не читает и оставляет actions пустым, то есть
-				# редакция не выполняется вообще. Проверяется по caddy adapt.
+				# Набор фильтров обязан совпадать с default-логгером выше: тот
+				# покрывает ошибки reverse_proxy, этот — access-лог, и они видят
+				# разные запросы. Почему вырезается целиком, а не по именам, —
+				# объяснено там же.
 				request>uri regexp "\?.*" "?REDACTED"
-				request>headers>Referer regexp "\?.*" "?REDACTED"
 				resp_headers>Location regexp "\?.*" "?REDACTED"
-				request>headers>Cookie delete
-				request>headers>X-N8n-Api-Key delete
-				request>headers>X-Neurokurs-Management delete
+				request>headers delete
 			}
 		}
 	}

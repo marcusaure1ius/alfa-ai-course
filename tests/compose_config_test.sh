@@ -115,16 +115,13 @@ jq -e '
   (.logging.logs | length) >= 2
   and (.logging.logs | to_entries | all(
     .value.encoder.fields as $f
-    | ([ "request>uri", "request>headers>Referer", "resp_headers>Location" ]
+    | ([ "request>uri", "resp_headers>Location" ]
        | all(. as $k | ($f[$k] // {}).filter == "regexp"))
-    and ([ $f | to_entries[] | select(.value.filter == "delete") | .key ] as $deleted
-         | ($deleted | index("request>headers>Cookie") != null)
-         and ($deleted | index("request>headers>X-Neurokurs-Management") != null)
-         and ($deleted | map(ascii_downcase) | index("request>headers>x-n8n-api-key") != null))
+    and (($f["request>headers"] // {}).filter == "delete")
   ))
 ' "$tmp/caddy.json" >/dev/null \
-  || fail "Some Caddy logger does not strip the query from uri, Referer or Location, or keeps a secret header"
-ok "every managed Caddy logger strips query from uri, Referer, Location and drops secret headers"
+  || fail "Some Caddy logger keeps the query, the Location query or the request headers"
+ok "every managed Caddy logger strips query from uri and Location and drops all request headers"
 
 # log_credentials возвращает в лог заголовок Authorization целиком и не виден ни
 # в одном фильтре полей: опция живёт в блоке servers, а не в логгере.
@@ -150,6 +147,9 @@ wget -q -O /dev/null "http://127.0.0.1:8080/probe-marker/rest/oauth2-credential/
 wget -q -O /dev/null "http://127.0.0.1:8080/probe-marker/rest/oauth1-credential/callback?oauth_token=PLANTED-4&oauth_verifier=PLANTED-5" 2>/dev/null
 wget -q -O /dev/null "http://127.0.0.1:8080/probe-marker/x?Token=PLANTED-6&access_token=PLANTED-7&password=PLANTED-8&api_key=PLANTED-9" 2>/dev/null
 wget -q -O /dev/null --header="X-N8N-API-KEY: PLANTED-10" "http://127.0.0.1:8080/probe-marker/api/v1/users" 2>/dev/null
+# Имя заголовка вебхука выбирает ученик (headerAuth в n8n), поэтому список имён
+# закрыть нельзя — проверяются заведомо неизвестные имена.
+wget -q -O /dev/null --header="X-Webhook-Secret: PLANTED-14" --header="X-Custom-Whatever: PLANTED-15" --header="Authorization: Bearer PLANTED-16" "http://127.0.0.1:8080/probe-marker/webhook/lesson-6" 2>/dev/null
 wget -q -O /dev/null --header="Cookie: n8n-auth=PLANTED-11" "http://127.0.0.1:8080/probe-marker/home" 2>/dev/null
 wget -q -O /dev/null --header="X-Neurokurs-Management: PLANTED-12" "http://127.0.0.1:8080/probe-marker/api/v1/users" 2>/dev/null
 wget -q -O /dev/null --header="Referer: http://127.0.0.1:8080/signup?token=PLANTED-13" "http://127.0.0.1:8080/probe-marker/app.js" 2>/dev/null
@@ -169,7 +169,7 @@ docker run --rm -v "$tmp":/probe \
 # Маркер — часть ПУТИ, а не query: путь остаётся в логе намеренно.
 [[ "$(sed -n 2p "$tmp/live-result")" != '0' ]] \
   || fail "Live probe saw no log lines at all: the zero above proves nothing"
-ok "live request plants thirteen secrets across query, headers and Referer and none reaches the log"
+ok "live request plants sixteen secrets across query, arbitrary headers and Referer and none reaches the log"
 
 # T-0117: без собственного robots.txt любой неизвестный путь уходит в n8n, а тот
 # отдаёт SPA-оболочку с кодом 200 — домен выглядит как множество страниц входа
