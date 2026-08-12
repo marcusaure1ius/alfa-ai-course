@@ -7,6 +7,15 @@
 	#
 	# Набор редактируемых параметров обязан совпадать со вторым логгером ниже:
 	# гейт требует одинаковую редакцию у КАЖДОГО логгера, а не у скольких-то.
+	#
+	# Имена заголовков пишутся в КАНОНИЧЕСКОЙ форме Go: X-N8n-Api-Key, а не
+	# X-N8N-API-KEY. Ключ фильтра сравнивается с уже канонизированным именем, и
+	# написание as-is не совпадает никогда — директива принимается, но остаётся
+	# no-op, а ключ печатается в лог целиком. Проверено живым запросом (T-0118).
+	#
+	# Referer фильтруется тем же query: браузер шлёт полный URL предыдущей
+	# страницы на same-origin подзапросы при нашей Referrer-Policy, а n8n — SPA,
+	# поэтому /signup?token=... приезжает в заголовке следующего же запроса.
 	log default {
 		format filter {
 			wrap console
@@ -15,8 +24,12 @@
 					replace token REDACTED
 					replace code REDACTED
 				}
+				request>headers>Referer query {
+					replace token REDACTED
+					replace code REDACTED
+				}
 				request>headers>Cookie delete
-				request>headers>X-N8N-API-KEY delete
+				request>headers>X-N8n-Api-Key delete
 				request>headers>X-Neurokurs-Management delete
 			}
 		}
@@ -133,8 +146,12 @@ Allow: /{$SITE_VERIFICATION_FILE:.site-verification-not-configured}
 					replace token REDACTED
 					replace code REDACTED
 				}
+				request>headers>Referer query {
+					replace token REDACTED
+					replace code REDACTED
+				}
 				request>headers>Cookie delete
-				request>headers>X-N8N-API-KEY delete
+				request>headers>X-N8n-Api-Key delete
 				request>headers>X-Neurokurs-Management delete
 			}
 		}
