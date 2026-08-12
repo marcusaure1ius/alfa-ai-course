@@ -13,7 +13,7 @@ Releases.
 - Реальные Generic/Yandex/GigaChat, Telegram, email и CRM provider smokes
   остаются external-unverified, если для конкретного provider не указано иное.
 
-## [Не выпущено после 0.1.8]
+## [0.1.9] - 2026-08-12
 
 Найдено независимым ревью T-0118 и подтверждено живым запросом.
 
