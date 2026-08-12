@@ -101,22 +101,27 @@ docker run --rm -i \
   sh -c 'cat > /tmp/Caddyfile && caddy adapt --config /tmp/Caddyfile --adapter caddyfile' \
   < "$ROOT/config/Caddyfile.platform" > "$tmp/caddy.json" 2>/dev/null \
   || fail "Managed Caddy profile does not adapt"
+# T-0127: ответные заголовки удаляются целиком, как и запросные. Их имена
+# задают n8n и сам ученик (Respond to Webhook), поэтому точечные фильтры вроде
+# прежнего resp_headers>Location неполны по построению; при удалённой карте они
+# к тому же мертвы при любом порядке применения.
 jq -e '
   (.logging.logs | length) >= 2
   and (.logging.logs | to_entries | all(
     .value.encoder.fields as $f
-    | ([ "request>uri", "resp_headers>Location" ]
-       | all(. as $k | ($f[$k] // {}).filter == "regexp"))
+    | (($f["request>uri"] // {}).filter == "regexp")
     and (($f["request>headers"] // {}).filter == "delete")
+    and (($f["resp_headers"] // {}).filter == "delete")
   ))
 ' "$tmp/caddy.json" >/dev/null \
-  || fail "Some Caddy logger keeps the query, the Location query or the request headers"
-ok "every managed Caddy logger strips query from uri and Location and drops all request headers"
+  || fail "Some Caddy logger keeps the query, the request headers or the response headers"
+ok "every managed Caddy logger strips query and drops request and response headers"
 
 # log_credentials снимает встроенную редакцию Caddy и не виден ни в одном фильтре
-# полей: опция живёт в блоке servers, а не в логгере. Authorization она сейчас не
-# вернёт — заголовки запроса удаляются целиком, — но Set-Cookie начнёт печататься
-# сырым, а это сессионный JWT n8n. Проверено живым запросом.
+# полей: опция живёт в блоке servers, а не в логгере. Под текущим профилем она не
+# вернёт ничего — обе карты заголовков удаляются целиком (проверено живым
+# запросом, T-0127), — но опасна в сочетании с любым будущим логгером без
+# вырезания, поэтому остаётся запрещённой.
 jq -e '[ .. | objects | select(.logs? != null) | .logs.should_log_credentials? // false ] | any | not' \
   "$tmp/caddy.json" >/dev/null \
   || fail "log_credentials is enabled: Set-Cookie with the n8n session JWT would be logged verbatim"
@@ -128,8 +133,26 @@ jq -e '[ .. | objects | select(.logs? != null) | .logs.should_log_credentials? /
 # Поэтому здесь секреты подкладываются в реальный запрос и в логе их быть не
 # должно ни в каком виде. Это единственная проверка, которая ловит расхождение
 # между «директива написана» и «редакция работает».
+# T-0127: без живого upstream ответные заголовки в лог не попадают вовсе, и
+# проверка ответной стороны была бы ложно зелёной. Фиктивный n8n — второй
+# caddy-процесс в том же контейнере (тот же закреплённый образ), который
+# подкладывает секреты в ответные заголовки, cookie и Location редиректа.
+cat > "$tmp/upstream.Caddyfile" <<'UPSTREAM'
+{
+	admin off
+}
+
+:5678 {
+	header X-Upstream-Secret "PLANTED-17"
+	header X-N8n-Api-Key "PLANTED-18"
+	header Set-Cookie "n8n-auth=PLANTED-19; Path=/; HttpOnly"
+	redir /probe-marker/probe-redirect "http://127.0.0.1:8080/rest/oauth2-credential/callback?code=PLANTED-20&state=x" temporary
+	respond "upstream-alive" 200
+}
+UPSTREAM
 cat > "$tmp/live.sh" <<'LIVE'
 #!/bin/sh
+caddy start --config /probe/upstream.Caddyfile --adapter caddyfile >/dev/null 2>&1
 caddy run --config /probe/Caddyfile --adapter caddyfile > /tmp/caddy.log 2>&1 &
 sleep 2
 # Имена параметров нарочно разные, включая другой регистр и те, которых нет ни в
@@ -145,12 +168,19 @@ wget -q -O /dev/null --header="X-Webhook-Secret: PLANTED-14" --header="X-Custom-
 wget -q -O /dev/null --header="Cookie: n8n-auth=PLANTED-11" "http://127.0.0.1:8080/probe-marker/home" 2>/dev/null
 wget -q -O /dev/null --header="X-Neurokurs-Management: PLANTED-12" "http://127.0.0.1:8080/probe-marker/api/v1/users" 2>/dev/null
 wget -q -O /dev/null --header="Referer: http://127.0.0.1:8080/signup?token=PLANTED-13" "http://127.0.0.1:8080/probe-marker/app.js" 2>/dev/null
+# Ответная сторона: тело обязано дойти от фиктивного upstream, иначе ответные
+# планты не испускались и их отсутствие в логе ничего не доказывает.
+upstream_body="$(wget -q -O- "http://127.0.0.1:8080/probe-marker/home" 2>/dev/null)"
+wget -q -O /dev/null "http://127.0.0.1:8080/probe-marker/probe-redirect" 2>/dev/null
 sleep 1
 grep -c 'PLANTED-' /tmp/caddy.log
 grep -c 'probe-marker' /tmp/caddy.log
+printf '%s\n' "$upstream_body"
+# grep -c возвращает 1 при нуле совпадений; ноль здесь — ожидаемый результат.
+grep -c 'resp_headers' /tmp/caddy.log || :
 LIVE
 sed 's/{\$N8N_HOST}/:8080/' "$ROOT/config/Caddyfile.platform" > "$tmp/Caddyfile"
-docker run --rm -v "$tmp":/probe \
+docker run --rm -v "$tmp":/probe --add-host n8n:127.0.0.1 \
   -e N8N_GATE_MANAGEMENT_SECRET=synthetic-secret-for-live-only \
   -e SITE_VERIFICATION_FILE=googl0123456789abcdef.html \
   caddy:2.11.4-alpine sh /probe/live.sh > "$tmp/live-result" 2>/dev/null \
@@ -161,7 +191,13 @@ docker run --rm -v "$tmp":/probe \
 # Маркер — часть ПУТИ, а не query: путь остаётся в логе намеренно.
 [[ "$(sed -n 2p "$tmp/live-result")" != '0' ]] \
   || fail "Live probe saw no log lines at all: the zero above proves nothing"
-ok "live request plants sixteen secrets across query, arbitrary headers and Referer and none reaches the log"
+# Для ответной стороны свой контроль ложной зелени: тело от фиктивного upstream
+# обязано дойти через прокси, иначе ответные планты не испускались.
+[[ "$(sed -n 3p "$tmp/live-result")" == 'upstream-alive' ]] \
+  || fail "Fake upstream did not answer through the proxy: response-side zeros prove nothing"
+[[ "$(sed -n 4p "$tmp/live-result")" == '0' ]] \
+  || fail "resp_headers map still reaches the log record"
+ok "live request plants twenty secrets on both sides and none reaches the log"
 
 # T-0117: без собственного robots.txt любой неизвестный путь уходит в n8n, а тот
 # отдаёт SPA-оболочку с кодом 200 — домен выглядит как множество страниц входа

@@ -24,16 +24,20 @@
 	# Состав того, что остаётся в записи, — в docs/security.md. Здесь он
 	# намеренно не пересказан: копия уже расходилась с фактом.
 	#
+	# Ответные заголовки удаляются целиком по той же причине, что и запросные:
+	# их имена задают n8n и сам ученик (Respond to Webhook принимает
+	# произвольные заголовки), поэтому любой список неполон по построению.
+	# «Оставить только Location» в stock Caddy невыразимо: точечный фильтр при
+	# удалённой родительской карте мёртв при любом порядке применения.
+	# Решение и диагностический размен записаны в docs/security.md (T-0127).
 	# Referer отдельно не фильтруется: он входит в удаляемую карту заголовков.
-	# Location фильтруется, потому что ответные заголовки не удаляются —
-	# редирект от n8n может нести код в query.
 	log default {
 		format filter {
 			wrap console
 			fields {
 				request>uri regexp "\?.*" "?REDACTED"
-				resp_headers>Location regexp "\?.*" "?REDACTED"
 				request>headers delete
+				resp_headers delete
 			}
 		}
 	}
@@ -134,8 +138,8 @@ Allow: /{$SITE_VERIFICATION_FILE:.site-verification-not-configured}
 				# разные запросы. Почему вырезается целиком, а не по именам, —
 				# объяснено там же.
 				request>uri regexp "\?.*" "?REDACTED"
-				resp_headers>Location regexp "\?.*" "?REDACTED"
 				request>headers delete
+				resp_headers delete
 			}
 		}
 	}
