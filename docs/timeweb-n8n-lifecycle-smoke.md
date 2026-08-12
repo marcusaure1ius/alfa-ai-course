@@ -14,11 +14,11 @@ project/deployment, Timeweb project, SSH key или n8n owner.
 
 Production profile неизменяемо фиксирует:
 
-- starter-kit release `v0.1.10`;
+- starter-kit release `v0.1.11`;
 - installer
-  `https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.10/install.sh`;
+  `https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.11/install.sh`;
 - SHA-256 installer
-  `3f0eca6a1fdc28c710f2fac4e204f2b693333f42d86d0e1e58050e84c01eee1c`;
+  `9451e2b9acb5df6e796c51a5646c5f50a06e9a482db1d82fdbaaa23b2bb3d74e`;
 - n8n `2.29.10`;
 - Ubuntu 24.04 LTS x86_64;
 - timezone `Europe/Moscow`.

@@ -21,19 +21,20 @@ export const COURSE_SITE_VERIFICATION_FILE =
 export const STARTER_KIT_BOOTSTRAP_PROFILE = Object.freeze({
   // Версия обязана расти вместе с содержимым cloud-init: lifecycle сверяет
   // сохранённый план по ней, и без бампа расхождение осталось бы тихим.
-  version: "starter-kit-v0.1.12",
-  // v0.1.10 перевёл логи Caddy с редакции по списку имён на вырезание query
-  // целиком: список трижды оказывался неполным (T-0118). Предыдущие круги той
-  // же темы — v0.1.8 и v0.1.9; v0.1.6 убрал из общего профиля личный файл
+  version: "starter-kit-v0.1.13",
+  // v0.1.11 распространил вырезание на заголовки запроса: имя заголовка
+  // вебхука выбирает ученик, поэтому список имён закрыть канал не мог
+  // (T-0118, четвёртый круг). v0.1.10 сделал то же для query. Предыдущие круги
+  // той же темы — v0.1.8 и v0.1.9; v0.1.6 убрал из общего профиля личный файл
   // подтверждения владения, v0.1.7 исправил ложное утверждение в комментарии.
   // Managed-конфиги внутри артефакта обязаны совпадать с рабочим деревом —
   // это сверяет release_pin_test.
-  release: "v0.1.10",
+  release: "v0.1.11",
   installerUrl:
     "https://github.com/marcusaure1ius/" +
-    "alfa-ai-course/releases/download/v0.1.10/install.sh",
+    "alfa-ai-course/releases/download/v0.1.11/install.sh",
   installerSha256:
-    "3f0eca6a1fdc28c710f2fac4e204f2b693333f42d86d0e1e58050e84c01eee1c",
+    "9451e2b9acb5df6e796c51a5646c5f50a06e9a482db1d82fdbaaa23b2bb3d74e",
   n8nVersion: "2.29.10",
   timezone: "Europe/Moscow",
   networkWaitSeconds: 1200,
