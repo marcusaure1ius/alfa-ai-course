@@ -21,19 +21,19 @@ export const COURSE_SITE_VERIFICATION_FILE =
 export const STARTER_KIT_BOOTSTRAP_PROFILE = Object.freeze({
   // Версия обязана расти вместе с содержимым cloud-init: lifecycle сверяет
   // сохранённый план по ней, и без бампа расхождение осталось бы тихим.
-  version: "starter-kit-v0.1.11",
-  // v0.1.9 закрыл утечку ключа управления n8n и токена приглашения через
-  // Referer: удаление заголовка было no-op из-за неканонического написания
-  // имени (T-0118, второй круг). До него v0.1.8 закрыл OAuth2-код, v0.1.6 убрал
-  // из общего профиля личный файл подтверждения владения, v0.1.7 исправил
-  // ложное утверждение в комментарии. Managed-конфиги внутри артефакта обязаны
-  // совпадать с рабочим деревом — это сверяет release_pin_test.
-  release: "v0.1.9",
+  version: "starter-kit-v0.1.12",
+  // v0.1.10 перевёл логи Caddy с редакции по списку имён на вырезание query
+  // целиком: список трижды оказывался неполным (T-0118). Предыдущие круги той
+  // же темы — v0.1.8 и v0.1.9; v0.1.6 убрал из общего профиля личный файл
+  // подтверждения владения, v0.1.7 исправил ложное утверждение в комментарии.
+  // Managed-конфиги внутри артефакта обязаны совпадать с рабочим деревом —
+  // это сверяет release_pin_test.
+  release: "v0.1.10",
   installerUrl:
     "https://github.com/marcusaure1ius/" +
-    "alfa-ai-course/releases/download/v0.1.9/install.sh",
+    "alfa-ai-course/releases/download/v0.1.10/install.sh",
   installerSha256:
-    "ecd2e1d94dd68e6e1ea72474f025b99d6b366d539c8b6d24a59281d12b306dac",
+    "3f0eca6a1fdc28c710f2fac4e204f2b693333f42d86d0e1e58050e84c01eee1c",
   n8nVersion: "2.29.10",
   timezone: "Europe/Moscow",
   networkWaitSeconds: 1200,

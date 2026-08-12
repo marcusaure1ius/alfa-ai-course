@@ -8,7 +8,7 @@
 
 - repository: `https://github.com/marcusaure1ius/alfa-ai-course`;
 - stable installer: `https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh`;
-- immutable v0.1.9 installer: `https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.9/install.sh`;
+- immutable v0.1.10 installer: `https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.10/install.sh`;
 - checksum: соседний asset `install.sh.sha256` в том же versioned release.
 
 Public download, checksum, embedded archive и verify-only подтверждены для
@@ -58,7 +58,7 @@ GitHub Releases реализует stable channel через `/releases/latest/d
 Сначала asset проверяется без установки:
 
 ```bash
-release_url="https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.9"
+release_url="https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.10"
 curl -fsSLO "$release_url/install.sh"
 curl -fsSLO "$release_url/install.sh.sha256"
 sha256sum -c install.sh.sha256
@@ -66,7 +66,7 @@ N8N_BOOTSTRAP_VERIFY_ONLY=1 sh install.sh
 ```
 
 Ожидаемый SHA-256 `install.sh`:
-`ecd2e1d94dd68e6e1ea72474f025b99d6b366d539c8b6d24a59281d12b306dac`.
+`3f0eca6a1fdc28c710f2fac4e204f2b693333f42d86d0e1e58050e84c01eee1c`.
 На macOS вместо `sha256sum -c` можно выполнить
 `shasum -a 256 install.sh` и сравнить строку с ожидаемым значением.
 
@@ -91,7 +91,7 @@ assets, проверяет sidecar, извлекает payload без запус
 set -Eeuo pipefail
 
 audit_dir="$(mktemp -d "${TMPDIR:-/tmp}/n8n-release-audit.XXXXXX")"
-release_url="https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.9"
+release_url="https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.10"
 
 if command -v sha256sum >/dev/null 2>&1; then
   checksum=(sha256sum)
