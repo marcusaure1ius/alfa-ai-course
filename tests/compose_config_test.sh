@@ -81,10 +81,11 @@ ok "managed profile never passes an empty site verification file to Caddy"
 # проверки не дают вернуть удалённый слой незаметно.
 grep -Fq 'header X-Neurokurs-Management {$N8N_GATE_MANAGEMENT_SECRET}' "$ROOT/config/Caddyfile.platform" \
   || fail "Management header matcher is missing"
-grep -Fq 'request>headers>Cookie delete' "$ROOT/config/Caddyfile.platform" \
-  || fail "Cookies are not redacted from access logs"
-grep -Fq 'request>headers>X-N8N-API-KEY delete' "$ROOT/config/Caddyfile.platform" \
-  || fail "n8n API key is not redacted from access logs"
+# T-0118: прежние grep-проверки на 'request>headers>Cookie delete' и
+# 'request>headers>X-N8N-API-KEY delete' убраны не как лишние, а как более
+# слабые: они смотрели текст конфига и проходили, даже когда рядом появлялся
+# логгер без всякой редакции. Те же заголовки теперь требуются у КАЖДОГО
+# логгера в проверке адаптированного конфига ниже.
 # ADR-0016: ученик задаёт пароль по одноразовому /signup?token=..., который идёт
 # общим handle. Токен даёт право завести чужой аккаунт, поэтому в лог он попасть
 # не должен.
@@ -96,6 +97,13 @@ grep -Fq 'request>headers>X-N8N-API-KEY delete' "$ROOT/config/Caddyfile.platform
 # Логгеров два, и оба обязательны. Блок log внутри сайта покрывает только
 # access-лог; ошибки reverse_proxy пишет default-логгер, и без его настройки
 # http.log.error печатает URI с токеном целиком — проверено живым запросом.
+#
+# T-0118: условие инвертировано. Прежняя проверка считала логгеры С редакцией и
+# требовала ровно двух, поэтому добавление третьего логгера `log extra { output
+# stdout }` оставляло гейт зелёным, а живой запрос печатал сырой токен в
+# http.log.access.extra и http.log.error.extra — воспроизведено. Теперь редакция
+# требуется у КАЖДОГО логгера из .logging.logs, то есть новый логгер без неё
+# роняет проверку.
 docker run --rm -i \
   -e N8N_HOST=n8n.example.test \
   -e N8N_GATE_MANAGEMENT_SECRET=synthetic-secret-for-adapt-only \
@@ -104,16 +112,20 @@ docker run --rm -i \
   < "$ROOT/config/Caddyfile.platform" > "$tmp/caddy.json" 2>/dev/null \
   || fail "Managed Caddy profile does not adapt"
 jq -e '
-  [ .logging.logs | to_entries[]
-    | select(.value.encoder.fields["request>uri"] != null)
-    | .value.encoder.fields["request>uri"]
-    | select(.filter == "query")
-    | .actions // []
-    | any(.[]; .parameter == "token" and .type == "replace")
-  ] | length == 2 and all(.[]; .)
+  (.logging.logs | length) >= 2
+  and (.logging.logs | to_entries | all(
+    .value.encoder.fields as $f
+    | ($f["request>uri"] // {}) as $uri
+    | $uri.filter == "query"
+    and ([ ($uri.actions // [])[] | select(.type == "replace") | .parameter ]
+         | index("token") != null and index("code") != null)
+    and ($f["request>headers>Cookie"].filter == "delete")
+    and ($f["request>headers>X-N8N-API-KEY"].filter == "delete")
+    and ($f["request>headers>X-Neurokurs-Management"].filter == "delete")
+  ))
 ' "$tmp/caddy.json" >/dev/null \
-  || fail "n8n invite token is not redacted from both Caddy access and error logs"
-ok "managed Caddy redacts the n8n invite token from access and error logs"
+  || fail "Some Caddy logger does not redact the invite token, the OAuth2 code, or secret headers"
+ok "every managed Caddy logger redacts invite token, OAuth2 code and secret headers"
 
 # T-0117: без собственного robots.txt любой неизвестный путь уходит в n8n, а тот
 # отдаёт SPA-оболочку с кодом 200 — домен выглядит как множество страниц входа
