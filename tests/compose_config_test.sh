@@ -172,12 +172,27 @@ wget -q -O /dev/null --header="Referer: http://127.0.0.1:8080/signup?token=PLANT
 # планты не испускались и их отсутствие в логе ничего не доказывает.
 upstream_body="$(wget -q -O- "http://127.0.0.1:8080/probe-marker/home" 2>/dev/null)"
 wget -q -O /dev/null "http://127.0.0.1:8080/probe-marker/probe-redirect" 2>/dev/null
+# T-0120: корень называет оператора и отношения сторон; робот и человек
+# обязаны получить одно и то же тело (различие — маскировка); /signin при
+# этом остаётся живым проксированием в n8n.
+root_body="$(wget -q -O- "http://127.0.0.1:8080/" 2>/dev/null)"
+bot_body="$(wget -q -O- --user-agent="Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" "http://127.0.0.1:8080/" 2>/dev/null)"
+signin_body="$(wget -q -O- "http://127.0.0.1:8080/signin" 2>/dev/null)"
 sleep 1
 grep -c 'PLANTED-' /tmp/caddy.log
 grep -c 'probe-marker' /tmp/caddy.log
 printf '%s\n' "$upstream_body"
 # grep -c возвращает 1 при нуле совпадений; ноль здесь — ожидаемый результат.
 grep -c 'resp_headers' /tmp/caddy.log || :
+printf 'ROOT_OPERATOR=%s\n' "$(printf '%s' "$root_body" | grep -c 'Neurokurs')"
+printf 'ROOT_RELATION=%s\n' "$(printf '%s' "$root_body" | grep -c 'n8n GmbH')"
+printf 'ROOT_SIGNIN_LINK=%s\n' "$(printf '%s' "$root_body" | grep -c 'href="/signin"')"
+if [ "$(printf '%s' "$root_body" | sha256sum)" = "$(printf '%s' "$bot_body" | sha256sum)" ]; then
+  printf 'ROOT_SAME_FOR_BOT=yes\n'
+else
+  printf 'ROOT_SAME_FOR_BOT=no\n'
+fi
+printf 'SIGNIN_BODY=%s\n' "$signin_body"
 LIVE
 sed 's/{\$N8N_HOST}/:8080/' "$ROOT/config/Caddyfile.platform" > "$tmp/Caddyfile"
 docker run --rm -v "$tmp":/probe --add-host n8n:127.0.0.1 \
@@ -198,6 +213,21 @@ docker run --rm -v "$tmp":/probe --add-host n8n:127.0.0.1 \
 [[ "$(sed -n 4p "$tmp/live-result")" == '0' ]] \
   || fail "resp_headers map still reaches the log record"
 ok "live request plants twenty secrets on both sides and none reaches the log"
+
+# T-0120: корень обязан называть оператора, характер сервиса и отношение к
+# n8n; робот и человек получают байт-в-байт одно тело; /signin остаётся живым
+# проксированием — вход ученика страница не перехватывает.
+grep -q '^ROOT_OPERATOR=[1-9]' "$tmp/live-result" \
+  || fail "Root page does not name the operator"
+grep -q '^ROOT_RELATION=[1-9]' "$tmp/live-result" \
+  || fail "Root page does not state the n8n GmbH relation"
+grep -q '^ROOT_SIGNIN_LINK=[1-9]' "$tmp/live-result" \
+  || fail "Root page does not link to /signin"
+grep -q '^ROOT_SAME_FOR_BOT=yes$' "$tmp/live-result" \
+  || fail "Root page differs for a search robot: that is cloaking"
+grep -q '^SIGNIN_BODY=upstream-alive$' "$tmp/live-result" \
+  || fail "/signin no longer reaches n8n through the proxy"
+ok "root page names the operator identically for humans and robots, /signin stays proxied"
 
 # T-0117: без собственного robots.txt любой неизвестный путь уходит в n8n, а тот
 # отдаёт SPA-оболочку с кодом 200 — домен выглядит как множество страниц входа
@@ -239,10 +269,18 @@ jq -e '
   ] | length == 0
 ' "$tmp/caddy.json" >/dev/null \
   || fail "Managed Caddy serves a personal verification token without host configuration"
-# Без переменной ни один обработчик не должен захватывать корень сайта: пустое
-# или отсутствующее имя файла не имеет права превратиться в матчер `/`.
+# Без переменной обработчик ПОДТВЕРЖДЕНИЯ не должен захватывать корень сайта:
+# пустое или отсутствующее имя файла не имеет права превратиться в матчер `/`.
+# С T-0120 у корня есть собственная легитимная страница оператора, поэтому
+# инвариант сужен с «нет матчера / вообще» до «маршрут с google-site-verification
+# не матчит /» — ровно тот класс, который ловила проверка.
 jq -e '
-  [ .. | objects | (.match // [])[] | (.path // [])[] ] | index("/") | not
+  [ .. | objects
+    | select(has("match") and has("handle"))
+    | select([.. | objects | select(.handler? == "static_response")
+        | .body? // "" | select(test("google-site-verification"))] | length > 0)
+    | (.match // [])[] | (.path // [])[]
+  ] | index("/") | not
 ' "$tmp/caddy.json" >/dev/null \
   || fail "Site verification handler hijacks the site root when no file is configured"
 ok "shared managed profile carries no personal verification file"

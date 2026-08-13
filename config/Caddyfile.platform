@@ -91,6 +91,37 @@ Allow: /{$SITE_VERIFICATION_FILE:.site-verification-not-configured}
 		respond "google-site-verification: {$SITE_VERIFICATION_FILE:.site-verification-not-configured}" 200
 	}
 
+	# T-0120: анонимный вход на корень называет оператора и отношения сторон.
+	# Google помечал хост как «обманные страницы»: чужой бренд в title и форма
+	# пароля без указания, кто оператор. Руководство Google по социальной
+	# инженерии требует не убирать чужой бренд, а явно обозначать отношения
+	# сторон. Матчер точный: перехватывается ТОЛЬКО корень; вход /signin, REST,
+	# статика редактора и вебхуки идут в n8n как раньше. Робот и человек
+	# получают одно и то же содержимое — различие было бы маскировкой и
+	# отдельным нарушением. Текст согласован владельцем (T-0120).
+	# В HTML намеренно нет блока <style>: фигурные скобки внутри respond Caddy
+	# разбирает как плейсхолдеры, поэтому стили только inline-атрибутами.
+	handle / {
+		header Content-Type "text/html; charset=utf-8"
+		respond `<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neurokurs — учебная среда n8n</title>
+</head>
+<body style="margin:0;padding:48px 24px;font-family:system-ui,-apple-system,sans-serif;background:#fafafa;color:#1a1a1a">
+<main style="max-width:560px;margin:0 auto">
+<h1 style="font-size:1.6rem">Учебная среда Neurokurs</h1>
+<p>Это персональная учебная среда участника курса Neurokurs. Доступ к ней есть только у ученика, за которым она закреплена.</p>
+<p>Среда работает на n8n — инструменте автоматизации с открытым исходным кодом. n8n — продукт n8n GmbH; оператор этой среды — курс Neurokurs (<a href="https://neurokurs.ru">neurokurs.ru</a>), не аффилированный с n8n GmbH.</p>
+<p><a href="/signin" style="display:inline-block;padding:12px 20px;background:#1a1a1a;color:#ffffff;border-radius:8px;text-decoration:none">Войти в учебную среду</a></p>
+<p style="margin-top:40px;font-size:0.85rem;color:#555555"><a href="https://neurokurs.ru" style="color:#555555">neurokurs.ru</a></p>
+</main>
+</body>
+</html>` 200
+	}
+
 	@public_endpoints path /healthz /healthz/readiness /webhook/* /webhook-test/* /form/* /form-test/*
 	handle @public_endpoints {
 		reverse_proxy n8n:5678
