@@ -27,7 +27,13 @@ safe rerun, reboot, внешний TLS и network exposure прошли. Он в
 
 Exact commits, hashes, pins и artifact boundary релиза `v0.1.1` записаны в
 [`release-manifest.json`](../release-manifest.json) — замороженный исторический
-evidence, он намеренно не обновляется при перевыпусках.
+evidence, он намеренно не обновляется при перевыпусках. Его контрольные
+значения — архив
+`6bd12fd976440eea398196bedc4d1d80d878212026bae02064a2cb562d773701`,
+файловый инвентарь
+`e6109aab10547dfdf1e5b72881e0b3b28329e61aeb9939a1b92cd73e4bb1e048`
+(169 файлов) — относятся только к `v0.1.1` и в аудите текущего релиза не
+участвуют.
 
 ## Сборка exact release
 
