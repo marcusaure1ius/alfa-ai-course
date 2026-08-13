@@ -8,7 +8,7 @@
 
 - repository: `https://github.com/marcusaure1ius/alfa-ai-course`;
 - stable installer: `https://github.com/marcusaure1ius/alfa-ai-course/releases/latest/download/install.sh`;
-- immutable v0.1.13 installer: `https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.13/install.sh`;
+- immutable v0.1.14 installer: `https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.14/install.sh`;
 - checksum: соседний asset `install.sh.sha256` в том же versioned release.
 
 Public download, checksum, embedded archive и verify-only подтверждены для
@@ -71,7 +71,7 @@ GitHub Releases реализует stable channel через `/releases/latest/d
 Сначала asset проверяется без установки:
 
 ```bash
-release_url="https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.13"
+release_url="https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.14"
 curl -fsSLO "$release_url/install.sh"
 curl -fsSLO "$release_url/install.sh.sha256"
 sha256sum -c install.sh.sha256
@@ -79,7 +79,7 @@ N8N_BOOTSTRAP_VERIFY_ONLY=1 sh install.sh
 ```
 
 Ожидаемый SHA-256 `install.sh`:
-`0cbdcf1712e807f58bc17365dfaf2468b9e30480affc59fa5c653f5457d495a7`.
+`5f271e27b0a599fa3827e0296b446a9a4fcd1a733c046c5ecd00576b3dc6b5e9`.
 На macOS вместо `sha256sum -c` можно выполнить
 `shasum -a 256 install.sh` и сравнить строку с ожидаемым значением.
 
@@ -115,10 +115,10 @@ installer → payload.
 set -Eeuo pipefail
 
 audit_dir="$(mktemp -d "${TMPDIR:-/tmp}/n8n-release-audit.XXXXXX")"
-release_url="https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.13"
+release_url="https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.14"
 # Значение обязано совпадать со строкой «Ожидаемый SHA-256 install.sh» выше;
 # обе копии сверяются с installerSha256 в bootstrap-profile.ts автоматически.
-expected_installer_sha256="0cbdcf1712e807f58bc17365dfaf2468b9e30480affc59fa5c653f5457d495a7"
+expected_installer_sha256="5f271e27b0a599fa3827e0296b446a9a4fcd1a733c046c5ecd00576b3dc6b5e9"
 
 if command -v sha256sum >/dev/null 2>&1; then
   checksum=(sha256sum)
