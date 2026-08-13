@@ -37,6 +37,11 @@ release_repo="$tmp/release-repo"
 mkdir -p "$release_repo/scripts"
 printf '#!/bin/sh\nprintf "STUB-INSTALLER-RAN\\n"\n' > "$release_repo/scripts/install.sh"
 chmod 0755 "$release_repo/scripts/install.sh"
+cat > "$release_repo/scripts/doctor.sh" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" > "$(dirname "$0")/../.doctor-invoked"
+EOF
+chmod 0755 "$release_repo/scripts/doctor.sh"
 cp "$UPDATER" "$release_repo/scripts/update-code.sh"
 cp "$BUILDER" "$release_repo/scripts/build-one-command-installer.sh"
 printf 'name: n8n-starter-kit\nservices: {}\n' > "$release_repo/docker-compose.yml"
@@ -183,25 +188,37 @@ rerun_output="$(PATH="$tmp/bin:$PATH" N8N_KIT_INSTALL_ROOT="$rerun_root" sh "$ar
   || fail 'same-commit bootstrap rerun no longer reaches the installer'
 ok 'same-commit bootstrap rerun still reruns the installer'
 
+# Docker-стаб: контейнеры проекта отдаются через ps/inspect с label, как в
+# настоящем Compose (T-0138). Параметры: корень установки, состав env-файлов,
+# сервис с bind-mount, код возврата compose up, журнал вызовов.
+write_docker_stub() {
+  local root="$1" envs="$2" up_exit="$3" call_log="$4"
+  cat > "$tmp/bin/docker" <<EOF
+#!/bin/sh
+case "\$*" in
+  "compose version") exit 0 ;;
+  "ps -q --filter label=com.docker.compose.project") printf 'stubcontainer1\n' ;;
+  "ps -aq --filter label=com.docker.compose.project") printf 'stubcontainer1\nstubcontainer2\n' ;;
+  inspect*stubcontainer1*)
+    printf '[{"Id":"stubcontainer1","Config":{"Labels":{"com.docker.compose.project":"n8n-starter-kit","com.docker.compose.project.config_files":"%s/docker-compose.yml","com.docker.compose.project.environment_file":"%s","com.docker.compose.service":"n8n"}},"Mounts":[]},{"Id":"stubcontainer2","Config":{"Labels":{"com.docker.compose.project":"n8n-starter-kit","com.docker.compose.project.config_files":"%s/docker-compose.yml","com.docker.compose.project.environment_file":"%s","com.docker.compose.service":"caddy"}},"Mounts":[{"Type":"bind","Source":"%s/config/Caddyfile"}]}]\n' "$root" "$envs" "$root" "$envs" "$root" ;;
+  compose*up*)
+    printf '%s\n' "\$*" >> "$call_log"
+    [ "$up_exit" -eq 0 ] || printf 'stub compose up failure\n' >&2
+    exit "$up_exit" ;;
+  *) exit 0 ;;
+esac
+EOF
+  chmod 0755 "$tmp/bin/docker"
+}
+
 # T-0135: отказ ПОСЛЕ успешной замены кода (упавший перезапуск) обязан оставить
-# оператору пути отката в выводе. Docker подменяется стабом: ls видит проект
-# установки, up падает.
+# оператору пути отката в выводе.
 restart_root="$tmp/opt/restart-fail"
 make_install_root "$restart_root" "$old_commit"
 # Путь в стабе обязан быть каноническим: updater резолвит install root через
 # pwd -P, и /var/folders без /private не пройдёт сверку префикса.
 restart_root="$(cd "$restart_root" && pwd -P)"
-cat > "$tmp/bin/docker" <<EOF
-#!/bin/sh
-case "\$*" in
-  "compose version") exit 0 ;;
-  "compose ls --all --format json")
-    printf '[{"Name":"n8n-starter-kit","Status":"running(3)","ConfigFiles":"%s/docker-compose.yml"}]\n' "$restart_root" ;;
-  compose*up*) printf 'stub compose up failure\n' >&2; exit 1 ;;
-  *) exit 0 ;;
-esac
-EOF
-chmod 0755 "$tmp/bin/docker"
+write_docker_stub "$restart_root" "$restart_root/.env" 1 "$tmp/restart-fail-calls.log"
 set +e
 restart_output="$(PATH="$tmp/bin:$PATH" "$UPDATER" --source "$new_tree" \
   --release-commit "$new_commit" --install-root "$restart_root" --yes 2>&1)"
@@ -218,6 +235,66 @@ restart_previous="$(printf '%s\n' "$restart_output" | awk -F= '$1 == "PREVIOUS_C
 [[ -d "$restart_previous" ]] || fail 'previous tree missing after failing restart'
 rm -f -- "$tmp/bin/docker"
 ok 'failing restart after the swap keeps rollback paths in the output'
+
+# T-0138: перезапуск воспроизводит env-файлы ИСХОДНОГО запуска из label
+# контейнеров (боевой платформенный профиль шёл с двумя --env-file и падал на
+# интерполяции), а сервисы с bind-mount из дерева установки пересоздаются.
+envfiles_root="$tmp/opt/restart-envfiles"
+make_install_root "$envfiles_root" "$old_commit"
+envfiles_root="$(cd "$envfiles_root" && pwd -P)"
+printf 'EXTRA=1\n' > "$envfiles_root/.env.platform"
+chmod 0600 "$envfiles_root/.env.platform"
+write_docker_stub "$envfiles_root" "$envfiles_root/.env,$envfiles_root/.env.platform" 0 "$tmp/envfiles-calls.log"
+: > "$tmp/envfiles-calls.log"
+envfiles_output="$(PATH="$tmp/bin:$PATH" "$UPDATER" --source "$new_tree" \
+  --release-commit "$new_commit" --install-root "$envfiles_root" --yes 2>&1)" \
+  || { printf '%s\n' "$envfiles_output" >&2; fail 'restart with two env files did not succeed'; }
+[[ -f "$envfiles_root/.env.platform" ]] || fail 'extra env file was not carried over'
+grep -q -- "--env-file $envfiles_root/.env --env-file $envfiles_root/.env.platform" "$tmp/envfiles-calls.log" \
+  || fail 'restart did not reproduce both env files from container labels'
+grep -q -- "--force-recreate caddy" "$tmp/envfiles-calls.log" \
+  || fail 'bind-mounted service was not force-recreated'
+[[ "$(grep -c 'up -d' "$tmp/envfiles-calls.log")" == '2' ]] \
+  || fail 'expected exactly two compose up invocations (reconcile + recreate)'
+[[ "$(grep -c -- '--pull never' "$tmp/envfiles-calls.log")" == '2' ]] \
+  || fail 'code update restart must never reach the registry'
+[[ ! -f "$envfiles_root/.doctor-invoked" ]] \
+  || fail 'doctor ran against a project it cannot interpolate'
+[[ "$envfiles_output" == *'doctor.sh пропущен'* ]] \
+  || fail 'doctor skip on a non-standard env set is not explained'
+rm -f -- "$tmp/bin/docker"
+ok 'restart reproduces original env files and recreates bind-mounted services'
+
+# Штатный одиночный .env: doctor обязан прогоняться, как и раньше.
+singleenv_root="$tmp/opt/restart-singleenv"
+make_install_root "$singleenv_root" "$old_commit"
+singleenv_root="$(cd "$singleenv_root" && pwd -P)"
+write_docker_stub "$singleenv_root" "$singleenv_root/.env" 0 "$tmp/singleenv-calls.log"
+singleenv_output="$(PATH="$tmp/bin:$PATH" "$UPDATER" --source "$new_tree" \
+  --release-commit "$new_commit" --install-root "$singleenv_root" --yes 2>&1)" \
+  || fail 'single-env restart did not succeed'
+[[ -f "$singleenv_root/.doctor-invoked" ]] || fail 'doctor was not run on a standard single-env project'
+[[ "$singleenv_output" == *'без FAIL'* ]] || fail 'doctor pass is not reported'
+rm -f -- "$tmp/bin/docker"
+ok 'standard single-env project still gets a doctor run'
+
+# Отсутствующий env-файл исходного запуска — понятный отказ, а не тихий compose.
+missingenv_root="$tmp/opt/restart-missing-env"
+make_install_root "$missingenv_root" "$old_commit"
+missingenv_root="$(cd "$missingenv_root" && pwd -P)"
+write_docker_stub "$missingenv_root" "$missingenv_root/.env,$missingenv_root/.env.gone" 0 "$tmp/missing-calls.log"
+set +e
+missing_output="$(PATH="$tmp/bin:$PATH" "$UPDATER" --source "$new_tree" \
+  --release-commit "$new_commit" --install-root "$missingenv_root" --yes 2>&1)"
+missing_code=$?
+set -e
+[[ "$missing_code" -ne 0 ]] || fail 'missing original env file was accepted'
+[[ "$missing_output" == *'Env-файл исходного запуска не найден'* ]] \
+  || fail 'missing env file failure is not explained'
+[[ "$missing_output" == *"PREVIOUS_CODE_TREE="* ]] \
+  || fail 'missing env file failure lost rollback paths'
+rm -f -- "$tmp/bin/docker"
+ok 'missing original env file fails with rollback paths in the output'
 
 rehearsal_help="$("$REHEARSAL" --help)"
 [[ "$rehearsal_help" == *'T-0130-DISPOSABLE'* ]] \

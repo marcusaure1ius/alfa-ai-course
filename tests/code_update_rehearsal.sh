@@ -53,8 +53,12 @@ parse_args() {
   done
 }
 
+# Запуск нарочно идёт с ДВУМЯ env-файлами, как боевой платформенный профиль:
+# обязательный POSTGRES_PASSWORD живёт во втором. Прежний перезапуск с одним
+# .env на таком проекте падал на интерполяции — класс T-0138.
 compose() {
-  docker compose --project-directory "$INSTALL_ROOT" --env-file "$ENV_FILE" "$@"
+  docker compose --project-directory "$INSTALL_ROOT" \
+    --env-file "$ENV_FILE" --env-file "$ENV_FILE_EXTRA" "$@"
 }
 
 sql() {
@@ -95,6 +99,7 @@ cleanup() {
 main() {
   local tmp_base marker old_commit new_commit artifact tampered secret encryption_key
   local volumes_before volumes_after env_sha_before env_sha_after update_log failure_log
+  local caddy_id_before n8n_id_before
   local previous_tree backup_archive artifact_manifest artifact_manifest_hash image resource
 
   parse_args "$@"
@@ -149,6 +154,7 @@ main() {
   export MEM_TOTAL_KB_OVERRIDE=4194304
   export DISK_AVAILABLE_KB_OVERRIDE=41943040
   ENV_FILE="$INSTALL_ROOT/.env"
+  ENV_FILE_EXTRA="$INSTALL_ROOT/.env.extra"
   secret="$(openssl rand -hex 32)"
   encryption_key="$(openssl rand -hex 32)"
   {
@@ -158,12 +164,13 @@ main() {
     printf 'N8N_VERSION=2.29.10\n'
     printf 'POSTGRES_DB=n8n\n'
     printf 'POSTGRES_USER=n8n\n'
-    printf 'POSTGRES_PASSWORD=%s\n' "$secret"
     printf 'N8N_ENCRYPTION_KEY=%s\n' "$encryption_key"
     printf 'EXECUTIONS_DATA_MAX_AGE=168\n'
     printf 'EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000\n'
   } > "$ENV_FILE"
   chmod 0600 "$ENV_FILE"
+  printf 'POSTGRES_PASSWORD=%s\n' "$secret" > "$ENV_FILE_EXTRA"
+  chmod 0600 "$ENV_FILE_EXTRA"
   CLEANUP_ALLOWED=1
   trap cleanup EXIT INT TERM
 
@@ -171,7 +178,9 @@ main() {
   sql "CREATE TABLE t0130_probe (id text PRIMARY KEY, payload text NOT NULL); INSERT INTO t0130_probe VALUES ('seed', 'T0130-PROBE-V1');" >/dev/null
   volumes_before="$(volume_fingerprint)"
   env_sha_before="$(sha256sum "$ENV_FILE" | awk '{print $1}')"
-  ok "old release $OLD_REF runs as a live installation with seeded probe"
+  caddy_id_before="$(compose ps -q caddy)"
+  n8n_id_before="$(compose ps -q n8n)"
+  ok "old release $OLD_REF runs as a live two-env-file installation with seeded probe"
 
   artifact="$WORK_ROOT/install-new.sh"
   "$ROOT/scripts/build-one-command-installer.sh" --ref HEAD --output "$artifact" >/dev/null
@@ -214,6 +223,7 @@ PY
 
   env_sha_after="$(sha256sum "$ENV_FILE" | awk '{print $1}')"
   [[ "$env_sha_before" == "$env_sha_after" ]] || fatal ".env изменился при обновлении кода."
+  [[ -f "$ENV_FILE_EXTRA" ]] || fatal "Второй env-файл не пережил обновление."
   [[ "$(stat -c '%a' "$ENV_FILE" 2>/dev/null || stat -f '%Lp' "$ENV_FILE")" == 600 ]] \
     || fatal ".env потерял mode 0600."
   volumes_after="$(volume_fingerprint)"
@@ -222,9 +232,18 @@ PY
     || fatal "Данные probe изменились после обновления."
   [[ -n "$(compose ps --status running -q postgres)" && -n "$(compose ps --status running -q n8n)" && -n "$(compose ps --status running -q caddy)" ]] \
     || fatal "Stack не running после обновления."
-  grep -q 'doctor.sh --local-only после обновления без FAIL' "$update_log" \
-    || fatal "doctor.sh после обновления не подтверждён."
-  ok "data, secrets, volumes and running stack survived the code update"
+  # Проект запущен с двумя env-файлами: doctor принимает единственный .env и
+  # обязан быть явно пропущен, а не падать ложным FAIL (второй слой T-0138).
+  grep -q 'doctor.sh пропущен: у исходного запуска нестандартный набор env-файлов' "$update_log" \
+    || fatal "doctor.sh не был явно пропущен на нестандартном наборе env-файлов."
+  # T-0138: сервис с bind-mount из дерева установки обязан быть пересоздан
+  # (иначе он держит inode прежнего файла), а сервисы без таких mount —
+  # остаться прежними контейнерами: пересоздание не должно быть огульным.
+  [[ "$(compose ps -q caddy)" != "$caddy_id_before" ]] \
+    || fatal "Caddy не пересоздан: bind-mount держит прежний inode конфига."
+  [[ "$(compose ps -q n8n)" == "$n8n_id_before" ]] \
+    || fatal "n8n пересоздан без причины: у него нет bind-mount из дерева установки."
+  ok "data, secrets, volumes and running stack survived; only the bind-mounted service was recreated"
 
   previous_tree="$(awk -F= '$1 == "PREVIOUS_CODE_TREE" {print $2; exit}' "$update_log")"
   [[ -d "$previous_tree" && -f "$previous_tree/scripts/install.sh" ]] \

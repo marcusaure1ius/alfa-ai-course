@@ -29,6 +29,8 @@ STAGED_TREE=""
 CODE_BACKUP_ARCHIVE=""
 declare -a RESTART_PROJECT_NAMES=()
 declare -a RESTART_PROJECT_FILES=()
+declare -a RESTART_PROJECT_ENVS=()
+declare -a RESTART_PROJECT_RECREATE=()
 
 usage() {
   cat <<'EOF'
@@ -132,32 +134,83 @@ validate_inputs() {
   fi
 }
 
+# Перезапуск обязан воспроизводить ИСХОДНЫЙ запуск проекта, а не собирать его
+# заново из предположений: состав env-файлов задаёт запуск конкретного хоста
+# (боевой платформенный профиль идёт с .env и .env.platform), и перечислить их
+# в скрипте нельзя (T-0138). Источник истины — label работающих контейнеров:
+# Compose записывает туда config-файлы и env-файлы фактического запуска.
+# Оттуда же берутся сервисы с bind-mount из дерева установки: после подмены
+# каталога их контейнеры держат старые inode, и без пересоздания новый конфиг
+# не применится.
 detect_running_projects() {
   RESTART_PROJECT_NAMES=()
   RESTART_PROJECT_FILES=()
+  RESTART_PROJECT_ENVS=()
+  RESTART_PROJECT_RECREATE=()
   (( ! SKIP_RESTART )) || return 0
   command -v docker >/dev/null 2>&1 \
     || fatal "Docker не найден. Либо установите его, либо запустите с --skip-restart."
   docker compose version >/dev/null 2>&1 \
     || fatal "Docker Compose недоступен. Либо почините его, либо запустите с --skip-restart."
   command -v python3 >/dev/null 2>&1 \
-    || fatal "python3 нужен для разбора docker compose ls. Либо установите его, либо запустите с --skip-restart."
-  local name files
-  while IFS=$'\t' read -r name files; do
+    || fatal "python3 нужен для разбора контейнеров Compose. Либо установите его, либо запустите с --skip-restart."
+  local container_ids running_ids name files envs recreate
+  # Выбор проекта идёт по РАБОТАЮЩИМ контейнерам, а состав (env-файлы,
+  # сервисы с bind-mount) собирается по ВСЕМ контейнерам проекта: сервис,
+  # кратко упавший в момент детекта, всё равно держит устаревшие mount и
+  # обязан попасть в пересоздание.
+  container_ids="$(docker ps -aq --filter label=com.docker.compose.project)"
+  running_ids="$(docker ps -q --filter label=com.docker.compose.project | tr '\n' ' ')"
+  if [[ -z "${running_ids// /}" || -z "$container_ids" ]]; then
+    log "Запущенных Compose-проектов не найдено; перезапуск не потребуется."
+    return 0
+  fi
+  while IFS=$'\t' read -r name files envs recreate; do
     [[ -n "$name" ]] || continue
     RESTART_PROJECT_NAMES+=("$name")
     RESTART_PROJECT_FILES+=("$files")
-  done < <(docker compose ls --all --format json \
+    RESTART_PROJECT_ENVS+=("$envs")
+    RESTART_PROJECT_RECREATE+=("$recreate")
+  done < <(printf '%s\n' "$container_ids" | xargs docker inspect \
     | python3 -c '
 import json
 import sys
 
-root = sys.argv[1].rstrip("/") + "/"
-for project in json.load(sys.stdin):
-    files = [f for f in (project.get("ConfigFiles") or "").split(",") if f]
-    if any(f == root.rstrip("/") or f.startswith(root) for f in files):
-        print(project["Name"] + "\t" + ",".join(files))
-' "$INSTALL_ROOT")
+root = sys.argv[1].rstrip("/")
+prefix = root + "/"
+running = [r for r in sys.argv[2].split() if r]
+projects = {}
+for container in json.load(sys.stdin):
+    labels = container.get("Config", {}).get("Labels") or {}
+    files = [f for f in (labels.get("com.docker.compose.project.config_files") or "").split(",") if f]
+    if not any(f == root or f.startswith(prefix) for f in files):
+        continue
+    name = labels.get("com.docker.compose.project")
+    if not name:
+        continue
+    project = projects.setdefault(name, {"files": files, "envs": [], "recreate": set(), "running": False})
+    if any(str(container.get("Id", "")).startswith(short) for short in running):
+        project["running"] = True
+    for env in (labels.get("com.docker.compose.project.environment_file") or "").split(","):
+        if env and env not in project["envs"]:
+            project["envs"].append(env)
+    service = labels.get("com.docker.compose.service")
+    if service and any(
+        mount.get("Type") == "bind" and str(mount.get("Source", "")).startswith(prefix)
+        for mount in container.get("Mounts") or []
+    ):
+        project["recreate"].add(service)
+for name in sorted(projects):
+    project = projects[name]
+    if not project["running"]:
+        continue
+    print("\t".join([
+        name,
+        ",".join(project["files"]),
+        ",".join(project["envs"]),
+        " ".join(sorted(project["recreate"])),
+    ]))
+' "$INSTALL_ROOT" "$running_ids")
   if (( ${#RESTART_PROJECT_NAMES[@]} == 0 )); then
     log "Запущенных Compose-проектов из $INSTALL_ROOT не найдено; перезапуск не потребуется."
   fi
@@ -216,26 +269,58 @@ swap_and_carry() {
 restart_projects() {
   (( ! SKIP_RESTART )) || { log "Перезапуск пропущен по --skip-restart."; return 0; }
   (( ${#RESTART_PROJECT_NAMES[@]} )) || return 0
-  local index files file file_list args ran_doctor=0 doctor_code
+  local index files envs recreate entry file_list env_list recreate_list args ran_doctor=0 doctor_code
   for index in "${!RESTART_PROJECT_NAMES[@]}"; do
     files="${RESTART_PROJECT_FILES[$index]}"
+    envs="${RESTART_PROJECT_ENVS[$index]}"
+    recreate="${RESTART_PROJECT_RECREATE[$index]}"
     args=(--project-directory "$INSTALL_ROOT")
-    [[ ! -f "$INSTALL_ROOT/.env" ]] || args+=(--env-file "$INSTALL_ROOT/.env")
+    # Env-файлы — ровно те, с которыми проект был запущен. Пустой список
+    # значит, что исходный запуск шёл без --env-file, и не передавать ничего —
+    # тоже воспроизведение. Отсутствующий файл ловится до вызова compose.
+    IFS=',' read -r -a env_list <<<"$envs"
+    for entry in "${env_list[@]}"; do
+      [[ -n "$entry" ]] || continue
+      [[ -f "$entry" ]] || fatal "Env-файл исходного запуска не найден: $entry"
+      args+=(--env-file "$entry")
+    done
     IFS=',' read -r -a file_list <<<"$files"
-    for file in "${file_list[@]}"; do
-      args+=(-f "$file")
+    for entry in "${file_list[@]}"; do
+      [[ -f "$entry" ]] || fatal "Config-файл исходного запуска не найден: $entry"
+      args+=(-f "$entry")
     done
     log "Перезапуск Compose-проекта ${RESTART_PROJECT_NAMES[$index]} с новым кодом."
-    docker compose "${args[@]}" up -d --wait --wait-timeout 300 >/dev/null
+    # Обновление КОДА не ходит в сеть: стек уже работает на нужных образах, и
+    # --pull never исключает зависание на registry (а на arm64-стенде — ещё и
+    # ложный pull из-за platform: linux/amd64). Если новый релиз меняет
+    # закреплённый образ, up упадёт с понятной ошибкой — pull образов это
+    # отдельная явная операция, как в scripts/update.sh.
+    docker compose "${args[@]}" up -d --wait --wait-timeout 300 --pull never >/dev/null
+    if [[ -n "$recreate" ]]; then
+      # Сервисы с bind-mount из дерева установки держат inode прежних файлов
+      # после подмены каталога; без пересоздания новый конфиг не применится.
+      read -r -a recreate_list <<<"$recreate"
+      log "Пересоздание сервисов с bind-mount из дерева установки: $recreate."
+      docker compose "${args[@]}" up -d --wait --wait-timeout 300 --pull never --force-recreate "${recreate_list[@]}" >/dev/null
+    fi
     pass "Проект ${RESTART_PROJECT_NAMES[$index]} перезапущен и здоров."
-    if [[ ",$files," == *"/docker-compose.yml,"* && -x "$INSTALL_ROOT/scripts/doctor.sh" && -f "$INSTALL_ROOT/.env" && $ran_doctor -eq 0 ]]; then
-      ran_doctor=1
-      set +e
-      "$INSTALL_ROOT/scripts/doctor.sh" --env-file "$INSTALL_ROOT/.env" --local-only >/dev/null
-      doctor_code=$?
-      set -e
-      (( doctor_code < 2 )) || fatal "doctor.sh после обновления обнаружил FAIL."
-      pass "doctor.sh --local-only после обновления без FAIL."
+    if [[ ",$files," == *"/docker-compose.yml,"* && -x "$INSTALL_ROOT/scripts/doctor.sh" && $ran_doctor -eq 0 ]]; then
+      # doctor.sh принимает единственный --env-file и предполагает штатный
+      # .env. Проект, запущенный с другим набором env-файлов (боевой
+      # платформенный профиль), doctor интерполировать не сможет — для него
+      # здоровье уже подтверждено compose up --wait, а doctor пропускается
+      # явно, а не падает ложным FAIL.
+      if [[ "$envs" == "$INSTALL_ROOT/.env" ]]; then
+        ran_doctor=1
+        set +e
+        "$INSTALL_ROOT/scripts/doctor.sh" --env-file "$INSTALL_ROOT/.env" --local-only >/dev/null
+        doctor_code=$?
+        set -e
+        (( doctor_code < 2 )) || fatal "doctor.sh после обновления обнаружил FAIL."
+        pass "doctor.sh --local-only после обновления без FAIL."
+      else
+        log "doctor.sh пропущен: у исходного запуска нестандартный набор env-файлов; здоровье подтверждено compose up --wait."
+      fi
     fi
   done
 }
