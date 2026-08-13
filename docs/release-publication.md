@@ -12,7 +12,9 @@
 - checksum: соседний asset `install.sh.sha256` в том же versioned release.
 
 Public download, checksum, embedded archive и verify-only подтверждены для
-`v0.1.1`. Реальный fresh-VPS domainless run дошёл до HTTPS owner setup и editor.
+`v0.1.1` — это **исторический снимок первого релиза**, а не текущего;
+актуальный закреплённый релиз назван выше и сверяется с кодом автоматически.
+Реальный fresh-VPS domainless run дошёл до HTTPS owner setup и editor.
 Полный independent novice trial остаётся **FAIL**: после исправления двух
 blockers выполнен targeted recovery, но новый clean 15–30-минутный проход ещё
 не проведён. Поэтому технический артефакт пригоден для контролируемого пилота,
@@ -23,8 +25,9 @@ blockers выполнен targeted recovery, но новый clean 15–30-ми�
 safe rerun, reboot, внешний TLS и network exposure прошли. Он выполнен опытным
 оператором, предшествует находкам novice trial и не закрывает его gate.
 
-Exact commits, hashes, pins и artifact boundary записаны в
-[`release-manifest.json`](../release-manifest.json).
+Exact commits, hashes, pins и artifact boundary релиза `v0.1.1` записаны в
+[`release-manifest.json`](../release-manifest.json) — замороженный исторический
+evidence, он намеренно не обновляется при перевыпусках.
 
 ## Сборка exact release
 
@@ -91,11 +94,25 @@ assets, проверяет sidecar, извлекает payload без запус
 пути относительно корня archive, строит file-level checksum manifest и запускает
 встроенный secret scanner:
 
+Контрольные значения в блоке не захардкожены под конкретный релиз — они уже
+расходились с закреплённым релизом трижды за неделю. Якорей два, и оба
+обновляются автоматически вместе с релизом: ожидаемый SHA-256 самого
+`install.sh` берётся из этого документа (обе копии в нём сверяются с
+`installerSha256` в коде построчно тестом `release_publication_test`), а
+SHA-256 встроенного архива — из заголовка самого bootstrap: пересборка
+`git archive` непереносима между версиями git, поэтому внешняя константа для
+архива была бы ложным якорем. Число файлов и хэш инвентаря печатаются для
+фиксации в отчёте аудита, а не сверяются: их целостность уже доказана цепочкой
+installer → payload.
+
 ```bash
 set -Eeuo pipefail
 
 audit_dir="$(mktemp -d "${TMPDIR:-/tmp}/n8n-release-audit.XXXXXX")"
 release_url="https://github.com/marcusaure1ius/alfa-ai-course/releases/download/v0.1.13"
+# Значение обязано совпадать со строкой «Ожидаемый SHA-256 install.sh» выше;
+# обе копии сверяются с installerSha256 в bootstrap-profile.ts автоматически.
+expected_installer_sha256="0cbdcf1712e807f58bc17365dfaf2468b9e30480affc59fa5c653f5457d495a7"
 
 if command -v sha256sum >/dev/null 2>&1; then
   checksum=(sha256sum)
@@ -108,13 +125,17 @@ curl -fsSL "$release_url/install.sh.sha256" -o "$audit_dir/install.sh.sha256"
 (
   cd "$audit_dir"
   "${checksum[@]}" -c install.sh.sha256
+  installer_hash="$("${checksum[@]}" install.sh | awk '{print $1}')"
+  test "$installer_hash" = "$expected_installer_sha256"
   N8N_BOOTSTRAP_VERIFY_ONLY=1 sh install.sh
   awk 'capture && /^N8N_KIT_PAYLOAD$/ {exit} capture {print} /<<'\''N8N_KIT_PAYLOAD'\''$/ {capture=1}' install.sh \
     | base64 -d > release.tar.gz
 )
 
+declared_archive_sha256="$(sed -n "s/^ARCHIVE_SHA256='\([0-9a-f]\{64\}\)'$/\1/p" "$audit_dir/install.sh")"
+test -n "$declared_archive_sha256"
 archive_hash="$("${checksum[@]}" "$audit_dir/release.tar.gz" | awk '{print $1}')"
-test "$archive_hash" = "6bd12fd976440eea398196bedc4d1d80d878212026bae02064a2cb562d773701"
+test "$archive_hash" = "$declared_archive_sha256"
 
 mkdir "$audit_dir/extracted"
 tar -xzf "$audit_dir/release.tar.gz" -C "$audit_dir/extracted"
@@ -125,17 +146,16 @@ archive_root="$audit_dir/extracted/n8n-entrepreneur-starter-kit"
     | xargs -0 "${checksum[@]}" > "$audit_dir/files.sha256"
 )
 
-test "$(wc -l < "$audit_dir/files.sha256" | tr -d ' ')" = "169"
-inventory_hash="$("${checksum[@]}" "$audit_dir/files.sha256" | awk '{print $1}')"
-test "$inventory_hash" = "e6109aab10547dfdf1e5b72881e0b3b28329e61aeb9939a1b92cd73e4bb1e048"
+printf 'FILE_COUNT=%s\n' "$(wc -l < "$audit_dir/files.sha256" | tr -d ' ')"
+printf 'INVENTORY_SHA256=%s\n' "$("${checksum[@]}" "$audit_dir/files.sha256" | awk '{print $1}')"
 "$archive_root/tests/secret_scan.sh" --path "$archive_root"
 printf 'Audit PASS: %s\n' "$audit_dir"
 ```
 
-Ожидаемый итог: `install.sh: OK`, два embedded `PASS`, archive и inventory
-assertions без вывода, затем `secret scan: 166 text file(s), 0 findings` и
-`Audit PASS`. Каталог выводится намеренно: reviewer может изучить
-`files.sha256`, после чего удалить только этот временный каталог.
+Ожидаемый итог: `install.sh: OK`, два embedded `PASS`, строки `FILE_COUNT` и
+`INVENTORY_SHA256` (зафиксируйте их в отчёте аудита), отчёт секрет-сканера с
+`0 findings` и `Audit PASS`. Каталог выводится намеренно: reviewer может
+изучить `files.sha256`, после чего удалить только этот временный каталог.
 
 В артефакте не допускаются runtime `.env`, private keys, credentials, dumps,
 backups, logs, Docker volumes или `.git`. Дополнительно к scanner reviewer

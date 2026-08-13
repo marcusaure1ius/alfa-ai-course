@@ -45,15 +45,35 @@ PROFILE="$ROOT/platform/src/server/providers/timeweb/bootstrap-profile.ts"
 [[ -f "$PROFILE" ]] || fail "bootstrap profile missing: ${PROFILE#"$ROOT/"}"
 
 profile_release="$(sed -n 's/^[[:space:]]*release:[[:space:]]*"\([^"]*\)".*/\1/p' "$PROFILE" | head -1)"
-[[ -n "$profile_release" ]] || fail 'pinned release tag not found in bootstrap profile'
+[[ -n "$profile_release" ]] \
+  || fail 'pinned release tag not extracted: bootstrap profile format may have changed, adjust the sed anchor'
 [[ "$PINNED_VERSION" == "$profile_release" ]] \
   || fail "documented installer $PINNED_VERSION differs from pinned release $profile_release in bootstrap profile"
 
 profile_sha="$(sed -n 's/^[[:space:]]*"\([0-9a-f]\{64\}\)",$/\1/p' "$PROFILE" | head -1)"
-[[ -n "$profile_sha" ]] || fail 'installerSha256 not found in bootstrap profile'
-grep -Fq "$profile_sha" "$RELEASE_DOC" \
-  || fail "documented installer SHA-256 differs from installerSha256 in bootstrap profile"
-ok 'release runbook agrees with the pinned release in code'
+[[ -n "$profile_sha" ]] \
+  || fail 'installerSha256 not extracted: bootstrap profile format may have changed, adjust the sed anchor'
+
+# T-0121: сверка по строкам, а не grep по всему документу. Прежний grep -F
+# проходил при устаревшей строке «Ожидаемый SHA-256», если верное значение
+# лежало где-то ещё. Каждая копия значения в документе якорится своей строкой
+# и сверяется отдельно.
+doc_expected_sha="$(awk '/^Ожидаемый SHA-256 `install\.sh`:$/ {getline; gsub(/[`.]/, ""); print; exit}' "$RELEASE_DOC")"
+[[ -n "$doc_expected_sha" ]] \
+  || fail 'expected SHA-256 line not extracted: the runbook anchor line may have been reworded'
+[[ "$doc_expected_sha" == "$profile_sha" ]] \
+  || fail "runbook 'Ожидаемый SHA-256' line is stale: $doc_expected_sha differs from installerSha256 in bootstrap profile"
+
+audit_sha_lines="$(sed -n 's/^expected_installer_sha256="\([0-9a-f]\{64\}\)"$/\1/p' "$RELEASE_DOC")"
+[[ "$(printf '%s\n' "$audit_sha_lines" | grep -c .)" == '1' ]] \
+  || fail 'exactly one expected_installer_sha256 assignment must exist in the audit block'
+[[ "$audit_sha_lines" == "$profile_sha" ]] \
+  || fail "audit block expected_installer_sha256 is stale: $audit_sha_lines differs from installerSha256 in bootstrap profile"
+
+stale_release_urls="$(sed -n 's/^release_url="\(.*\)"$/\1/p' "$RELEASE_DOC" | grep -v "download/${PINNED_VERSION}$" || true)"
+[[ -z "$stale_release_urls" ]] \
+  || fail "runbook contains release_url not pointing at pinned ${PINNED_VERSION}: $stale_release_urls"
+ok 'release runbook agrees with the pinned release in code, line-anchored'
 
 if git -C "$ROOT" grep -nE 'RELEASE-HOST\.example|REAL-STABLE-HOST' -- '*.md'; then
   fail 'reserved release placeholder remains in tracked documentation'
