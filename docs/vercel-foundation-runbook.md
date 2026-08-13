@@ -12,8 +12,9 @@
 
 Проверено 2026-08-04.
 
-Production **не выкатывается автоматически**. `platform/vercel.json` содержит
-`git.deploymentEnabled: {"main": false}`, поэтому merge в `main` не создаёт
+Production **не выкатывается автоматически**: git-деплои выключены через
+`git.deploymentEnabled` в `platform/vercel.json` (значение смотреть там —
+цитата здесь уже расходилась с конфигом), поэтому merge в `main` не создаёт
 production deployment. Выкатка — явное действие:
 
 ```bash
