@@ -396,3 +396,5 @@ Root Directory `platform/`, раздельные Neon credentials, контро�
 migration, preview E2E, observability и rollback описаны в
 [`docs/vercel-foundation-runbook.md`](../docs/vercel-foundation-runbook.md).
 Runbook отделяет фактическое evidence 2026-07-30 от ещё не проверенных gates.
+
+<!-- T-0122: одноразовая проба превью-деплоя; PR закрывается без мержа -->
