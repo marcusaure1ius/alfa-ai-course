@@ -80,21 +80,42 @@ ok "tests README documents the gate matrix"
 # длинная --ignore-case вместе с её однозначными GNU-сокращениями (--ig и
 # длиннее) и устаревший синоним -y. Формы задаёт grep, поэтому короткие
 # кластеры матчятся по наличию буквы i или y, а длинные — по префиксу --ig.
+#
+# T-0137: позиция флага — ложная ось: GNU grep переставляет опции, и флаг
+# после шаблона работает так же, как перед ним. Поэтому строка режется по
+# границам команд (|, ;, &), и внутри каждого сегмента с grep флаг ищется
+# среди ВСЕХ токенов до `--`, независимо от места. Разрез по границам нужен,
+# чтобы -i соседних команд в пайпе (sed -i и т.п.) не давал ложных
+# срабатываний.
 python3 - "$ROOT" <<'PY' || fail "grep with case-folding flag and Cyrillic pattern found; use explicit character classes"
 import pathlib
 import re
 import sys
 
 root = pathlib.Path(sys.argv[1])
-fold_flag = re.compile(r"\bgrep\s+(-\S*\s+)*(?:-[A-Za-z]*[iy][A-Za-z]*|--ig\S*)\b")
+fold_token = re.compile(r"^(?:-[A-Za-z]*[iy][A-Za-z]*|--ig\S*)$")
 cyrillic = re.compile("[А-яЁё]")
+
+
+def segment_offends(segment):
+    if not cyrillic.search(segment):
+        return False
+    for match in re.finditer(r"\bgrep\b", segment):
+        for token in segment[match.end():].split():
+            if token == "--":
+                break
+            if fold_token.match(token.rstrip(")")):
+                return True
+    return False
+
+
 bad = []
 for folder in ("tests", "scripts"):
     for path in sorted((root / folder).glob("*.sh")):
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if line.lstrip().startswith("#"):
                 continue
-            if fold_flag.search(line) and cyrillic.search(line):
+            if any(segment_offends(segment) for segment in re.split(r"[|;&]+", line)):
                 bad.append(f"{path.relative_to(root)}:{number}: {line.strip()[:100]}")
 for entry in bad:
     print(entry, file=sys.stderr)
