@@ -62,10 +62,12 @@ sudo env N8N_BOOTSTRAP_UPDATE_CODE=1 sh install.sh
 ```
 
 Ожидаемый ход: `[PASS] Release ... проверен по SHA-256` → `[PASS] Backup кода:
-...` → `[PASS] Код обновлён: <старый> -> <новый>` → перезапуск найденных
-Compose-проектов установки → `[PASS] doctor.sh --local-only после обновления
-без FAIL` → итоговые строки `UPDATED_FROM_COMMIT`, `UPDATED_TO_COMMIT`,
-`CODE_BACKUP_ARCHIVE`, `PREVIOUS_CODE_TREE`.
+...` → `[PASS] Код обновлён: <старый> -> <новый>` → итоговые строки
+`UPDATED_FROM_COMMIT`, `UPDATED_TO_COMMIT`, `CODE_BACKUP_ARCHIVE`,
+`PREVIOUS_CODE_TREE` → перезапуск найденных Compose-проектов установки →
+`[PASS] doctor.sh --local-only после обновления без FAIL`. Итоговые строки
+печатаются до перезапуска намеренно: если перезапуск или doctor упадут, пути
+отката уже выведены.
 
 Проверка результата:
 

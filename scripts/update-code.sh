@@ -264,12 +264,18 @@ main() {
   stage_new_tree
   swap_and_carry
   pass "Код обновлён: $current_commit -> $TARGET_COMMIT"
-  restart_projects
 
+  # Итоговые строки печатаются ДО перезапуска: любой отказ после успешной
+  # замены кода обязан оставить оператору пути отката в выводе — иначе
+  # прежнее дерево пришлось бы искать по шаблону имени (T-0135). Сами строки
+  # верны уже здесь: код заменён и .release-commit записан.
   printf 'UPDATED_FROM_COMMIT=%s\n' "$current_commit"
   printf 'UPDATED_TO_COMMIT=%s\n' "$TARGET_COMMIT"
   printf 'CODE_BACKUP_ARCHIVE=%s\n' "$CODE_BACKUP_ARCHIVE"
   printf 'PREVIOUS_CODE_TREE=%s\n' "$OLD_TREE"
+
+  restart_projects
+
   log "Прежнее дерево кода сохранено: $OLD_TREE"
   log "После проверки удалите его вручную; для отката см. docs/starter-kit-code-update.md."
 }

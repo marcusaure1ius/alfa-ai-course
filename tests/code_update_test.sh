@@ -183,6 +183,42 @@ rerun_output="$(PATH="$tmp/bin:$PATH" N8N_KIT_INSTALL_ROOT="$rerun_root" sh "$ar
   || fail 'same-commit bootstrap rerun no longer reaches the installer'
 ok 'same-commit bootstrap rerun still reruns the installer'
 
+# T-0135: отказ ПОСЛЕ успешной замены кода (упавший перезапуск) обязан оставить
+# оператору пути отката в выводе. Docker подменяется стабом: ls видит проект
+# установки, up падает.
+restart_root="$tmp/opt/restart-fail"
+make_install_root "$restart_root" "$old_commit"
+# Путь в стабе обязан быть каноническим: updater резолвит install root через
+# pwd -P, и /var/folders без /private не пройдёт сверку префикса.
+restart_root="$(cd "$restart_root" && pwd -P)"
+cat > "$tmp/bin/docker" <<EOF
+#!/bin/sh
+case "\$*" in
+  "compose version") exit 0 ;;
+  "compose ls --all --format json")
+    printf '[{"Name":"n8n-starter-kit","Status":"running(3)","ConfigFiles":"%s/docker-compose.yml"}]\n' "$restart_root" ;;
+  compose*up*) printf 'stub compose up failure\n' >&2; exit 1 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod 0755 "$tmp/bin/docker"
+set +e
+restart_output="$(PATH="$tmp/bin:$PATH" "$UPDATER" --source "$new_tree" \
+  --release-commit "$new_commit" --install-root "$restart_root" --yes 2>&1)"
+restart_code=$?
+set -e
+[[ "$restart_code" -ne 0 ]] || fail 'failing restart still exited zero'
+[[ "$restart_output" == *"PREVIOUS_CODE_TREE="* ]] \
+  || fail 'failing restart output lost the previous tree path'
+[[ "$restart_output" == *"CODE_BACKUP_ARCHIVE="* ]] \
+  || fail 'failing restart output lost the code backup path'
+[[ "$(cat "$restart_root/.release-commit")" == "$new_commit" ]] \
+  || fail 'failing restart left an inconsistent .release-commit'
+restart_previous="$(printf '%s\n' "$restart_output" | awk -F= '$1 == "PREVIOUS_CODE_TREE" {print $2; exit}')"
+[[ -d "$restart_previous" ]] || fail 'previous tree missing after failing restart'
+rm -f -- "$tmp/bin/docker"
+ok 'failing restart after the swap keeps rollback paths in the output'
+
 rehearsal_help="$("$REHEARSAL" --help)"
 [[ "$rehearsal_help" == *'T-0130-DISPOSABLE'* ]] \
   || fail 'rehearsal help does not state the disposable phrase'
