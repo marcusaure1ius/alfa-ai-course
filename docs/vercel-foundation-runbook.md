@@ -15,12 +15,17 @@
 Production **не выкатывается автоматически**: git-деплои выключены через
 `git.deploymentEnabled` в `platform/vercel.json` (значение смотреть там —
 цитата здесь уже расходилась с конфигом), поэтому merge в `main` не создаёт
-production deployment. Выкатка — явное действие:
+production deployment. Выкатка — явное действие **из корня репозитория**:
 
 ```bash
-cd platform
 vercel --prod
 ```
+
+Каталог важен: привязка проекта лежит в корневом `.vercel/`, а Root Directory
+в настройках проекта уже равен `platform`. Запуск той же команды из
+`platform/` завершается ошибкой «path .../platform/platform does not exist»
+(проверено 2026-08-14). Из корня же в build context попадает только
+`platform/` — starter kit в сборку не уезжает.
 
 Git-деплои (включая превью для веток) отключены целиком в
 `platform/vercel.json` — T-0122: превью блокировались лимитом веток на
