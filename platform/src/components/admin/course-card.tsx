@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { CourseSettingsDialog } from "@/components/admin/course-settings-dialog";
 import { Badge } from "@/components/ui/badge";
+import { formatCount } from "@/lib/plural";
 import { cn } from "@/lib/utils";
 import type { AdminCourseItem } from "@/server/admin/workspace";
 
@@ -12,17 +13,6 @@ const coverTones = [
   "bg-chart-4",
   "bg-chart-5",
 ] as const;
-
-const russianPluralRules = new Intl.PluralRules("ru-RU");
-
-function formatCount(
-  value: number,
-  words: { one: string; few: string; many: string },
-): string {
-  const form = russianPluralRules.select(value);
-  const word = form === "one" ? words.one : form === "few" ? words.few : words.many;
-  return `${value} ${word}`;
-}
 
 export function CourseCard({
   course,

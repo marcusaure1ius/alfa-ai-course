@@ -16,6 +16,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { formatCount } from "@/lib/plural";
 
 async function getCsrfToken(): Promise<string> {
   const response = await fetch("/api/auth/csrf", {
@@ -29,17 +30,12 @@ async function getCsrfToken(): Promise<string> {
 }
 
 function assignmentCountLabel(count: number): string {
-  const mod100 = count % 100;
-  const mod10 = count % 10;
-  const noun =
-    mod100 >= 11 && mod100 <= 19
-      ? "активных назначений"
-      : mod10 === 1
-        ? "активного назначения"
-        : mod10 >= 2 && mod10 <= 4
-          ? "активных назначений"
-          : "активных назначений";
-  return `${count} ${noun}`;
+  // Родительный падеж под контекст «скроется у …».
+  return formatCount(count, {
+    one: "активного назначения",
+    few: "активных назначений",
+    many: "активных назначений",
+  });
 }
 
 export function ToolAccessGate({

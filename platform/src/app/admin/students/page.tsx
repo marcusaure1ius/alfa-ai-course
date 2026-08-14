@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatCount } from "@/lib/plural";
 import { getAdminCourses, getAdminStudents } from "@/server/admin/workspace";
 import { getDatabase } from "@/server/db/client";
 
@@ -38,7 +39,11 @@ export default async function StudentsPage({
         <div>
           <h1 className="font-display text-page-title">Ученики</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {students.length} {students.length === 1 ? "аккаунт" : "аккаунтов"}
+            {formatCount(students.length, {
+              one: "аккаунт",
+              few: "аккаунта",
+              many: "аккаунтов",
+            })}
           </p>
         </div>
         <StudentCreateForm courses={courses} />

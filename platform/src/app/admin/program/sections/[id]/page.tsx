@@ -12,6 +12,7 @@ import { notFound } from "next/navigation";
 import { TaskCreateDialog } from "@/components/admin/task-create-dialog";
 import { Button } from "@/components/ui/button";
 import { resolveSectionVisibility } from "@/lib/publication-visibility";
+import { formatCount } from "@/lib/plural";
 import { cn } from "@/lib/utils";
 import {
   getAdminCourses,
@@ -20,12 +21,8 @@ import {
 } from "@/server/admin/workspace";
 import { getDatabase } from "@/server/db/client";
 
-const pluralRules = new Intl.PluralRules("ru-RU");
-
 function taskCountLabel(count: number): string {
-  const form = pluralRules.select(count);
-  const word = form === "one" ? "задание" : form === "few" ? "задания" : "заданий";
-  return `${count} ${word}`;
+  return formatCount(count, { one: "задание", few: "задания", many: "заданий" });
 }
 
 export default async function AdminSectionPage({

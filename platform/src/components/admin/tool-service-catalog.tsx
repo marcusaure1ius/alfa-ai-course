@@ -12,6 +12,7 @@ import Link from "next/link";
 import { ToolAccessGate } from "@/components/admin/tool-access-gate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { pluralWord } from "@/lib/plural";
 import type { ToolCatalogItem } from "@/lib/tool-catalog";
 
 const statusLabels: Record<string, string> = {
@@ -34,14 +35,6 @@ function formatUpdatedAt(value: string): string {
   }).format(new Date(value));
 }
 
-function pluralize(count: number, one: string, few: string, many: string) {
-  const mod100 = count % 100;
-  const mod10 = count % 10;
-  if (mod100 >= 11 && mod100 <= 19) return many;
-  if (mod10 === 1) return one;
-  if (mod10 >= 2 && mod10 <= 4) return few;
-  return many;
-}
 
 export function ToolServiceCatalog({ tools }: { tools: ToolCatalogItem[] }) {
   return (
@@ -80,7 +73,7 @@ export function ToolServiceCatalog({ tools }: { tools: ToolCatalogItem[] }) {
                             {tool.studentAccessEnabled ? "Доступ открыт" : "Доступ приостановлен"}
                           </Badge>
                           <span className="text-xs text-muted-foreground">
-                            {tool.activeAccessCount} {pluralize(tool.activeAccessCount, "активное назначение", "активных назначения", "активных назначений")}
+                            {tool.activeAccessCount} {pluralWord(tool.activeAccessCount, { one: "активное назначение", few: "активных назначения", many: "активных назначений" })}
                           </span>
                         </div>
                       </div>
@@ -122,7 +115,7 @@ export function ToolServiceCatalog({ tools }: { tools: ToolCatalogItem[] }) {
                                 </Badge>
                               </div>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                Обновлено {formatUpdatedAt(environment.updatedAt)} · {environment.accessCount} {pluralize(environment.accessCount, "ученик", "ученика", "учеников")}
+                                Обновлено {formatUpdatedAt(environment.updatedAt)} · {environment.accessCount} {pluralWord(environment.accessCount, { one: "ученик", few: "ученика", many: "учеников" })}
                               </p>
                               {needsAttention ? (
                                 <Link

@@ -23,6 +23,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatCount } from "@/lib/plural";
 import type { AdminSectionOption } from "@/server/admin/workspace";
 
 async function csrfToken(): Promise<string> {
@@ -48,15 +49,11 @@ async function responseError(
 }
 
 function materialCountLabel(count: number): string {
-  if (count % 10 === 1 && count % 100 !== 11) return `${count} материал`;
-  if (
-    count % 10 >= 2 &&
-    count % 10 <= 4 &&
-    (count % 100 < 12 || count % 100 > 14)
-  ) {
-    return `${count} материала`;
-  }
-  return `${count} материалов`;
+  return formatCount(count, {
+    one: "материал",
+    few: "материала",
+    many: "материалов",
+  });
 }
 
 export function SectionRowActions({
