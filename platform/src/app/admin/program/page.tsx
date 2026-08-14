@@ -84,7 +84,7 @@ export default async function AdminProgramPage({
                 <span
                   className={`inline-flex items-center gap-1.5 text-xs font-medium ${
                     coursePublished
-                      ? "text-status-ready"
+                      ? "text-status-ready-ink"
                       : "text-muted-foreground"
                   }`}
                 >

@@ -84,13 +84,13 @@ export function StudentCourseCatalog({ courses }: StudentCourseCatalogProps) {
                       Курс {String(index + 1).padStart(2, "0")}
                     </span>
                     {progress.state === "complete" ? (
-                      <span className="inline-flex items-center gap-1.5 font-medium text-status-ready">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-status-ready-ink">
                         <CheckCircle2 className="size-4" aria-hidden="true" />
                         Пройден
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5">
-                        <CircleDot className="size-4 text-brand" aria-hidden="true" />
+                        <CircleDot className="size-4 text-brand-ink" aria-hidden="true" />
                         {statusLabel}
                       </span>
                     )}

@@ -126,7 +126,7 @@ export function ToolServiceCatalog({ tools }: { tools: ToolCatalogItem[] }) {
                               </p>
                               {needsAttention ? (
                                 <Link
-                                  className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-md font-medium text-brand underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                                  className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-md font-medium text-brand-ink underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                                   href={`/admin/tools/${tool.id}/instances/${environment.id}`}
                                 >
                                   <AlertTriangle className="size-4" aria-hidden="true" />

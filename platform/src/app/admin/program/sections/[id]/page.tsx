@@ -73,7 +73,7 @@ export default async function AdminSectionPage({
             className={cn(
               "inline-flex items-center gap-1.5 text-xs font-medium",
               visibility.visible
-                ? "text-status-ready"
+                ? "text-status-ready-ink"
                 : "text-muted-foreground",
             )}
           >
@@ -138,7 +138,7 @@ export default async function AdminSectionPage({
                     className={cn(
                       "col-start-2 row-start-2 text-xs font-medium sm:col-start-auto sm:row-start-auto",
                       material.status === "published"
-                        ? "text-status-ready"
+                        ? "text-status-ready-ink"
                         : "text-muted-foreground",
                     )}
                   >

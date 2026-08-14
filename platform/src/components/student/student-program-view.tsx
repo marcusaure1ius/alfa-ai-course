@@ -94,7 +94,7 @@ export function StudentProgramView({ course }: StudentProgramViewProps) {
               >
                 <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-brand">
+                    <p className="text-sm font-medium text-brand-ink">
                       Следующий материал
                     </p>
                     <h2

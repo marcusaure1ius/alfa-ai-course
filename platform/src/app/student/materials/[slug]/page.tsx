@@ -70,7 +70,7 @@ export default async function StudentMaterialPage({
               </span>
             ) : null}
             {material.completedAt ? (
-              <span className="font-medium text-status-ready">Пройдено</span>
+              <span className="font-medium text-status-ready-ink">Пройдено</span>
             ) : null}
           </div>
         </div>
