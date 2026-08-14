@@ -27,9 +27,9 @@ import {
   updateMaterial,
 } from "./repository";
 
-const databaseUrl =
-  process.env.DATABASE_URL ??
-  "postgresql://platform:local-example-not-a-secret@127.0.0.1:55432/course_platform";
+import { requireIntegrationDatabaseUrl } from "../../../test/integration/database";
+
+const databaseUrl = requireIntegrationDatabaseUrl();
 
 let sql: DatabaseSql;
 let admin: AuthSession;

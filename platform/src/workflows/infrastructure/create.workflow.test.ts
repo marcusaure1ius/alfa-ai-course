@@ -15,9 +15,9 @@ import { runMigrations } from "@/server/db/migrate";
 import { reserveCreateOperation } from "@/server/operations/repository";
 import { createEnvironmentWorkflow } from "./create";
 
-const databaseUrl =
-  process.env.DATABASE_URL ??
-  "postgresql://platform:local-example-not-a-secret@127.0.0.1:55432/course_platform_t0052";
+import { requireIntegrationDatabaseUrl } from "../../../test/integration/database";
+
+const databaseUrl = requireIntegrationDatabaseUrl();
 process.env.DATABASE_URL = databaseUrl;
 process.env.AUTH_SECRET = "workflow-example-not-a-secret-32-characters";
 process.env.APP_ORIGIN = "http://localhost:3000";
