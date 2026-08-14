@@ -745,7 +745,7 @@ export function InfrastructureControl({ toolType = "n8n" }: { toolType?: string 
                     <span className="flex items-center gap-2 font-semibold">
                       {preset.cpu} vCPU
                       {selected ? (
-                        <Check className="size-4 text-status-ready" aria-hidden="true" />
+                        <Check className="size-4 text-status-ready-ink" aria-hidden="true" />
                       ) : null}
                     </span>
                   </span>
@@ -828,7 +828,7 @@ export function InfrastructureControl({ toolType = "n8n" }: { toolType?: string 
               </span>
             </button>
             <div className="flex min-h-20 items-center gap-3 rounded-lg border bg-card p-4">
-              <ShieldCheck className="size-5 text-status-ready" aria-hidden="true" />
+              <ShieldCheck className="size-5 text-status-ready-ink" aria-hidden="true" />
               <div>
                 <p className="font-medium">Публичный IPv4 включён</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -1039,7 +1039,7 @@ export function InfrastructureControl({ toolType = "n8n" }: { toolType?: string 
                   ) : environment.installationStatus ===
                       "ready_owner_setup_required" &&
                     environment.managedGatewayVerified ? (
-                    <p className="mt-2 text-sm text-status-ready">
+                    <p className="mt-2 text-sm text-status-ready-ink">
                       n8n готов — требуется создать владельца.
                     </p>
                   ) : environment.installationStatus ===

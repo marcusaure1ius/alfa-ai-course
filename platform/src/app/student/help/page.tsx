@@ -95,7 +95,7 @@ export default async function StudentHelpPage() {
           Короткая памятка: что проверить и какую информацию подготовить.
         </p>
         <div className="mt-8 flex max-w-3xl items-start gap-3 rounded-xl bg-brand-soft p-5">
-          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-brand-ink" aria-hidden="true" />
           <div>
             <h2 className="font-semibold">Перед отправкой сообщения</h2>
             <p className="mt-1 text-base leading-7 text-muted-foreground">

@@ -58,10 +58,12 @@
     --font-sans: var(--font-alfa-interface);
     --font-mono: var(--font-code);
     --color-brand: var(--brand);
+    --color-brand-ink: var(--brand-ink);
     --color-brand-foreground: var(--brand-foreground);
     --color-brand-soft: var(--brand-soft);
     --color-highlight: var(--highlight);
     --color-status-ready: var(--status-ready);
+    --color-status-ready-ink: var(--status-ready-ink);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -126,10 +128,12 @@
     --input: #c9ccd2;
     --ring: #ef3124;
     --brand: #ef3124;
+    --brand-ink: #c11f14;
     --brand-foreground: #0e0e0e;
     --brand-soft: #ffe9e7;
     --highlight: #c8ff4d;
     --status-ready: #168a58;
+    --status-ready-ink: #0f6b44;
     --chart-1: #ef3124;
     --chart-2: #dfd0fa;
     --chart-3: #bcefc9;
@@ -166,10 +170,12 @@
     --input: #45454b;
     --ring: #ff5a4e;
     --brand: #ff5a4e;
+    --brand-ink: #ff7a70;
     --brand-foreground: #141416;
     --brand-soft: #3a1c1a;
     --highlight: #c8ff4d;
     --status-ready: #54c890;
+    --status-ready-ink: #54c890;
     --sidebar: #1d1d20;
     --sidebar-foreground: #f6f6f7;
     --sidebar-primary: #f6f6f7;

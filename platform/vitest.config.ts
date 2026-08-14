@@ -13,7 +13,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "test/**/*.test.ts"],
     exclude: [
       "src/**/*.integration.test.ts",
       "src/**/*.workflow.test.ts",

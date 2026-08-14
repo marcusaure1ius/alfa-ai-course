@@ -252,6 +252,36 @@ build. Интеграционные проверки с локальным Postg
 npm run test:integration
 ```
 
+Интеграционные и workflow тесты деструктивны: они очищают таблицы между
+сценариями. Поэтому их конфигурация никогда не использует `DATABASE_URL`.
+Вместо этого bootstrap (`test/integration/global-setup.ts`) на каждый прогон:
+
+- создаёт одноразовую базу `course_platform_test_<случайный суффикс>` на
+  локальном PostgreSQL из `compose.dev.yml` и удаляет её после прогона;
+- отклоняет любой сервер вне loopback (`localhost`, `127.0.0.0/8`, `::1`), то
+  есть dev/staging/production подключение отвергается классом, а не списком;
+- передаёт тестам адрес только созданной им базы; suite, запущенный в обход
+  bootstrap, завершается ошибкой до первого обращения к данным.
+
+Ожидаемый результат: `npm run test:integration` не может очистить рабочую базу
+даже при ошибочно выставленном `DATABASE_URL`, а данные `course_platform` после
+прогона не меняются. Другой тестовый сервер задаётся переменной
+`TEST_DATABASE_URL` — она тоже обязана указывать на loopback.
+
+Браузерные E2E smoke-сценарии (Playwright, desktop и mobile viewport):
+
+```bash
+npm run test:e2e
+```
+
+Команда собирает production build и прогоняет login/logout, границу ролей,
+путь ученика (курс → материал → отметка прогресса) и навигацию администратора
+на `http://127.0.0.1:3100`. Прогон использует тот же bootstrap одноразовой
+базы, что и интеграционные тесты: синтетические `e2e-*@example.test` аккаунты
+и курс создаются в `course_platform_test_*` и удаляются вместе с базой после
+прогона; dev/production база недостижима по построению. В CI шаг
+`Browser E2E smoke` запускается после production build в том же workflow.
+
 Path-aware GitHub Actions workflow запускает PostgreSQL 17 service, миграции,
 unit/integration tests и остальные проверки только для изменений platform или
 её архитектурных контрактов.

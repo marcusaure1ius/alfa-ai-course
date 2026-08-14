@@ -1,3 +1,4 @@
+import { pluralWord } from "@/lib/plural";
 import type {
   StudentCourse,
   StudentMaterialSummary,
@@ -19,7 +20,12 @@ export function getStudentProgressLabel(
   if (!progress) return null;
   if (progress.state === "empty") return "Программа готовится";
   if (progress.state === "complete") return "Курс завершён";
-  return `${progress.completed} из ${progress.total} материалов`;
+  // Родительный падеж под «из N …»: «из 1 материала», «из 2 материалов».
+  return `${progress.completed} из ${progress.total} ${pluralWord(progress.total, {
+    one: "материала",
+    few: "материалов",
+    many: "материалов",
+  })}`;
 }
 
 export function flattenMaterials(course: StudentCourse): StudentMaterialSummary[] {

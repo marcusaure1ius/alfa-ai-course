@@ -16,6 +16,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/workflows/**/*.workflow.test.ts"],
+    globalSetup: ["./test/integration/global-setup.ts"],
     fileParallelism: false,
     testTimeout: 60_000,
     hookTimeout: 60_000,

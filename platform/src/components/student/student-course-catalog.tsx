@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { formatCount, pluralWord } from "@/lib/plural";
 import { getCourseProgress } from "@/lib/student-course";
 import type { StudentCourse } from "@/server/course/contracts";
 
@@ -15,31 +16,19 @@ type StudentCourseCatalogProps = {
 };
 
 function materialCountLabel(count: number): string {
-  const mod100 = count % 100;
-  const mod10 = count % 10;
-  const word =
-    mod100 >= 11 && mod100 <= 14
-      ? "материалов"
-      : mod10 === 1
-        ? "материал"
-        : mod10 >= 2 && mod10 <= 4
-          ? "материала"
-          : "материалов";
-  return `${count} ${word}`;
+  return formatCount(count, {
+    one: "материал",
+    few: "материала",
+    many: "материалов",
+  });
 }
 
 function sectionCountLabel(count: number): string {
-  const mod100 = count % 100;
-  const mod10 = count % 10;
-  const word =
-    mod100 >= 11 && mod100 <= 14
-      ? "разделов"
-      : mod10 === 1
-        ? "раздел"
-        : mod10 >= 2 && mod10 <= 4
-          ? "раздела"
-          : "разделов";
-  return `${count} ${word}`;
+  return formatCount(count, {
+    one: "раздел",
+    few: "раздела",
+    many: "разделов",
+  });
 }
 
 export function StudentCourseCatalog({ courses }: StudentCourseCatalogProps) {
@@ -84,13 +73,13 @@ export function StudentCourseCatalog({ courses }: StudentCourseCatalogProps) {
                       Курс {String(index + 1).padStart(2, "0")}
                     </span>
                     {progress.state === "complete" ? (
-                      <span className="inline-flex items-center gap-1.5 font-medium text-status-ready">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-status-ready-ink">
                         <CheckCircle2 className="size-4" aria-hidden="true" />
                         Пройден
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5">
-                        <CircleDot className="size-4 text-brand" aria-hidden="true" />
+                        <CircleDot className="size-4 text-brand-ink" aria-hidden="true" />
                         {statusLabel}
                       </span>
                     )}
@@ -109,7 +98,7 @@ export function StudentCourseCatalog({ courses }: StudentCourseCatalogProps) {
                       className="sr-only"
                       value={progress.completed}
                       max={Math.max(progress.total, 1)}
-                      aria-label={`Прогресс курса: ${progress.completed} из ${progress.total} материалов завершено`}
+                      aria-label={`Прогресс курса: ${progress.completed} из ${progress.total} ${pluralWord(progress.total, { one: "материала", few: "материалов", many: "материалов" })} завершено`}
                     />
                     <div
                       className="h-1.5 overflow-hidden rounded-full bg-muted"

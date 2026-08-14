@@ -267,7 +267,7 @@ export function StudentCreateForm({
                 className="flex items-start gap-2.5 rounded-md border bg-muted px-3 py-2.5 text-sm leading-5 text-foreground"
               >
                 <TriangleAlert
-                  className="mt-0.5 size-4 shrink-0 text-brand"
+                  className="mt-0.5 size-4 shrink-0 text-brand-ink"
                   aria-hidden="true"
                 />
                 <p>

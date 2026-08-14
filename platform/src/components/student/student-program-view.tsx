@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { formatCount } from "@/lib/plural";
 import { getCourseProgress } from "@/lib/student-course";
 import type {
   StudentCourse,
@@ -94,7 +95,7 @@ export function StudentProgramView({ course }: StudentProgramViewProps) {
               >
                 <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-brand">
+                    <p className="text-sm font-medium text-brand-ink">
                       Следующий материал
                     </p>
                     <h2
@@ -148,7 +149,11 @@ export function StudentProgramView({ course }: StudentProgramViewProps) {
               <div className="flex items-end justify-between gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    {course.sections.length} разделов
+                    {formatCount(course.sections.length, {
+                      one: "раздел",
+                      few: "раздела",
+                      many: "разделов",
+                    })}
                   </p>
                   <h2
                     id="program-sections-title"

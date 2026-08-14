@@ -9,6 +9,7 @@ import {
   getAdminMaterials,
   getAdminSections,
 } from "@/server/admin/workspace";
+import { formatCount } from "@/lib/plural";
 import { getDatabase } from "@/server/db/client";
 
 export default async function AdminProgramPage({
@@ -74,17 +75,24 @@ export default async function AdminProgramPage({
                   <div>
                     <h2 className="font-display text-xl">{course.title}</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {sections.length}{" "}
-                      {sections.length === 1 ? "раздел" : "разделов"} ·{" "}
-                      {courseMaterials.length}{" "}
-                      {courseMaterials.length === 1 ? "задание" : "заданий"}
+                      {formatCount(sections.length, {
+                        one: "раздел",
+                        few: "раздела",
+                        many: "разделов",
+                      })}{" "}
+                      ·{" "}
+                      {formatCount(courseMaterials.length, {
+                        one: "задание",
+                        few: "задания",
+                        many: "заданий",
+                      })}
                     </p>
                   </div>
                 </div>
                 <span
                   className={`inline-flex items-center gap-1.5 text-xs font-medium ${
                     coursePublished
-                      ? "text-status-ready"
+                      ? "text-status-ready-ink"
                       : "text-muted-foreground"
                   }`}
                 >

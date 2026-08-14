@@ -22,6 +22,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { formatCount } from "@/lib/plural";
 import { cn } from "@/lib/utils";
 
 const navItems: Array<{
@@ -42,17 +43,11 @@ type StudentNavigationProps = {
 };
 
 function courseCountLabel(courseCount: number): string {
-  const mod100 = courseCount % 100;
-  const mod10 = courseCount % 10;
-  const word =
-    mod100 >= 11 && mod100 <= 14
-      ? "курсов"
-      : mod10 === 1
-        ? "курс"
-        : mod10 >= 2 && mod10 <= 4
-          ? "курса"
-          : "курсов";
-  return `${courseCount} ${word}`;
+  return formatCount(courseCount, {
+    one: "курс",
+    few: "курса",
+    many: "курсов",
+  });
 }
 
 export function StudentNavigation({

@@ -44,6 +44,7 @@ import {
   createContentAddress,
   sanitizeContentAddressInput,
 } from "@/lib/content-address";
+import { formatCount } from "@/lib/plural";
 import type { AdminCourseItem } from "@/server/admin/workspace";
 
 async function csrfToken(): Promise<string> {
@@ -78,16 +79,6 @@ function courseErrors(title: string, slug: string) {
   };
 }
 
-const pluralRules = new Intl.PluralRules("ru-RU");
-
-function countLabel(
-  count: number,
-  words: { one: string; few: string; many: string },
-): string {
-  const form = pluralRules.select(count);
-  const word = form === "one" ? words.one : form === "few" ? words.few : words.many;
-  return `${count} ${word}`;
-}
 
 export function CourseSettingsDialog({
   course,
@@ -208,12 +199,12 @@ export function CourseSettingsDialog({
     }
   }
 
-  const sectionLabel = countLabel(sectionCount, {
+  const sectionLabel = formatCount(sectionCount, {
     one: "раздел",
     few: "раздела",
     many: "разделов",
   });
-  const taskLabel = countLabel(taskCount, {
+  const taskLabel = formatCount(taskCount, {
     one: "задание",
     few: "задания",
     many: "заданий",
