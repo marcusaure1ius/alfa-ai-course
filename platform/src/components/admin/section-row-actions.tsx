@@ -23,7 +23,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { formatCount } from "@/lib/plural";
+import { formatCount, pluralWord } from "@/lib/plural";
 import type { AdminSectionOption } from "@/server/admin/workspace";
 
 async function csrfToken(): Promise<string> {
@@ -128,7 +128,7 @@ export function SectionRowActions({
               </AlertDialogTitle>
               <AlertDialogDescription>
                 {materialCount > 0
-                  ? `В разделе ${materialCountLabel(materialCount)}. Сначала перенесите или удалите ${materialCount === 1 ? "его" : "их"}, чтобы не потерять учебный контент.`
+                  ? `В разделе ${materialCountLabel(materialCount)}. Сначала перенесите или удалите ${pluralWord(materialCount, { one: "его", few: "их", many: "их" })}, чтобы не потерять учебный контент.`
                   : "Раздел будет удалён без возможности восстановления. Порядок остальных разделов обновится автоматически."}
               </AlertDialogDescription>
             </AlertDialogHeader>
