@@ -93,5 +93,13 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser E2E smoke
+        run: npx playwright test
+        env:
+          TEST_DATABASE_URL: postgresql://platform:ci-example-not-a-secret@127.0.0.1:5432/course_platform
+
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high

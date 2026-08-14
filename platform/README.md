@@ -268,6 +268,20 @@ npm run test:integration
 прогона не меняются. Другой тестовый сервер задаётся переменной
 `TEST_DATABASE_URL` — она тоже обязана указывать на loopback.
 
+Браузерные E2E smoke-сценарии (Playwright, desktop и mobile viewport):
+
+```bash
+npm run test:e2e
+```
+
+Команда собирает production build и прогоняет login/logout, границу ролей,
+путь ученика (курс → материал → отметка прогресса) и навигацию администратора
+на `http://127.0.0.1:3100`. Прогон использует тот же bootstrap одноразовой
+базы, что и интеграционные тесты: синтетические `e2e-*@example.test` аккаунты
+и курс создаются в `course_platform_test_*` и удаляются вместе с базой после
+прогона; dev/production база недостижима по построению. В CI шаг
+`Browser E2E smoke` запускается после production build в том же workflow.
+
 Path-aware GitHub Actions workflow запускает PostgreSQL 17 service, миграции,
 unit/integration tests и остальные проверки только для изменений platform или
 её архитектурных контрактов.
