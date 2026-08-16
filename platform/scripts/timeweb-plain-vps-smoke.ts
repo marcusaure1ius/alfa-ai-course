@@ -10,7 +10,7 @@ import {
 } from "../src/server/auth/service";
 import { createTotpCode } from "../src/server/auth/mfa";
 import { getDatabase } from "../src/server/db/client";
-import { runMigrations } from "../src/server/db/migrate";
+import { assertSchemaUpToDate } from "../src/server/db/migrate";
 import {
   finishOperation,
   getOperationTimeline,
@@ -238,7 +238,7 @@ async function main(): Promise<void> {
         `provider balance ${before.balance.amount} ${before.balance.currency}.`,
     );
 
-    await runMigrations(sql);
+    await assertSchemaUpToDate(sql);
     const smokeDatabaseState = await sql<
       {
         users: number;
