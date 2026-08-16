@@ -3,7 +3,7 @@ import { chmod, writeFile } from "node:fs/promises";
 
 import { hashPassword } from "../src/server/auth/crypto";
 import { getDatabase } from "../src/server/db/client";
-import { runMigrations } from "../src/server/db/migrate";
+import { assertSchemaUpToDate } from "../src/server/db/migrate";
 
 const CONFIRMATION_FLAG = "--confirm-production-fixture";
 const STUDENT_EMAIL = "t0058-student@neurokurs.invalid";
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
 
   const sql = getDatabase();
   try {
-    await runMigrations(sql);
+    await assertSchemaUpToDate(sql);
     const admins = await sql<Array<{ id: string }>>`
       SELECT id FROM users
       WHERE role_id = 'admin' AND status = 'active'
